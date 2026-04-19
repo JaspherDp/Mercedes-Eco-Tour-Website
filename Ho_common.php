@@ -232,6 +232,8 @@ function HoGetUnreadCount(PDO $pdo, ?int $hotelResortId = null): int
 
 function HoGetNotificationItems(PDO $pdo, int $limit = 8, ?int $hotelResortId = null): array
 {
+    $seenAt = HoGetNotifSeenAt($hotelResortId);
+    $seenAtTs = $seenAt ? strtotime($seenAt) : false;
     $hotelFilter = ($hotelResortId && $hotelResortId > 0) ? (int)$hotelResortId : 0;
     $sql = "
         SELECT
@@ -255,7 +257,16 @@ function HoGetNotificationItems(PDO $pdo, int $limit = 8, ?int $hotelResortId = 
     }
     $stmt->bindValue(':limit_rows', $limit, PDO::PARAM_INT);
     $stmt->execute();
-    return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    $items = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    foreach ($items as &$item) {
+        $status = strtolower((string)($item['booking_status'] ?? ''));
+        $createdAt = (string)($item['created_at'] ?? '');
+        $createdAtTs = $createdAt !== '' ? strtotime($createdAt) : false;
+        $isUnread = $status === 'pending' && ($seenAtTs === false || ($createdAtTs !== false && $createdAtTs > $seenAtTs));
+        $item['is_unread'] = $isUnread ? 1 : 0;
+    }
+    unset($item);
+    return $items;
 }
 
 

@@ -82,8 +82,14 @@ $hoRangeOptions = [
         <?php if (!empty($hoNotifItems)): ?>
           <ul>
             <?php foreach ($hoNotifItems as $item): ?>
-              <li>
-                <strong>#<?= (int)$item['hotel_booking_id'] ?> — <?= htmlspecialchars(trim($item['first_name'] . ' ' . $item['last_name'])) ?></strong>
+              <?php $isUnread = !empty($item['is_unread']); ?>
+              <li class="ho-notif-item<?= $isUnread ? ' is-unread' : '' ?>">
+                <strong>
+                  #<?= (int)$item['hotel_booking_id'] ?> — <?= htmlspecialchars(trim($item['first_name'] . ' ' . $item['last_name'])) ?>
+                  <?php if ($isUnread): ?>
+                    <span class="ho-notif-unread-pill">NEW</span>
+                  <?php endif; ?>
+                </strong>
                 <span><?= htmlspecialchars((string)$item['room_type']) ?> • Check-in <?= htmlspecialchars((string)$item['checkin_date']) ?></span>
                 <small><?= htmlspecialchars((string)$item['created_at']) ?></small>
               </li>

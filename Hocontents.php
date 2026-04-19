@@ -486,32 +486,63 @@ if (trim((string)($property['description_text'] ?? '')) === '' || trim((string)(
       const panel = document.getElementById('hoNotifPanel');
       const markBtn = document.getElementById('hoNotifMarkRead');
       const badge = document.getElementById('hoNotifBadge');
+      const unreadSelector = '.ho-notif-item.is-unread';
       let notifMarked = false;
+      const hideBadge = () => {
+        if (badge) badge.style.display = 'none';
+      };
+      const hasUnreadItems = () => panel ? panel.querySelector(unreadSelector) !== null : false;
+      const clearUnreadState = () => {
+        if (!panel) return;
+        panel.querySelectorAll(unreadSelector).forEach((item) => item.classList.remove('is-unread'));
+        panel.querySelectorAll('.ho-notif-unread-pill').forEach((pill) => pill.remove());
+      };
 
       const markNotificationsRead = async () => {
-        if (notifMarked) return;
+        if (notifMarked || !hasUnreadItems()) return;
         notifMarked = true;
         const body = new URLSearchParams();
         body.set('ho_action', 'mark_notifications_read');
-        await fetch('Hocontents.php', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: body.toString()
-        });
-        if (badge) badge.remove();
+        try {
+          const response = await fetch('Hocontents.php', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: body.toString()
+          });
+          if (!response.ok) {
+            throw new Error(`Failed to mark notifications as read (${response.status})`);
+          }
+          hideBadge();
+          clearUnreadState();
+        } catch (error) {
+          notifMarked = false;
+          console.error(error);
+        }
+      };
+
+      const closePanelAndMarkRead = () => {
+        if (!panel || !toggle) return;
+        const wasOpen = panel.classList.contains('open');
+        panel.classList.remove('open');
+        toggle.setAttribute('aria-expanded', 'false');
+        if (wasOpen) markNotificationsRead();
       };
 
       if (toggle && panel) {
         toggle.addEventListener('click', () => {
-          const open = panel.classList.toggle('open');
-          toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-          if (open) markNotificationsRead();
+          const willOpen = !panel.classList.contains('open');
+          if (!willOpen) {
+            closePanelAndMarkRead();
+            return;
+          }
+          panel.classList.add('open');
+          toggle.setAttribute('aria-expanded', 'true');
+          hideBadge();
         });
 
         document.addEventListener('click', (e) => {
           if (!panel.contains(e.target) && !toggle.contains(e.target)) {
-            panel.classList.remove('open');
-            toggle.setAttribute('aria-expanded', 'false');
+            closePanelAndMarkRead();
           }
         });
       }

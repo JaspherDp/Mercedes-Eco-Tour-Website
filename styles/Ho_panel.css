@@ -338,24 +338,59 @@ body.ho-body {
   overflow: auto;
 }
 
-.ho-notif-panel li {
+.ho-notif-item {
+  position: relative;
   border: 1px solid #e8f0ed;
   background: #fbfefd;
   border-radius: 10px;
   padding: 8px;
   display: grid;
   gap: 3px;
+  transition: background-color .2s ease, border-color .2s ease, box-shadow .2s ease;
 }
 
-.ho-notif-panel li strong {
+.ho-notif-item.is-unread {
+  background: linear-gradient(90deg, #e9fff3 0%, #f7fffb 100%);
+  border-color: #8fd1b3;
+  box-shadow: 0 0 0 1px rgba(43, 122, 102, 0.12);
+}
+
+.ho-notif-item.is-unread::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 4px;
+  border-radius: 999px;
+  background: #1f8a63;
+}
+
+.ho-notif-item strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   color: #1d343e;
 }
 
-.ho-notif-panel li span,
-.ho-notif-panel li small {
+.ho-notif-item span,
+.ho-notif-item small {
   font-size: 12px;
   color: #63747d;
+}
+
+.ho-notif-unread-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: #1f8a63;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .2px;
 }
 
 .ho-notif-empty {
