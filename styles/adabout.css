@@ -1,0 +1,153 @@
+body {
+  margin: 0;
+  font-family: 'Poppins', sans-serif;
+  background: #f5f7fa;
+  color: #222;
+  scroll-behavior: smooth;
+}
+/* Container for gallery cards */
+#galleryContainerUnique {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* exactly 2 columns */
+  gap: 1.5rem; /* spacing between cards */
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Gallery card */
+.gallery-card-unique {
+    display: flex;
+    flex-direction: row;
+    background: #fff;
+    border-radius: 12px;
+    padding: 1rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+    align-items: stretch;
+    width: 100%;
+}
+
+/* Gallery image */
+.gallery-image-unique {
+    width: 150px;
+    height: 150px;
+    object-fit: cover;
+    border-radius: 10px;
+    margin-right: 1rem;
+}
+
+/* Info section */
+.gallery-info-unique {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+/* Action buttons */
+.gallery-actions-unique {
+    margin-top: auto;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.btn-edit-unique,
+.btn-save-unique,
+.btn-cancel-unique,
+.addnewbutton {
+    background: #2b7a66;
+    color: #fff;
+    border: none;
+    padding: 8px 12px;       /* keeps size like upload buttons */
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: auto;             /* auto width to fit the text */
+    box-sizing: border-box;
+    gap: 8px;
+    margin-top: 6px;
+    font-size: 13px; 
+}
+
+.btn-edit-unique:hover,
+.btn-save-unique:hover,
+.btn-cancel-unique:hover,
+.addnewbutton {
+    background: #24614f;
+}
+
+.addnewbutton {
+  background: #2b7a66 !important ;
+  float: right;
+  margin-bottom: 20px;
+}
+
+/* Modal & drag/drop */
+.modal-unique .modal-dialog {max-width:800px;}
+.drag-drop-area-unique, .custum-file-upload-unique {border:2px dashed #49A47A; border-radius:10px; width:250px; height:250px; display:flex; align-items:center; justify-content:center; cursor:pointer; margin-bottom:1rem; overflow:hidden; background-color:#f5f7fa;}
+.drag-drop-area-unique img, .custum-file-upload-unique img {max-width:100%; max-height:100%; display:block;}
+.modal-form-unique input, .modal-form-unique textarea {margin-bottom:1rem;}
+.save-btn, .addnewbutton {background-color:#49A47A; color:white; border:none; border-radius:8px; padding:0.6rem 1.2rem; font-weight:bold; cursor:pointer; transition:all 0.3s;}
+.save-btn:hover, .addnewbutton:hover {background-color:#3a8762; transform:translateY(-2px);}
+.close-btn {position:absolute; top:12px; right:12px; background:none; border:none; font-size:28px; cursor:pointer; color:#555; z-index:10;}
+.close-btn:hover {color:#000;}
+
+/* --- New Drag & Drop Upload Area (Same Style as Provided) --- */
+.custum-file-upload-unique {
+  height: 200px;
+  width: 100%;
+  max-width: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+  cursor: pointer;
+  border: 2px dashed #cacaca;
+  background-color: #fff;
+  padding: 1.5rem;
+  border-radius: 10px;
+  box-shadow: 0px 48px 35px -48px rgba(0,0,0,0.1);
+  transition: 0.3s ease;
+}
+
+.custum-file-upload-unique:hover {
+  border-color: #49A47A;
+  background-color: #f8fffa;
+}
+
+.custum-file-upload-unique .icon-unique {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.custum-file-upload-unique .icon-unique svg {
+  height: 80px;
+  fill: rgba(75, 85, 99, 1);
+}
+
+.custum-file-upload-unique .text-unique {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.custum-file-upload-unique .text-unique span {
+  font-weight: 400;
+  color: rgba(75, 85, 99, 1);
+}
+
+.custum-file-upload-unique input {
+  display: none;
+}
+
+/* When image is previewed */
+.custum-file-upload-unique img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 10px;
+}

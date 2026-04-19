@@ -1,0 +1,564 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap");
+
+:root {
+  --primary: #2b7a66;
+  --primary-dark: #1f5f4e;
+  --ink: #132129;
+  --muted: #5c6d78;
+  --border: #d8e4df;
+  --bg: #f4f8f7;
+  --card: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: "Inter", sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+.booking-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #fff;
+  border-bottom: 1px solid #e6efeb;
+  padding: 8px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.booking-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.back-btn {
+  text-decoration: none;
+  color: var(--primary-dark);
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  padding: 7px 10px;
+  background: #fff;
+}
+
+.brand-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-round-logo {
+  width: 40px;
+  height: 40px;
+}
+
+.brand-text-logo {
+  height: 30px;
+  width: auto;
+}
+
+.profile-chip {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #e1ece8;
+  color: var(--primary-dark);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.profile-chip img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.booking-page {
+  width: min(1280px, 94vw);
+  margin: 18px auto 36px;
+}
+
+.booking-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.9fr;
+  gap: 18px;
+  align-items: start;
+}
+
+.booking-form-card,
+.booking-preview-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: 0 10px 30px rgba(21, 76, 60, 0.05);
+}
+
+.booking-preview-card {
+  position: sticky;
+  top: 72px;
+  display: grid;
+  grid-template-rows: auto auto;
+  gap: 12px;
+  max-height: none;
+  overflow: visible;
+}
+
+#durationHint {
+  display: none;
+  margin-top: -6px;
+}
+
+#tourDuration.range-ready {
+  cursor: pointer;
+  background: #f7fbf9;
+}
+
+#tourDuration.range-ready:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(43, 122, 102, 0.12);
+}
+
+.booking-form-card h1 {
+  margin: 0 0 6px;
+  font-size: 26px;
+}
+
+.subtitle {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.account-note {
+  margin: -4px 0 14px;
+  font-size: 13px;
+  color: #355563;
+}
+
+.booking-form {
+  display: grid;
+  gap: 13px;
+}
+
+.field-row {
+  display: grid;
+  gap: 8px;
+}
+
+.field-row.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+#bookingEndDateWrapper {
+  display: none;
+}
+
+label {
+  display: grid;
+  gap: 7px;
+  font-size: 13px;
+  color: #2f424d;
+  font-weight: 600;
+}
+
+input,
+select {
+  width: 100%;
+  border: 1px solid #d3dfda;
+  border-radius: 10px;
+  font: inherit;
+  color: #17262f;
+  padding: 10px 12px;
+  background: #fff;
+}
+
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(43, 122, 102, 0.12);
+}
+
+.helper-text {
+  margin: -2px 0 0;
+  font-size: 12px;
+  color: #5f727c;
+}
+
+.locations-box {
+  margin: 0;
+  border: 1px solid #dbe7e2;
+  border-radius: 12px;
+  background: #f8fbfa;
+  padding: 12px;
+}
+
+.locations-box legend {
+  font-size: 13px;
+  font-weight: 700;
+  color: #24414d;
+  padding: 0 6px;
+}
+
+.locations-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 10px;
+}
+
+.location-chip {
+  border: 1px solid #d6e2dd;
+  border-radius: 10px;
+  background: #fff;
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #243741;
+}
+
+.location-chip input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--primary);
+}
+
+.checkbox-box {
+  border: 1px solid #dbe7e2;
+  border-radius: 12px;
+  background: #f8fbfa;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.checkbox-box label {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 13px;
+  font-weight: 500;
+  color: #2f434d;
+}
+
+.checkbox-box input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+  accent-color: var(--primary);
+}
+
+.checkbox-box a {
+  color: var(--primary-dark);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.addon-box {
+  margin-top: -2px;
+}
+
+.other-fees-reference {
+  border: 1px solid #dbe7e2;
+  border-radius: 12px;
+  background: #f8fbfa;
+  padding: 12px;
+}
+
+.other-fees-reference h3 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #1f4f5f;
+}
+
+.other-fees-reference ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 7px;
+}
+
+.other-fees-reference li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 12px;
+  color: #355463;
+}
+
+.other-fees-reference li strong {
+  color: #143641;
+  white-space: nowrap;
+}
+
+.submit-btn {
+  border: none;
+  border-radius: 12px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 12px 16px;
+  cursor: pointer;
+}
+
+.submit-btn:hover {
+  background: var(--primary-dark);
+}
+
+.preview-block {
+  margin: 0;
+  border: 1px solid #deebe6;
+  border-radius: 12px;
+  background: #fbfdfc;
+  padding: 12px;
+}
+
+.preview-main {
+  max-height: calc(100vh - 260px);
+  overflow: hidden;
+}
+
+.preview-block h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+
+.preview-block p {
+  margin: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  color: #31454f;
+}
+
+.preview-block p + p {
+  margin-top: 6px;
+}
+
+.preview-block p span {
+  color: #5e707a;
+}
+
+.preview-block p strong {
+  text-align: right;
+  max-width: 60%;
+}
+
+.preview-block.totals p:last-of-type {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #deebe6;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.preview-block small {
+  display: block;
+  margin-top: 8px;
+  color: #5f727c;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.flatpickr-calendar.tour-range-calendar {
+  width: min(780px, calc(100vw - 20px));
+  min-width: 760px;
+  max-width: 1000px;
+  border-radius: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.16);
+  border: 1px solid #e0ebe6;
+  margin-top: 8px;
+  padding: 10px 10px 8px;
+  z-index: 1200;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.flatpickr-calendar.tour-range-calendar.open {
+  width: min(780px, calc(100vw - 20px));
+}
+
+.flatpickr-calendar.tour-range-calendar .flatpickr-innerContainer {
+  min-width: 720px;
+  overflow: visible;
+}
+
+.flatpickr-calendar.tour-range-calendar .flatpickr-rContainer {
+  width: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: visible;
+}
+
+.flatpickr-calendar.tour-range-calendar .flatpickr-days {
+  padding: 0 8px 6px;
+  width: auto !important;
+  display: flex;
+  overflow: visible;
+}
+
+@media (max-width: 1040px) {
+  .flatpickr-calendar.tour-range-calendar {
+    min-width: 0;
+    width: calc(100vw - 16px);
+    max-width: calc(100vw - 16px);
+  }
+}
+
+.flatpickr-calendar.tour-range-calendar .flatpickr-months {
+  padding: 0 8px;
+  margin-bottom: 8px;
+}
+
+.flatpickr-calendar.tour-range-calendar .flatpickr-month {
+  height: 52px;
+}
+
+.flatpickr-calendar.tour-range-calendar .flatpickr-current-month {
+  padding-top: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  color: #173826;
+}
+
+.flatpickr-calendar.tour-range-calendar .flatpickr-weekdays {
+  display: flex;
+  width: auto !important;
+  background: #f1f8f4;
+  border-radius: 10px;
+  padding: 4px 8px;
+  margin-bottom: 6px;
+}
+
+.flatpickr-calendar.tour-range-calendar .dayContainer,
+.flatpickr-calendar.tour-range-calendar .flatpickr-weekdaycontainer {
+  min-width: 360px;
+  max-width: 360px;
+  width: 360px;
+}
+
+.flatpickr-calendar.tour-range-calendar .flatpickr-weekday {
+  color: #2c5f50;
+  font-weight: 700;
+  font-size: 12px;
+  padding: 0;
+  line-height: 26px;
+  flex: 0 0 calc(100% / 7);
+  min-width: calc(100% / 7);
+  max-width: calc(100% / 7);
+  text-align: center;
+}
+
+.flatpickr-calendar.tour-range-calendar .flatpickr-day {
+  border-radius: 10px;
+  max-width: none;
+  min-width: calc(100% / 7);
+  width: calc(100% / 7);
+  height: 38px;
+  line-height: 38px;
+  font-weight: 600;
+}
+
+.flatpickr-calendar.tour-range-calendar .flatpickr-next-month,
+.flatpickr-calendar.tour-range-calendar .flatpickr-prev-month {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #173826;
+}
+
+.flatpickr-calendar.tour-range-calendar .flatpickr-next-month:hover,
+.flatpickr-calendar.tour-range-calendar .flatpickr-prev-month:hover {
+  background: #eef5f1;
+}
+
+.flatpickr-calendar.tour-range-calendar .flatpickr-day.today {
+  border-color: #2b7a66;
+  color: #1f5f4e;
+}
+
+.flatpickr-calendar.tour-range-calendar .flatpickr-day:hover {
+  background: #eef8f3;
+  border-color: #e2f0e9;
+}
+
+.flatpickr-calendar.tour-range-calendar .flatpickr-day.selected,
+.flatpickr-calendar.tour-range-calendar .flatpickr-day.startRange,
+.flatpickr-calendar.tour-range-calendar .flatpickr-day.endRange {
+  background: #2b7a66;
+  border-color: #2b7a66;
+}
+
+.flatpickr-calendar.tour-range-calendar .flatpickr-day.inRange {
+  background: #e8f2ec;
+  border-color: #e8f2ec;
+  color: #173826;
+  box-shadow: -5px 0 0 #e8f2ec, 5px 0 0 #e8f2ec;
+}
+
+@media (max-width: 980px) {
+  .booking-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .booking-preview-card {
+    position: static;
+    grid-template-rows: auto;
+    gap: 14px;
+    max-height: none;
+    overflow: visible;
+  }
+
+  .preview-main {
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+@media (max-width: 768px) {
+  .booking-header {
+    padding: 8px 12px;
+  }
+
+  .brand-round-logo {
+    width: 34px;
+    height: 34px;
+  }
+
+  .brand-text-logo {
+    height: 21px;
+  }
+
+  .booking-page {
+    width: 96vw;
+  }
+
+  .field-row.two,
+  .locations-grid {
+    grid-template-columns: 1fr;
+  }
+}

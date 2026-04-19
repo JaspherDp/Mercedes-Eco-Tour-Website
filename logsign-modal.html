@@ -1,0 +1,325 @@
+<!-- logsign-modal.html -->
+<div class="logsign-modal-overlay" id="modalOverlay">
+  <div class="logsign-modal">
+    <span class="logsign-close-modal" id="closeModal">&times;</span>
+
+    <!-- LOGIN FORM -->
+    <div class="logsign-form-container" id="loginForm">
+      <h2 class="logsign-form-title">Login</h2>
+
+      <div class="logsign-input-group logsign-email-group">
+        <input type="email" id="loginEmail" placeholder=" " required>
+        <label for="loginEmail">Email</label>
+      </div>
+
+      <div class="logsign-input-group logsign-password-group">
+      <input type="password" id="loginPassword" placeholder=" " required>
+      <label for="loginPassword">Password</label>
+      <img src="img/passwordhide.png" 
+          alt="Show Password" 
+          class="logsign-eye-icon" 
+          id="toggleLoginPassword" 
+          data-hidden-icon="img/passwordhide.png" 
+          data-visible-icon="img/passwordsee.png">
+    </div>
+
+      <div class="logsign-checkbox-container">
+        <label><input type="checkbox" id="rememberMe"> Remember Me</label>
+        <span class="forgot-password">Forgot Password?</span>
+      </div>
+
+      <button id="loginBtn">Login</button>
+
+      <!-- Google Sign-In -->
+      <div class="or-divider">
+        <span>or with</span>
+      </div>
+
+      <!-- Login Google Button -->
+      <button id="googleLoginBtn" class="google-signin-btn">
+          <img src="img/googlelogo.png" alt="Google Logo">
+          <span class="btn-text">Log in with Google</span>
+      </button>
+
+
+      <p class="center-text">Don't have an account? <span id="goSignup" class="logsign-toggle-link">Sign up now</span></p>
+    </div>
+
+<!-- FORGOT PASSWORD FORM -->
+<div class="logsign-form-container logsign-hidden" id="forgotPasswordForm">
+  <h2 class="logsign-form-title">Forgot Password</h2>
+
+  <!-- Step Indicator -->
+  <div class="signup-phase-indicator forgot-phase-indicator">
+    <div class="phase-step phase-active" data-phase="1">
+      <div class="circle">1</div><span>Verify Email</span>
+    </div>
+    <div class="phase-line"></div>
+    <div class="phase-step phase-inactive" data-phase="2">
+      <div class="circle">2</div><span>New Password</span>
+    </div>
+  </div>
+
+  <!-- Step 1: Enter Email + Verification Code -->
+  <div class="signup-phase forgot-phase forgot-phase-1 active">
+    <div class="logsign-email-container">
+      <div class="logsign-email-wrapper logsign-input-group">
+        <input type="email" id="forgotEmail" placeholder=" " required>
+        <label for="forgotEmail">Email</label>
+      </div>
+      <button id="forgotSendCodeBtn" class="logsign-send-code-btn" type="button">Send Code</button>
+    </div>
+    <div id="forgotEmailStatus" class="email-status"></div>
+
+    <div class="verification-code-container">
+      <input type="text" maxlength="1" class="forgot-code-box" disabled>
+      <input type="text" maxlength="1" class="forgot-code-box" disabled>
+      <input type="text" maxlength="1" class="forgot-code-box" disabled>
+      <input type="text" maxlength="1" class="forgot-code-box" disabled>
+      <input type="text" maxlength="1" class="forgot-code-box" disabled>
+      <input type="text" maxlength="1" class="forgot-code-box" disabled>
+    </div>
+    <div class="code-countdown" id="forgotCodeCountdown" style="display:none">Resend code in 90s</div>
+  </div>
+
+  <!-- Step 2: New Password -->
+  <div class="signup-phase forgot-phase forgot-phase-2">
+    <div class="logsign-input-group logsign-password-group">
+      <input type="password" id="newPassword" placeholder=" " required>
+      <label for="newPassword">New Password</label>
+      <img src="img/passwordhide.png" alt="Show Password" class="logsign-eye-icon" id="toggleNewPassword" data-hidden-icon="img/passwordhide.png" data-visible-icon="img/passwordsee.png">
+    </div>
+    <div class="logsign-input-group logsign-password-group">
+      <input type="password" id="confirmNewPassword" placeholder=" " required>
+      <label for="confirmNewPassword">Confirm Password</label>
+      <img src="img/passwordhide.png" alt="Show Password" class="logsign-eye-icon" id="toggleConfirmNewPassword" data-hidden-icon="img/passwordhide.png" data-visible-icon="img/passwordsee.png">
+    </div>
+    <button id="saveNewPasswordBtn">Save</button>
+  </div>
+</div>
+
+    <!-- SIGNUP FORM (2 PHASE) -->
+    <div class="logsign-form-container logsign-hidden" id="signupForm">
+      <h2 class="logsign-form-title">Sign Up</h2>
+
+      <!-- Phase Indicator -->
+      <div class="signup-phase-indicator">
+        <div class="phase-step phase-active" data-phase="1">
+          <div class="circle">1</div><span>Fill up details</span>
+        </div>
+        <div class="phase-line"></div>
+        <div class="phase-step phase-inactive" data-phase="2">
+          <div class="circle">2</div><span>Verify email</span>
+        </div>
+      </div>
+
+      <!-- PHASE 1 -->
+      <div class="signup-phase signup-phase-1 active">
+        <div class="logsign-input-group">
+          <input type="text" id="signupFirstName" placeholder=" " required>
+          <label for="signupFirstName">First Name</label>
+        </div>
+        <div class="logsign-input-group">
+          <input type="text" id="signupLastName" placeholder=" " required>
+          <label for="signupLastName">Last Name</label>
+        </div>
+        <div class="logsign-input-group logsign-password-group">
+          <input type="password" id="signupPassword" placeholder=" " required>
+          <label for="signupPassword">Password</label>
+          <img src="img/passwordhide.png" alt="Show Password" class="logsign-eye-icon" id="toggleSignupPassword" data-hidden-icon="img/passwordhide.png" data-visible-icon="img/passwordsee.png">
+        </div>
+        <div class="logsign-input-group logsign-password-group">
+          <input type="password" id="signupConfirmPassword" placeholder=" " required>
+          <label for="signupConfirmPassword">Confirm Password</label>
+          <img src="img/passwordhide.png" alt="Show Password" class="logsign-eye-icon" id="toggleConfirmPassword" data-hidden-icon="img/passwordhide.png" data-visible-icon="img/passwordsee.png">
+        </div>
+        <button id="verifyEmailBtn" type="button">Verify Email</button>
+      </div>
+
+      <!-- PHASE 2 -->
+      <div class="signup-phase signup-phase-2">
+        <div class="logsign-email-container">
+          <div class="logsign-email-wrapper logsign-input-group">
+            <input type="email" id="signupEmail" placeholder=" " required>
+            <label for="signupEmail">Email</label>
+          </div>
+          <button id="sendCodeBtn" class="logsign-send-code-btn" type="button">Send Code</button>
+        </div>
+        <div class="verification-code-container">
+          <input type="text" maxlength="1" class="code-box">
+          <input type="text" maxlength="1" class="code-box">
+          <input type="text" maxlength="1" class="code-box">
+          <input type="text" maxlength="1" class="code-box">
+          <input type="text" maxlength="1" class="code-box">
+          <input type="text" maxlength="1" class="code-box">
+        </div>
+        <div class="code-countdown" id="codeCountdown">Resend code in 90s</div>
+        <button id="signupBtn" type="button">Sign Up</button>
+      </div>
+
+      <div class="or-divider">
+        <span>or with</span>
+      </div>
+
+      <button id="googleSignupBtn" class="google-signin-btn">
+          <img src="img/googlelogo.png" alt="Google Logo">
+          <span class="btn-text">Sign up with Google</span>
+      </button>
+
+
+      <p class="center-text">Already have an account? <span id="goLogin" class="logsign-toggle-link">Login here</span></p>
+    </div>
+  </div>
+</div>
+
+<style>
+/* === Modal === */
+.logsign-modal-overlay { 
+  position: fixed; inset: 0; 
+  background: rgba(0,0,0,0.6); 
+  display: none; 
+  justify-content: center; 
+  align-items: center; 
+  z-index: 1001; 
+}
+
+.logsign-modal { 
+  background: #fff; 
+  padding: 1.5rem 2rem; 
+  border-radius: 12px; 
+  width: 400px; max-width: 90% !important; 
+  position: relative; 
+  box-shadow: 0 15px 30px rgba(0,0,0,0.2); 
+  display: flex; 
+  flex-direction: column; 
+  overflow: hidden; 
+  max-height: 90vh !important; 
+}
+
+/* Close button */
+.logsign-close-modal { 
+  position: absolute; top: 12px; right: 18px; 
+  font-size: 1.6rem; cursor: pointer; color: #555; 
+}
+
+/* Form container */
+.logsign-form-container { 
+  display: flex; flex-direction: column; 
+  gap: 1.5rem; 
+  transition: all 0.3s ease; 
+  position: relative;
+  margin-bottom: 10px;
+}
+.logsign-hidden { display: none !important; }
+.logsign-form-title { text-align: center; margin-bottom: 0.3rem; color: #2b7a66; font-weight: 600; font-size: 1.5rem; }
+
+/* Floating labels */
+.logsign-input-group { position: relative; display: flex; flex-direction: column; }
+.logsign-input-group input { padding: 12px 10px; font-size: 1rem; border: 2px solid #ccc; border-radius: 6px; outline: none; transition: border-color 0.3s ease; }
+.logsign-input-group input:focus { border-color: #2b7a66; }
+.logsign-input-group label { position: absolute; left: 12px; top: 12px; color: #999; font-size: 0.9rem; pointer-events: none; background: #fff; padding: 0 4px; transition: all 0.3s ease; }
+.logsign-input-group input:focus + label, .logsign-input-group input:not(:placeholder-shown) + label { top: -8px; font-size: 0.75rem; color: #3368A1; }
+
+/* Password toggle */
+.logsign-password-group { position: relative; }
+.logsign-eye-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; cursor: pointer; opacity: 0.6; transition: opacity 0.2s; }
+.logsign-eye-icon:hover { opacity: 1; }
+
+/* Checkbox + Forgot */
+.logsign-checkbox-container { display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; }
+.forgot-password { cursor: pointer; color: #3368A1; text-decoration: underline; }
+
+/* Buttons */
+.logsign-form-container button { padding: 12px; border-radius: 6px; background-color: #2b7a66; color: #fff; font-size: 1rem; border: none; cursor: pointer; transition: background-color 0.3s; }
+.logsign-form-container button:hover { background-color: #3368A1; }
+
+/* Google Sign-In distinct button */
+.logsign-form-container .google-signin-btn {
+    display: flex;
+    align-items: center;       /* vertically center */
+    justify-content: center;   /* center horizontally */
+    gap: 10px;                 /* space between logo and text */
+    background-color: #fff !important;
+    color: #000 !important;
+    border: 1px solid #000;
+    border-radius: 6px;
+    padding: 10px 16px;        /* adjust padding for better height */
+    font-weight: 500;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.3s;
+}
+
+.logsign-form-container .google-signin-btn img {
+    width: 22px;    /* slightly bigger for better proportion */
+    height: 22px;
+    object-fit: contain;  /* ensure logo doesn’t stretch */
+}
+
+.logsign-form-container .google-signin-btn:hover {
+    background-color: #f1f1f1 !important;
+}
+
+
+/* Toggle links */
+.logsign-toggle-link { color: #3368A1; cursor: pointer; text-decoration: underline; font-weight: 500; transition: color 0.3s; }
+.logsign-toggle-link:hover { color: #2b7a66; }
+
+/* Signup Phase Indicator */
+.signup-phase-indicator { display: flex; align-items: center; margin-bottom: 0.7rem; gap: 5px; }
+.phase-step { display: flex; flex-direction: column; align-items: center; font-size: 0.85rem; }
+.phase-step .circle { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #ccc; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; background-color: #fff; font-weight: 600; transition: all 0.3s; }
+.phase-line { flex: 1; height: 2px; background: #ccc; transition: all 0.3s; }
+
+/* Step colors */
+.phase-step.phase-active .circle { background: #2b7a66; border-color: #2b7a66; color: #fff; }
+.phase-step.phase-completed .circle { background: #eee; border-color: #ccc; color: #999; }
+.phase-step.phase-inactive .circle { background: #eee; border-color: #ccc; color: #999; }
+
+/* Phase content */
+.signup-phase {
+  display: none; 
+  flex-direction: column; 
+  gap: 0.5rem; 
+}
+.signup-phase.active {
+  display: flex;
+}
+
+
+/* Email + Send Code */
+.logsign-email-container { display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; margin-bottom: 0.3rem; }
+.logsign-email-wrapper { flex: 1; position: relative; min-width: 0; }
+.logsign-send-code-btn { padding: 10px 14px; font-size: 0.85rem; flex-shrink: 0; }
+
+/* Verification code input */
+.verification-code-container { display: flex; gap: 10px; justify-content: center; margin: 0.2rem 0; }
+.verification-code-container input { width: 51px; height: 51px; text-align: center; font-size: 1.1rem; border: 2px solid #ccc; border-radius: 6px; }
+
+/* Countdown */
+.code-countdown { text-align: center; font-size: 0.85rem; color: #555; margin: 0.2rem 0; }
+
+/* Signup button */
+#signupBtn { padding: 10px; margin-top: 0.3rem; }
+
+/* OR Divider */
+.or-divider { display: flex; align-items: center; text-align: center; margin: 10px 0; color: #555; font-weight: 500; font-size: 0.9rem; }
+.or-divider::before, .or-divider::after { content: ""; flex: 1; border-bottom: 1px solid #ccc; }
+.or-divider:not(:empty)::before { margin-right: 10px; }
+.or-divider:not(:empty)::after { margin-left: 10px; }
+
+.center-text { text-align: center; margin-top: 8px; font-size: 0.9rem; }
+
+/* Forgot password uses same phase styles */
+.forgot-phase-indicator { margin-bottom: 0.7rem; }
+.forgot-phase { display: none; flex-direction: column; gap: 0.5rem; }
+.forgot-phase.active { display: flex; }
+
+.email-status {
+  font-size: 0.85rem;
+  margin-top: 4px;
+  min-height: 18px;
+}
+
+</style>
+
