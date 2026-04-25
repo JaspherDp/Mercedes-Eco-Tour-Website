@@ -65,44 +65,60 @@ $small_image2   = getLatestFieldValue($pdo, 'small_image2');
   <div class="bt-container">
 
       <!-- Packages -->
-      <div class="bt-card">
-          <img src="img/packageshome.png" alt="Package Icon" class="bt-icon">
-          <div class="bt-info">
-              <h3>Packages</h3>
-              <p>Explore complete travel packages.</p>
-              <a href="tourss.php?tab=tour-packages" class="bt-btn">View Packages</a>
-          </div>
-      </div>
+      <a href="tourss.php?tab=tour-packages" class="bt-card-link" aria-label="Packages">
+        <div class="bt-card">
+          <img src="img/packageshome.png" alt="Packages" class="bt-icon">
+          <h3 class="bt-card-title">Packages</h3>
+        </div>
+      </a>
       
       <!-- Tour Guides -->
-      <div class="bt-card">
-          <img src="img/tourguidehome.png" alt="Tour Guide Icon" class="bt-icon">
-          <div class="bt-info">
-              <h3>Tour Guides</h3>
-              <p>Find professional and local tour guides.</p>
-              <a href="tourss.php?tab=tour-guides" class="bt-btn">View Tour Guides</a>
-          </div>
-      </div>
+      <a href="tourss.php?tab=tour-guides" class="bt-card-link" aria-label="Tour Guides">
+        <div class="bt-card">
+          <img src="img/tourguidehome.png" alt="Tour Guides" class="bt-icon">
+          <h3 class="bt-card-title">Tour Guides</h3>
+        </div>
+      </a>
 
       <!-- Boats -->
-      <div class="bt-card">
-          <img src="img/boathome.png" alt="Boat Icon" class="bt-icon">
-          <div class="bt-info">
-              <h3>Boats</h3>
-              <p>Book boats for sea activities.</p>
-              <a href="tourss.php?tab=our-boats" class="bt-btn">View Boats</a>
-          </div>
-      </div>
+      <a href="tourss.php?tab=our-boats" class="bt-card-link" aria-label="Boats">
+        <div class="bt-card">
+          <img src="img/boathome.png" alt="Boats" class="bt-icon">
+          <h3 class="bt-card-title">Boats</h3>
+        </div>
+      </a>
 
       <!-- Hotels -->
-      <div class="bt-card">
-          <img src="img/hotelshome.png" alt="Boat Icon" class="bt-icon">
-          <div class="bt-info">
-              <h3>Hotels / Resorts</h3>
-              <p>Find the perfect place to rest.</p>
-              <a href="hotel_resorts.php" class="bt-btn">View Hotels & Resorts</a>
-          </div>
-      </div>
+      <a href="hotel_resorts.php" class="bt-card-link" aria-label="Hotels and Resorts">
+        <div class="bt-card">
+          <img src="img/hotelshome.png" alt="Hotels and Resorts" class="bt-icon">
+          <h3 class="bt-card-title">Hotels / Resorts</h3>
+        </div>
+      </a>
+
+            <!-- Packages -->
+      <a href="tourss.php?tab=tour-packages" class="bt-card-link" aria-label="Packages">
+        <div class="bt-card">
+          <img src="img/packageshome.png" alt="Packages" class="bt-icon">
+          <h3 class="bt-card-title">Packages</h3>
+        </div>
+      </a>
+      
+      <!-- Tour Guides -->
+      <a href="tourss.php?tab=tour-guides" class="bt-card-link" aria-label="Tour Guides">
+        <div class="bt-card">
+          <img src="img/tourguidehome.png" alt="Tour Guides" class="bt-icon">
+          <h3 class="bt-card-title">Tour Guides</h3>
+        </div>
+      </a>
+
+      <!-- Boats -->
+      <a href="tourss.php?tab=our-boats" class="bt-card-link" aria-label="Boats">
+        <div class="bt-card">
+          <img src="img/boathome.png" alt="Boats" class="bt-icon">
+          <h3 class="bt-card-title">Boats</h3>
+        </div>
+      </a>
 
   </div>
 </section>

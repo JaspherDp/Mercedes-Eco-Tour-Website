@@ -540,6 +540,7 @@ if ($isPalmsFarm) {
     const searchWrap = document.getElementById("detailsSearchWrap");
     const roomsContent = document.getElementById("roomsContent");
     const hotelSearchStorageKey = `hotelDetailsSearchData:${hotelData.id}`;
+    const hotelSearchDraftStorageKey = `hotelDetailsSearchDraft:${hotelData.id}`;
     const legacyHotelSearchStorageKey = "hotelDetailsSearchData";
     const resortsSearchStorageKey = "searchData";
     const mainPhoto = document.getElementById("mainPhoto");
@@ -899,12 +900,14 @@ if ($isPalmsFarm) {
       }
       document.getElementById("guestBox").style.display = "none";
       clearError(document.querySelector(".guest-display"));
+      persistSearchFormDraft();
     }
 
     function changeValue(id, delta) {
       const el = document.getElementById(id);
       const current = Number(el.innerText || 0);
       el.innerText = Math.max(0, current + delta);
+      persistSearchFormDraft();
     }
 
     function toggleGuestBox() {
@@ -952,9 +955,30 @@ if ($isPalmsFarm) {
       };
     }
 
-    function clearPersistedSearchState() {
+    function parseStoredSearchData(rawValue) {
+      if (!rawValue) return null;
+      try {
+        const parsed = JSON.parse(rawValue);
+        return parsed && typeof parsed === "object" ? parsed : null;
+      } catch {
+        return null;
+      }
+    }
+
+    function persistSearchFormDraft() {
+      const draftData = { ...collectSearchData(), hotelId: hotelData.id };
+      sessionStorage.setItem(hotelSearchDraftStorageKey, JSON.stringify(draftData));
+    }
+
+    function clearHotelDetailsSearchState() {
+      sessionStorage.removeItem(hotelSearchStorageKey);
+      sessionStorage.removeItem(hotelSearchDraftStorageKey);
       localStorage.removeItem(hotelSearchStorageKey);
       localStorage.removeItem(legacyHotelSearchStorageKey);
+    }
+
+    function clearPersistedSearchState() {
+      clearHotelDetailsSearchState();
       sessionStorage.removeItem(resortsSearchStorageKey);
     }
 
@@ -1023,7 +1047,8 @@ if ($isPalmsFarm) {
         return;
       }
 
-      localStorage.setItem(hotelSearchStorageKey, JSON.stringify({ ...data, hotelId: hotelData.id }));
+      sessionStorage.setItem(hotelSearchStorageKey, JSON.stringify({ ...data, hotelId: hotelData.id }));
+      sessionStorage.removeItem(hotelSearchDraftStorageKey);
       runRoomSearch(data);
       const roomsSection = document.getElementById("rooms");
       if (roomsSection) {
@@ -1078,6 +1103,7 @@ if ($isPalmsFarm) {
             dateRangeInput.value = "";
             updateStayDurationBadge(null, null);
             picker.clear(false);
+            persistSearchFormDraft();
             return;
           }
           checkinInput.value = flatpickr.formatDate(selectedDates[0], "Y-m-d");
@@ -1095,6 +1121,7 @@ if ($isPalmsFarm) {
           dateRangeInput.value = "";
           updateStayDurationBadge(null, null);
         }
+        persistSearchFormDraft();
       }
     });
 
@@ -1127,6 +1154,8 @@ if ($isPalmsFarm) {
     window.addEventListener("scroll", placeCalendarBelow, true);
 
     document.addEventListener("DOMContentLoaded", () => {
+      const navigationEntry = performance.getEntriesByType("navigation")[0];
+      const navigationType = navigationEntry?.type || "navigate";
       const headerQuery = <?= json_encode($bookingSuccess ? ('?booking_success=1' . ($bookingRef > 0 ? '&booking_ref=' . (int)$bookingRef : '')) : '') ?>;
       const clearBookingSuccessQuery = () => {
         if (!window.history?.replaceState) return;
@@ -1151,23 +1180,27 @@ if ($isPalmsFarm) {
 
       if (bookingSuccess) {
         clearPersistedSearchState();
+      } else if (navigationType !== "reload") {
+        clearHotelDetailsSearchState();
       }
 
-      const savedDataRaw = localStorage.getItem(hotelSearchStorageKey) || localStorage.getItem(legacyHotelSearchStorageKey);
-      let savedData = null;
-      try {
-        savedData = savedDataRaw ? JSON.parse(savedDataRaw) : null;
-      } catch (e) {
-        savedData = null;
-      }
+      const savedDataRaw = sessionStorage.getItem(hotelSearchStorageKey) || localStorage.getItem(hotelSearchStorageKey) || localStorage.getItem(legacyHotelSearchStorageKey);
+      const savedData = parseStoredSearchData(savedDataRaw);
+      const draftData = parseStoredSearchData(sessionStorage.getItem(hotelSearchDraftStorageKey));
 
       const savedDataIsForCurrentHotel = savedData && (
         Number(savedData.hotelId || hotelData.id) === Number(hotelData.id)
+      );
+      const draftDataIsForCurrentHotel = draftData && (
+        Number(draftData.hotelId || hotelData.id) === Number(hotelData.id)
       );
 
       if (savedDataIsForCurrentHotel) {
         fillSearchFromData(savedData);
         runRoomSearch(savedData);
+      } else if (draftDataIsForCurrentHotel) {
+        fillSearchFromData(draftData);
+        renderRoomsSearchPrompt();
       } else {
         if (pageSource === "featured") {
           const featuredIsland = localStorage.getItem("hotelDetailsFeaturedIsland") || hotelData.island || "";
@@ -1177,7 +1210,7 @@ if ($isPalmsFarm) {
           }
           localStorage.removeItem("hotelDetailsFeaturedIsland");
           renderRoomsSearchPrompt();
-        } else if (pageSource === "result" && !savedData) {
+        } else if (pageSource === "result" && !savedData && !draftData) {
           const resortsSearchRaw = sessionStorage.getItem(resortsSearchStorageKey);
           if (resortsSearchRaw) {
             try {
@@ -1210,8 +1243,12 @@ if ($isPalmsFarm) {
       });
       islandInput.addEventListener("change", () => {
         clearError(islandInput);
+        persistSearchFormDraft();
       });
-      dateRangeInput.addEventListener("change", () => clearError(dateRangeInput));
+      dateRangeInput.addEventListener("change", () => {
+        clearError(dateRangeInput);
+        persistSearchFormDraft();
+      });
 
       const reviewsTrack = document.getElementById("reviewsTrack");
       const reviewsPrev = document.getElementById("reviewsPrev");

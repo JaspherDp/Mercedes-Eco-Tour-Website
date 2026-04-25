@@ -347,7 +347,7 @@ footer {
   FEATURED SECTION
   ============================ */
 .fe-featured {
-  padding: 40px 8%;
+  padding: 20px 8%;
   font-family: Arial, sans-serif;
 }
 
@@ -398,7 +398,7 @@ footer {
   align-items: center;
   justify-content: center;
   gap: 25px;
-  margin-top: 35px;
+  margin-top: 15px;
 }
 
 /* SMALL IMAGES */
@@ -534,117 +534,91 @@ footer {
 
 /* Booking Types Section */
 .booking-types {
-    padding: 40px 20px;
-    text-align: center;
+    padding: 38px 8% 30px;
 }
 /* Card Grid */
 .bt-container {
     display: grid;
-    grid-template-columns: repeat(4, 1fr); /* 4 in one row */
-    gap: 25px;
-    max-width: 90vw;
-    margin: auto;
+    grid-template-columns: repeat(7, minmax(160px, 160px));
+    justify-content: center;
+    gap: 26px;
+    width: 100%;
+    margin: 0;
 }
 
-/* Individual Card */
+.bt-card-link {
+    text-decoration: none;
+    color: #18333b;
+    display: block;
+    width: 100%;
+}
+
+/* Individual tappable box */
 .bt-card {
-    border-radius: 15px;
-    padding: 20px;
+    width: 100%;
+    min-height: 92px;
+    border-radius: 9px;
+    padding: 7px 6px;
     display: flex;
-    align-items: flex-start;
-    gap: 18px;
-    transition: transform 0.25s ease, box-shadow 0.25s ease;
-    background-color: #f4f4f5;
-    border: 1px solid #e5e4eb;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+    background: transparent;
+    border: 2px solid #2b7a66;
+}
+
+.bt-card-link:hover .bt-card,
+.bt-card-link:focus-visible .bt-card {
+    transform: translateY(-2px);
+    border-color: #1f5f4d;
+    box-shadow: 0 8px 18px rgba(20, 77, 28, 0.12);
 }
 
 /* Icon */
 .bt-icon {
-    width: 100px;
-    height: 100px;
-    object-fit: cover;
-    border-radius: 10px;
+    width: 36px;
+    height: 36px;
+    object-fit: contain;
 }
 
-/* Text Area */
-.bt-info {
-    text-align: left;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start; /* button naturally below text */
-    flex: 1;
-}
-
-.bt-info h3 {
-    font-size: 1rem;
+/* Title inside box */
+.bt-card-title {
     margin: 0;
+    font-size: 0.8rem;
     font-weight: 600;
-    color: #222;
-}
-
-.bt-info p {
-    margin-top: 5px;
-    font-size: 0.9rem;
-    color: #555;
-}
-
-/* Button under text */
-/* Button under text */
-.bt-btn {
-    display: inline-block;        /* fits content width */
-    width: auto;                   /* do not stretch */
-    padding: 8px 18px;
-    background-color: #2b7a66;
-    color: #fff;
-    text-decoration: none;
-    border-radius: 20px;
-    font-weight: 500;
-    font-size: 0.95rem;
-    transition: background 0.3s;
-    white-space: nowrap;           /* prevent line breaks inside button */
-    text-align: center;            /* center text */
-    align-self: flex-start;        /* <-- this makes width fit content only */
-}
-
-
-.bt-btn:hover {
-    background-color: #144d1c;
+    line-height: 1.15;
+    color: #1d3a42;
+    text-align: center;
 }
 
 /* Responsive */
 @media (max-width: 900px) {
     .bt-container {
-        grid-template-columns: 1fr;
-    }
-
-    .bt-card {
-        flex-direction: row; /* keep image left, text right */
+        grid-template-columns: repeat(2, minmax(0, 180px));
+        justify-content: center;
+        gap: 8px;
     }
 
     .bt-icon {
-        width: 80px;
-        height: 80px;
+        width: 34px;
+        height: 34px;
+    }
+
+    .bt-card-title {
+        font-size: 0.78rem;
     }
 }
 
 @media (max-width: 500px) {
     .bt-container {
-        grid-template-columns: 1fr;
+        grid-template-columns: minmax(0, 220px);
+        justify-content: center;
     }
 
     .bt-card {
-        flex-direction: column; /* stack image on top for small screens */
-        align-items: center;
-        text-align: center;
-    }
-
-    .bt-info {
-        justify-content: center;
-        align-items: center;
-    }
-
-    .bt-btn {
-        margin-top: 15px;
+        min-height: 90px;
     }
 }
 

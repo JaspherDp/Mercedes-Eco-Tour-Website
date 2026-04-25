@@ -46,13 +46,24 @@ function isDefaultProfileImage($value)
 
 function normalizeProfileImage($value)
 {
-    $candidate = trim((string) $value);
+    $candidate = html_entity_decode(trim((string) $value), ENT_QUOTES, 'UTF-8');
+    $candidate = str_replace('\\/', '/', $candidate);
     if ($candidate === '') {
         return '';
     }
+    if (strlen($candidate) >= 2) {
+        $first = $candidate[0];
+        $last = $candidate[strlen($candidate) - 1];
+        if (($first === '"' && $last === '"') || ($first === "'" && $last === "'")) {
+            $candidate = substr($candidate, 1, -1);
+        }
+    }
+    if (strpos($candidate, '//') === 0) {
+        $candidate = 'https:' . $candidate;
+    }
     if (preg_match('#^https?://#i', $candidate)) {
         if (stripos($candidate, 'profiles.google.com') !== false && preg_match('#profiles\\.google\\.com/(?:s2/photos/profile/)?([^/?#]+)(?:/picture)?#i', $candidate, $m)) {
-            return 'https://profiles.google.com/' . rawurlencode($m[1]) . '/picture?sz=256';
+            return 'https://www.google.com/s2/photos/profile/' . rawurlencode($m[1]) . '?sz=256';
         }
         if (stripos($candidate, 'googleusercontent.com') !== false) {
             $candidate = preg_replace('/([?&])sz=\\d+/i', '$1sz=256', $candidate);
@@ -70,7 +81,7 @@ function buildGoogleProfileImageById($googleId)
     if ($id === '') {
         return '';
     }
-    return 'https://profiles.google.com/' . rawurlencode($id) . '/picture?sz=256';
+    return 'https://www.google.com/s2/photos/profile/' . rawurlencode($id) . '?sz=256';
 }
 
 $profileImage = '';
@@ -100,6 +111,149 @@ if ($profileName === '') {
     $profileName = trim((string)($user['full_name'] ?? $_SESSION['tourist_name'] ?? ''));
 }
 $profileInitial = strtoupper(function_exists('mb_substr') ? mb_substr(($profileName !== '' ? $profileName : 'U'), 0, 1) : substr(($profileName !== '' ? $profileName : 'U'), 0, 1));
+
+function headSubnavTableExists(PDO $pdo, string $tableName): bool
+{
+    $stmt = $pdo->prepare("
+        SELECT COUNT(*)
+        FROM information_schema.tables
+        WHERE table_schema = DATABASE() AND table_name = ?
+    ");
+    $stmt->execute([$tableName]);
+    return ((int)$stmt->fetchColumn()) > 0;
+}
+
+function headSubnavResolveImage(?string $rawPath, string $fallback = 'img/sampleimage.png'): string
+{
+    $candidate = trim((string)$rawPath);
+    if ($candidate === '') {
+        return $fallback;
+    }
+
+    if (preg_match('#^https?://#i', $candidate)) {
+        return $candidate;
+    }
+
+    $cleanCandidate = ltrim(str_replace('\\', '/', $candidate), '/');
+    $candidateFile = __DIR__ . '/../' . $cleanCandidate;
+    if (is_file($candidateFile)) {
+        return $cleanCandidate;
+    }
+
+    $basename = basename($candidate);
+    $relativeCandidates = [
+        'php/upload/' . $basename,
+        'upload/' . $basename,
+        'uploads/' . $basename,
+        'img/' . $basename,
+        'imagess/' . $basename
+    ];
+
+    foreach ($relativeCandidates as $relativePath) {
+        if (is_file(__DIR__ . '/../' . $relativePath)) {
+            return $relativePath;
+        }
+    }
+
+    return $fallback;
+}
+
+$popularDestinations = [
+    [
+        'label' => 'Things to do in',
+        'title' => 'Apuao',
+        'url' => 'destination.php',
+        'image' => 'imagess/Apuao Pequena_header-img.png'
+    ],
+    [
+        'label' => 'Things to do in',
+        'title' => 'Malasugui',
+        'url' => 'destination.php',
+        'image' => 'imagess/Malasugui_header-img.png'
+    ],
+    [
+        'label' => 'Things to do in',
+        'title' => 'Quinapaguian',
+        'url' => 'destination.php',
+        'image' => 'imagess/Quinapaguian_header-img.png'
+    ],
+    [
+        'label' => 'Things to do in',
+        'title' => 'Cayucyucan',
+        'url' => 'destination.php',
+        'image' => 'imagess/Caringo_header-img.png'
+    ]
+];
+
+$popularPackages = [];
+$popularHotels = [];
+
+if ($currentPage === 'homepage.php' && headSubnavTableExists($pdo, 'tour_packages')) {
+    if (headSubnavTableExists($pdo, 'operators')) {
+        $stmt = $pdo->prepare("
+            SELECT
+              p.package_id,
+              p.package_title,
+              p.package_image
+            FROM tour_packages p
+            INNER JOIN operators o ON o.operator_id = p.operator_id
+            WHERE o.status = 'active'
+            ORDER BY p.package_id DESC
+            LIMIT 4
+        ");
+        $stmt->execute();
+    } else {
+        $stmt = $pdo->prepare("
+            SELECT
+              p.package_id,
+              p.package_title,
+              p.package_image
+            FROM tour_packages p
+            ORDER BY p.package_id DESC
+            LIMIT 4
+        ");
+        $stmt->execute();
+    }
+
+    $popularPackages = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+}
+
+if ($currentPage === 'homepage.php' && headSubnavTableExists($pdo, 'hotel_resorts')) {
+    $stmt = $pdo->prepare("
+        SELECT
+          hotel_resort_id,
+          name,
+          image_path
+        FROM hotel_resorts
+        WHERE status = 'active' AND popular = 1
+        ORDER BY updated_at DESC, hotel_resort_id DESC
+        LIMIT 4
+    ");
+    $stmt->execute();
+    $popularHotels = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+
+    if (count($popularHotels) < 4) {
+        $excludedIds = array_map(static fn(array $row): int => (int)($row['hotel_resort_id'] ?? 0), $popularHotels);
+        $placeholders = implode(',', array_fill(0, count($excludedIds), '?'));
+        $sql = "
+            SELECT
+              hotel_resort_id,
+              name,
+              image_path
+            FROM hotel_resorts
+            WHERE status = 'active'
+        ";
+        if (!empty($excludedIds)) {
+            $sql .= " AND hotel_resort_id NOT IN ($placeholders)";
+        }
+        $sql .= " ORDER BY updated_at DESC, hotel_resort_id DESC LIMIT " . (4 - count($popularHotels));
+
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($excludedIds);
+        $extraHotels = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $popularHotels = array_merge($popularHotels, $extraHotels);
+    }
+}
 
 ?>
 
@@ -190,20 +344,85 @@ $profileInitial = strtoupper(function_exists('mb_substr') ? mb_substr(($profileN
 
 <!-- SECOND NAVBAR -->
 <div class="head-subnav">
-  <a href="tourss.php#popular-destinations">
-    Popular Destinations
-    <img src="img/dropdownicon2.png" class="head-subnav-dropdown-icon">
-  </a>
+  <div class="head-subnav-item head-subnav-item--destinations">
+    <a href="destination.php" class="head-subnav-link" aria-haspopup="true">
+      Popular Destinations
+      <img src="img/dropdownicon2.png" class="head-subnav-dropdown-icon" alt="" aria-hidden="true">
+    </a>
 
-  <a href="tourss.php#popular-packages">
-    Popular Packages
-    <img src="img/dropdownicon2.png" class="head-subnav-dropdown-icon">
-  </a>
+    <div class="head-subnav-popup" aria-label="Popular destinations">
+      <h4 class="head-subnav-popup-title">Popular Destinations</h4>
+      <?php foreach ($popularDestinations as $destination): ?>
+        <a href="<?= htmlspecialchars($destination['url']) ?>" class="head-subnav-popup-item">
+          <img src="<?= htmlspecialchars(headSubnavResolveImage($destination['image'], 'img/sampleimage.png')) ?>" alt="<?= htmlspecialchars($destination['title']) ?>">
+          <div>
+            <span><?= htmlspecialchars($destination['label']) ?></span>
+            <strong><?= htmlspecialchars($destination['title']) ?></strong>
+          </div>
+        </a>
+      <?php endforeach; ?>
+    </div>
+  </div>
 
-  <a href="hotel_resorts.php#resorts">
-    Hotel & Resorts
-    <img src="img/dropdownicon2.png" class="head-subnav-dropdown-icon">
-  </a>
+  <div class="head-subnav-item head-subnav-item--packages">
+    <a href="tourss.php?tab=tour-packages" class="head-subnav-link" aria-haspopup="true">
+      Popular Packages
+      <img src="img/dropdownicon2.png" class="head-subnav-dropdown-icon" alt="" aria-hidden="true">
+    </a>
+
+    <div class="head-subnav-popup" aria-label="Popular packages">
+      <h4 class="head-subnav-popup-title">Popular Packages</h4>
+      <?php if (!empty($popularPackages)): ?>
+        <?php foreach ($popularPackages as $package): ?>
+          <a href="package_details.php?package_id=<?= (int)$package['package_id'] ?>" class="head-subnav-popup-item">
+            <img src="<?= htmlspecialchars(headSubnavResolveImage($package['package_image'] ?? '', 'img/packageshome.png')) ?>" alt="<?= htmlspecialchars((string)($package['package_title'] ?? 'Package')) ?>">
+            <div>
+              <span>Top package</span>
+              <strong><?= htmlspecialchars((string)($package['package_title'] ?? 'Package')) ?></strong>
+            </div>
+          </a>
+        <?php endforeach; ?>
+      <?php else: ?>
+        <a href="tourss.php?tab=tour-packages" class="head-subnav-popup-item">
+          <img src="img/packageshome.png" alt="Packages">
+          <div>
+            <span>Top package</span>
+            <strong>Explore Packages</strong>
+          </div>
+        </a>
+      <?php endif; ?>
+    </div>
+  </div>
+
+  <div class="head-subnav-item head-subnav-item--hotels">
+    <a href="hotel_resorts.php" class="head-subnav-link" aria-haspopup="true">
+      Hotel & Resorts
+      <img src="img/dropdownicon2.png" class="head-subnav-dropdown-icon" alt="" aria-hidden="true">
+    </a>
+
+    <div class="head-subnav-popup" aria-label="Popular hotels and resorts">
+      <h4 class="head-subnav-popup-title">Hotel & Resorts</h4>
+      <?php if (!empty($popularHotels)): ?>
+        <?php foreach ($popularHotels as $hotel): ?>
+          <a href="hotel_details.php?id=<?= (int)$hotel['hotel_resort_id'] ?>&amp;source=featured" class="head-subnav-popup-item">
+            <img src="<?= htmlspecialchars(headSubnavResolveImage($hotel['image_path'] ?? '', 'img/hotelshome.png')) ?>" alt="<?= htmlspecialchars((string)($hotel['name'] ?? 'Hotel')) ?>">
+            <div>
+              <span>Top stays</span>
+              <strong><?= htmlspecialchars((string)($hotel['name'] ?? 'Hotel & Resort')) ?></strong>
+            </div>
+          </a>
+        <?php endforeach; ?>
+      <?php else: ?>
+        <a href="hotel_resorts.php" class="head-subnav-popup-item">
+          <img src="img/hotelshome.png" alt="Hotels and resorts">
+          <div>
+            <span>Top stays</span>
+            <strong>Explore Hotels & Resorts</strong>
+          </div>
+        </a>
+      <?php endif; ?>
+    </div>
+  </div>
 
   <span class="head-subnav-separator">|</span>
 
@@ -649,7 +868,7 @@ body {
   background: white;
   display: flex;
   align-items: center;
-  gap: 25px;
+  gap: 22px;
   padding: 10px 0 10px 75px;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
   position: fixed;
@@ -658,9 +877,17 @@ body {
   width: 100%;
   z-index: 999;
   height: var(--sub-nav);
+  overflow: visible;
 }
 
-.head-subnav a {
+.head-subnav-item {
+  position: relative;
+  height: 100%;
+  display: inline-flex;
+  align-items: center;
+}
+
+.head-subnav-link {
   color: black;
   text-decoration: none;
   font-weight: 550;
@@ -683,10 +910,84 @@ body {
   transition: 0.3s;
 }
 
-/* hover effect (nice UX) */
-.head-subnav a:hover .head-subnav-dropdown-icon {
+.head-subnav-item:hover .head-subnav-dropdown-icon,
+.head-subnav-item:focus-within .head-subnav-dropdown-icon {
   transform: rotate(180deg);
   opacity: 1;
+}
+
+.head-subnav-popup {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 1px);
+  min-width: 360px;
+  max-width: 420px;
+  display: none;
+  background: #ffffff;
+  border: 1px solid #e4ece8;
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(15, 50, 40, 0.12);
+  padding: 12px 14px 14px;
+  z-index: 1200;
+}
+
+.head-subnav-item:hover .head-subnav-popup,
+.head-subnav-item:focus-within .head-subnav-popup {
+  display: block;
+}
+
+.head-subnav-item--packages .head-subnav-popup {
+  left: -28px;
+}
+
+.head-subnav-item--hotels .head-subnav-popup {
+  left: -52px;
+}
+
+.head-subnav-popup-title {
+  margin: 0 0 8px;
+  font-size: 15 px;
+  color: #10313b;
+  letter-spacing: 0.01em;
+}
+
+.head-subnav-popup-item {
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 4px;
+  border-radius: 8px;
+  transition: background 0.2s ease;
+}
+
+.head-subnav-popup-item:hover {
+  background: #f5f8f7;
+}
+
+.head-subnav-popup-item img {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.head-subnav-popup-item span {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: #6a7f85;
+}
+
+.head-subnav-popup-item strong {
+  display: block;
+  margin-top: 1px;
+  font-size: 15px;
+  color: #20363c;
+  font-weight: 600;
+  line-height: 1.2;
 }
 
 /* separator */
@@ -699,6 +1000,7 @@ body {
 .head-subnav-btn {
   background: #2b7a66;
   color: white !important;
+  text-decoration: none !important;
   padding: 6px 14px;
   border-radius: 20px;
   font-weight: 600;
@@ -708,6 +1010,13 @@ body {
 /* hover effect */
 .head-subnav-btn:hover {
   background: #256b59;
+  text-decoration: none !important;
+}
+
+.head-subnav-btn:focus,
+.head-subnav-btn:active,
+.head-subnav-btn:visited {
+  text-decoration: none !important;
 }
 
 /* button layout */
@@ -718,6 +1027,7 @@ body {
 
   background: #2b7a66;
   color: white !important;
+  text-decoration: none !important;
   padding: 6px 14px;
   border-radius: 20px;
   font-weight: 600;
@@ -732,7 +1042,49 @@ body {
 }
 /* remove underline effect for button */
 .head-subnav-btn::after {
-  display: none;
+  display: none !important;
+  content: none !important;
+}
+
+@media (max-width: 1180px) {
+  .head-subnav {
+    gap: 12px;
+    padding-left: 22px;
+  }
+
+  .head-subnav-item {
+    height: auto;
+  }
+
+  .head-subnav-link {
+    font-size: 13px;
+  }
+
+  .head-subnav-popup {
+    min-width: 320px;
+    max-width: min(360px, calc(100vw - 22px));
+  }
+
+  .head-subnav-item--packages .head-subnav-popup {
+    left: -12px;
+  }
+
+  .head-subnav-item--hotels .head-subnav-popup {
+    left: auto;
+    right: 0;
+  }
+
+  .head-subnav-popup-title,
+  .head-subnav-popup-item span,
+  .head-subnav-popup-item strong {
+    font-size: 13px;
+  }
+}
+
+@media (max-width: 860px) {
+  .head-subnav-popup {
+    display: none !important;
+  }
 }
 
 html {

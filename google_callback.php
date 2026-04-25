@@ -6,12 +6,7 @@ session_start();
 
 // --- Google Client Configuration ---
 $client = new Google_Client();
-try {
-    $googleConfig = load_google_oauth_config();
-} catch (RuntimeException $e) {
-    http_response_code(500);
-    exit(htmlspecialchars($e->getMessage(), ENT_QUOTES, 'UTF-8'));
-}
+$googleConfig = load_google_oauth_config();
 $client->setClientId($googleConfig['client_id']);
 $client->setClientSecret($googleConfig['client_secret']);
 $client->setRedirectUri($googleConfig['redirect_uri']);
@@ -28,10 +23,6 @@ if (!isset($_GET['code'])) {
 // --- Get Access Token ---
 $token = $client->fetchAccessTokenWithAuthCode($_GET['code']);
 if (isset($token['error'])) {
-    if (($token['error'] ?? '') === 'invalid_client') {
-        http_response_code(500);
-        exit('Google Sign-In failed: invalid OAuth client credentials. Update GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET in .env and Google Cloud Console.');
-    }
     die('Google login failed: ' . htmlspecialchars($token['error']));
 }
 $client->setAccessToken($token);
