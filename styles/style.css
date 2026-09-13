@@ -1,0 +1,617 @@
+.des_container {
+  max-width: 100%;
+  margin: 30px auto;
+}
+
+h1 {
+  text-align: center;
+  color: #2b7a66;
+  font-size: 1.8rem;
+  margin-bottom: 30px;
+}
+
+
+/* --- Places grid & card --- */
+.des_places-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr); 
+  gap: 30px;
+  padding: 0 20px;
+}
+
+@media (max-width: 1024px) {
+  .des_places-grid {
+    grid-template-columns: repeat(2, 1fr); /* 2 cards per row on tablets */
+  }
+}
+
+@media (max-width: 600px) {
+  .des_places-grid {
+    grid-template-columns: 1fr; /* 1 card per row on phones */
+  }
+}
+
+.des_place-card {
+  background: #fff;
+  border-radius: 20px;
+  overflow: hidden;
+  height: 250px;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  transition: transform 260ms cubic-bezier(.2, .9, .2, 1),
+              box-shadow 260ms ease;
+  cursor: pointer;
+  position: relative;
+}
+
+/* Bottom image decoration */
+.des_place-card::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 110px;
+  background-image: url("../imagess/explore.png"); 
+  background-repeat: no-repeat;
+  background-position: bottom center;
+  background-size: cover;
+  pointer-events: none;
+}
+
+.des_place-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+}
+
+.des_place-card img {
+  width: 100%;
+  height: 58%;           /* adjust height automatically */
+  max-height: 250px;      /* optional: limits very tall images */
+  object-fit: cover;    /* ensures full image is visible without cropping */
+  display: block;
+  background-color: #f5f5f5; /* optional: placeholder for empty space */
+  border-bottom: 1px solid #eee; /* optional: separates image from caption */
+}
+
+
+.des_place-caption {
+  padding: 20px;
+  text-align: center;
+  font-size: 1.3rem;
+  color: #2b7a66;
+  font-weight: 600;
+}
+
+
+/* --- Fixed buttons container --- */
+.des_fixed-buttons {
+  position: fixed;
+  top: 495px;          
+  left: 35px;
+  z-index: 1000;
+  display: none;
+  flex-direction: column;
+  gap: 15px;
+  transition: top 0.3s ease; /* smooth transition when top changes */
+}
+
+/* Show buttons */
+.des_fixed-buttons.show {
+  display: flex;
+}
+
+/* Buttons */
+.des_fixed-btn {
+  background: #2b7a66;
+  color: #fff;
+  border: none;
+  padding: 12px 18px;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 160ms ease, background 160ms ease;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.12);
+}
+
+.des_fixed-btn:hover {
+  transform: translateX(6px);
+}
+
+.des_fixed-btn.visited {
+  background: #18433d;
+  transform: scale(1.03);
+}
+
+
+/* --- Page wrapper --- */
+.des_place-page {
+  display: none;
+  position: fixed;
+  inset: 0;
+  overflow-y: auto;
+  background: #fff;
+  z-index: 1000;
+  -webkit-overflow-scrolling: touch;
+}
+
+.des_place-page.open {
+  display: block;
+}
+
+/* --- Smooth transition --- */
+.page-transition {
+  transition: opacity 320ms cubic-bezier(.2, .9, .2, 1),
+              transform 320ms cubic-bezier(.2, .9, .2, 1);
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+.page-transition.show {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+
+/* --- Header & close --- */
+.des_place-page-header {
+  position: relative;
+  width: 100%;
+  height: 400px;
+  overflow: hidden;
+  border-bottom: 2px solid #2d6a4f20;
+}
+
+.des_place-page-header img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.des_place-page-header .des_close-btn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  font-size: 30px;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.5);
+  border: none;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 160ms ease;
+}
+
+.des_place-page-header .des_close-btn:hover {
+  background: rgba(0, 0, 0, 0.75);
+}
+
+
+/* --- Body --- */
+.des_place-page-body {
+  padding: 32px;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.des_place-title {
+  font-size: 2rem;
+  color: #2b7a66;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.des_info-section,
+.des_activities-section,
+.des_image-gallery {
+  margin-bottom: 24px;
+}
+
+.des_info-section {
+  background: #fff;
+  padding: 18px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  margin-top: 10px; /* space between title and box */
+}
+
+
+/* Justify resort descriptions */
+.des_info-section p {
+  text-align: justify;
+  line-height: 1.5;      /* improves readability */
+  margin-bottom: 1em;
+}
+
+
+
+/* --- Justify descriptions and add spacing --- */
+#des_pageDescription p {
+  text-align: justify;
+  margin-bottom: 1em;
+}
+
+
+
+.des_info-title {
+  margin-bottom: 5px;
+  margin-left: 2px; 
+}
+
+
+.des_activities-section .des_activities-grid,
+.des_image-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+}
+
+.des_activity-item {
+  background: #fff;
+  padding: 10px;
+  margin-top: 10px;
+  border-radius: 10px;
+  border-left: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transition: transform 220ms ease;
+}
+
+.des_activity-item:hover {
+  transform: translateY(-4px);
+}
+
+
+/* --- Map Section --- */
+.des_map-section {
+  background: #fff;
+  padding: 16px;
+  border-radius: 16px;
+  margin: 24px auto 32px;
+  margin-left: 1.3px;
+  box-shadow: 0 8px 28px rgba(45, 106, 79, 0.08);
+  border: 1px solid rgba(45, 106, 79, 0.12);
+  width: 100%;
+  max-width: 760px;
+  box-sizing: border-box;
+}
+
+.des_map-section .des_map-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.des_map-section h3 {
+  color: #2b7a66;
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.des_map-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.map-btn {
+  background: #2b7a66;
+  color: #fff;
+  border: 0;
+  padding: 8px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  font-weight: 700;
+  transition: background 140ms ease, transform 120ms ease;
+}
+
+.map-btn:hover {
+  background: #2b7a66;
+  transform: translateY(-2px);
+}
+
+.map-meta {
+  margin-top: 8px;
+  color: #2b7a66;
+  font-size: 0.95rem;
+  font-style: italic;
+}
+
+
+/* --- Gallery images --- */
+.des_gallery-img {
+  width: 100%;
+  height: 200px;
+  object-fit: cover;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 260ms cubic-bezier(.2, .9, .2, 1),
+              box-shadow 260ms ease,
+              opacity 260ms ease;
+  opacity: 0;
+  transform: translateY(8px);
+}
+
+.des_gallery-img.loaded {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.des_gallery-img:hover {
+  transform: scale(1.05);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.12);
+}
+
+
+/* --- Modals (place & resort) --- */
+.des_image-modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.9);
+  z-index: 2000;
+  align-items: center;
+  justify-content: center;
+}
+
+.des_image-modal.visible {
+  display: flex;
+}
+
+.des_image-modal .des_image-modal-content {
+  position: relative;
+  width: 100%;
+  max-width: 1100px;
+  max-height: 92vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  transition: transform 260ms cubic-bezier(.2, .9, .2, 1),
+              opacity 260ms ease;
+  transform: scale(.98);
+  opacity: 0;
+}
+
+.des_image-modal.visible .des_image-modal-content {
+  transform: scale(1);
+  opacity: 1;
+}
+
+/* --- Modal uniform visual size --- */
+.des_image-modal-img {
+  width: 800px;           /* fixed width for all images */
+  height: 450px;          /* fixed height for all images */
+  max-width: 94%;         /* responsive on smaller screens */
+  max-height: 86vh;       /* responsive on smaller screens */
+  object-fit: cover;      /* fill container, same visual size for all images */
+  border-radius: 12px;    /* keep same radius as before */
+  display: block;
+  margin: 0 auto;
+}
+
+
+
+.des_image-close-btn {
+  position: absolute;
+  top: 22px;
+  right: 22px;
+  font-size: 34px;
+  color: #fff;
+  background: #2b7a66;
+  border: none;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 160ms ease;
+}
+
+.des_image-close-btn:hover {
+  background: #2b7a66;
+}
+
+.des_nav-btn {
+  position: absolute;
+  background: #2b7a66;
+  color: #fff;
+  border: none;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  font-size: 30px;
+  cursor: pointer;
+  top: 50%;
+  transform: translateY(-50%);
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.des_nav-btn.des_prev {
+  left: 22px;
+}
+
+.des_nav-btn.des_next {
+  right: 22px;
+}
+
+.des_nav-btn:hover {
+  transform: translateY(-50%) scale(1.03);
+  background: #2b7a66;
+}
+
+.des_image-counter {
+  position: absolute;
+  bottom: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #2b7a66;
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-weight: 700;
+}
+
+
+/* ===== Resort Name ===== */
+.resort-name-outside {
+  margin: 15px 0 5px 0;
+
+}
+
+/* ===== Resort Description Frame ===== */
+.des_info-section {
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 10px;
+  background: #fff;
+}
+
+/* ===== Things To Do Grid Outside Frame ===== */
+.des_activities-section-outside {
+  margin-bottom: 15px;
+}
+
+.des_activities-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.des_activity-item {
+  background: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+}
+
+/* ===== Resort Gallery Outside Frame ===== */
+.des_image-gallery-outside {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr); /* 5 images per row */
+  gap: 14px; /* spacing between images */
+  margin-bottom: 30px;
+}
+
+.des_image-gallery-outside img {
+  width: 100%;
+  height: 180px;       /* match .des_place-card img height */
+  object-fit: cover;   /* fills box, keeps ratio */
+  border-radius: 12px;
+  cursor: pointer;
+  transition: transform 0.3s;
+}
+
+.des_image-gallery-outside img:hover {
+  transform: scale(1.05);
+}
+
+/* --- Back button (resort page) --- */
+.back-btn {
+  position: absolute;
+  top: 18px;
+  left: 12px;
+  z-index: 1001;
+  background: #2b7a66;
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  transition: transform 160ms ease, background 160ms ease;
+}
+
+.back-btn:hover {
+  background: #2b7a66;
+  transform: translateY(-2px);
+}
+
+
+/* --- Responsive tweaks --- */
+@media (max-width: 820px) {
+  .des_place-page-header {
+    height: 220px;
+  }
+
+  .des_gallery-img {
+    height: 150px;
+  }
+
+  .des_place-card img {
+    height: 180px;
+  }
+
+  .des_fixed-buttons {
+    left: 14px;
+    top: auto;
+    bottom: 18px;
+    transform: none;
+    flex-direction: row;
+    gap: 10px;
+  }
+
+  .map-btn {
+    padding: 6px 10px;
+  }
+}
+
+/* Full-width navbar */
+.des_place-navbar {
+  background-color: #2b7a66;
+  margin-top: -2px;
+  width: 100%;
+  padding: 10px 0;
+  display: flex;
+  justify-content: center;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+}
+
+.des_place-navbar ul {
+  list-style: none;
+  display: flex;
+  gap: 24px;
+  margin: 0;
+  padding: 0;
+}
+
+.des_place-navbar li a {
+  text-decoration: none;
+  color: #fff;
+  padding: 6px 12px;
+  position: relative;
+  transition: color 0.2s;
+  border-bottom: none; /* make sure no extra line exists */
+}
+
+.des_place-navbar li a:hover::after {
+  width: 100%;
+}
+
+/* Active underline */
+.des_place-navbar li a.active::after {
+  width: 100%;
+}
+
+
+.des_section {
+  display: none;
+}
+.des_section.show {
+  display: block;
+}
+
+.activity-icon {
+  width: 32px;
+  height: 32px;
+  margin-right: 6px;
+  vertical-align: middle;
+}

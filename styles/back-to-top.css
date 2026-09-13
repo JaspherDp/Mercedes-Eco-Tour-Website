@@ -1,0 +1,201 @@
+.back-to-top {
+  --scroll-progress: 0;
+  position: fixed;
+  right: clamp(18px, 3vw, 36px);
+  bottom: clamp(18px, 3vw, 34px);
+  z-index: 1200;
+  width: 54px;
+  height: 54px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #174f40;
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(14px) scale(.9);
+  transition: opacity .25s ease, visibility .25s ease, transform .3s cubic-bezier(.2,.75,.25,1.25);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.back-to-top.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0) scale(1);
+}
+
+.back-to-top__surface {
+  position: absolute;
+  inset: 6px;
+  display: grid;
+  place-items: center;
+  border: 1px solid rgba(31, 116, 91, .16);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .96);
+  box-shadow: 0 8px 20px rgba(7, 53, 41, .18), inset 0 0 0 1px rgba(255,255,255,.8);
+  backdrop-filter: blur(8px);
+  overflow: hidden;
+  isolation: isolate;
+  transition: background-color .2s ease, transform .2s ease, box-shadow .2s ease;
+}
+
+.back-to-top.is-visible .back-to-top__surface {
+  animation: backToTopBuoy 3.2s ease-in-out infinite;
+}
+
+.back-to-top__surface::before,
+.back-to-top__surface::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  left: -18%;
+  width: 136%;
+  border-radius: 44% 52% 46% 50%;
+  pointer-events: none;
+}
+
+.back-to-top__surface::before {
+  bottom: -31%;
+  height: 49%;
+  background: rgba(56, 178, 139, .15);
+  animation: backToTopWater 4.2s linear infinite;
+}
+
+.back-to-top__surface::after {
+  bottom: -35%;
+  height: 47%;
+  background: rgba(30, 132, 101, .09);
+  animation: backToTopWater 5.4s linear infinite reverse;
+}
+
+.back-to-top:hover .back-to-top__surface,
+.back-to-top:focus-visible .back-to-top__surface {
+  animation: none;
+  background: #edf9f4;
+  box-shadow: 0 10px 25px rgba(7, 53, 41, .24), inset 0 0 0 1px #fff;
+  transform: scale(1.06);
+}
+
+.back-to-top:active .back-to-top__surface { transform: scale(.96); }
+
+.back-to-top:focus-visible {
+  outline: 3px solid rgba(50, 159, 124, .35);
+  outline-offset: 4px;
+}
+
+.back-to-top__arrow {
+  position: relative;
+  z-index: 2;
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.back-to-top__meter {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+  filter: drop-shadow(0 2px 3px rgba(12, 75, 57, .16));
+}
+
+.back-to-top__track,
+.back-to-top__progress {
+  fill: none;
+  stroke-width: 3.5;
+}
+
+.back-to-top__track {
+  stroke: rgba(38, 105, 84, .15);
+  animation: backToTopRingTide 2.4s ease-in-out infinite;
+}
+
+.back-to-top__progress {
+  stroke: url(#backToTopProgressGradient);
+  stroke-linecap: round;
+  transform: rotate(-90deg);
+  transform-origin: 32px 32px;
+  will-change: stroke-dashoffset;
+}
+
+.back-to-top__boat {
+  will-change: transform;
+}
+
+.back-to-top__boat-vessel {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: backToTopBoatBob 1.55s ease-in-out infinite;
+}
+
+.back-to-top__boat-hull {
+  fill: #124f3e;
+  stroke: #fff;
+  stroke-width: .75;
+  stroke-linejoin: round;
+}
+
+.back-to-top__boat-sail {
+  fill: #fff;
+  stroke: #124f3e;
+  stroke-width: .85;
+  stroke-linejoin: round;
+}
+
+.back-to-top__boat-mast { stroke: #124f3e; stroke-width: .95; stroke-linecap: round; }
+
+.back-to-top__boat-wave {
+  fill: none;
+  stroke: #36a983;
+  stroke-width: 1.15;
+  stroke-linecap: round;
+  stroke-dasharray: 2.2 1.7;
+  animation: backToTopWaveFlow .8s linear infinite;
+}
+
+@keyframes backToTopBoatBob {
+  0%, 100% { transform: translateY(.25px) rotate(-2deg); }
+  50% { transform: translateY(-.25px) rotate(2deg); }
+}
+
+@keyframes backToTopWaveFlow {
+  to { stroke-dashoffset: -7.8; }
+}
+
+@keyframes backToTopBuoy {
+  0%, 100% { transform: translateY(0); box-shadow: 0 8px 20px rgba(7, 53, 41, .18), inset 0 0 0 1px rgba(255,255,255,.8); }
+  50% { transform: translateY(-1.5px); box-shadow: 0 11px 24px rgba(7, 53, 41, .22), inset 0 0 0 1px rgba(255,255,255,.9); }
+}
+
+@keyframes backToTopWater {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes backToTopRingTide {
+  0%, 100% { stroke-opacity: .75; }
+  50% { stroke-opacity: 1; }
+}
+
+@media (max-width: 600px) {
+  .back-to-top { width: 50px; height: 50px; right: 14px; bottom: 16px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .back-to-top,
+  .back-to-top__surface,
+  .back-to-top__progress,
+  .back-to-top__boat { transition-duration: .01ms; }
+  .back-to-top__boat-vessel,
+  .back-to-top__boat-wave,
+  .back-to-top__surface,
+  .back-to-top__surface::before,
+  .back-to-top__surface::after,
+  .back-to-top__track { animation: none !important; }
+}

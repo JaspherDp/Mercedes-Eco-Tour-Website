@@ -1,0 +1,14 @@
+.mobile-scroll-indicator { display: none; }
+@media (max-width: 980px) {
+  html, body { scrollbar-width: none !important; }
+  html::-webkit-scrollbar, body::-webkit-scrollbar { display: none !important; width: 0 !important; }
+  * { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+  *::-webkit-scrollbar { width: 4px; height: 0; background: transparent; }
+  *::-webkit-scrollbar-track { background: transparent; box-shadow: none; }
+  *::-webkit-scrollbar-thumb { background: transparent; border: 0; border-radius: 999px; }
+  *.mobile-is-scrolling { scrollbar-color: #999 transparent; }
+  *.mobile-is-scrolling::-webkit-scrollbar-thumb { background: #999; }
+  .mobile-scroll-indicator { display: block; position: fixed; z-index: 2147483647; top: 0; right: 2px; width: 3px; border-radius: 999px; background: #929292; opacity: 0; pointer-events: none; transition: opacity .3s ease; }
+  .mobile-scroll-indicator.is-visible { opacity: .75; }
+}
+@media (prefers-reduced-motion: reduce) { .mobile-scroll-indicator { transition: none; } }

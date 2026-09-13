@@ -1,0 +1,101 @@
+/* Final tourism-report modal refinements kept separate from the legacy compact stylesheet. */
+.tourism-preview-filter {
+  align-items: flex-end;
+  gap: 9px;
+}
+
+.tourism-preview-filter label {
+  width: 142px;
+  height: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  display: grid;
+  gap: 4px;
+  box-shadow: none;
+}
+
+.tourism-preview-filter label:focus-within {
+  border: 0;
+  box-shadow: none;
+}
+
+.tourism-preview-filter label > span {
+  padding-left: 2px;
+  color: #44675d;
+  font-size: 7.5px;
+  line-height: 1;
+  letter-spacing: .09em;
+}
+
+.tourism-preview-filter input[type="date"] {
+  box-sizing: border-box;
+  width: 142px;
+  height: 38px;
+  line-height: 38px;
+  padding: 0 34px 0 11px;
+  border: 1px solid #c8ddd5;
+  border-radius: 8px;
+  background-color: #fff;
+  background-image: none;
+  color: #173c32;
+  color-scheme: light;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 1px 2px rgba(18,73,57,.03);
+  outline: none;
+}
+
+.tourism-preview-filter input[type="date"]:hover {
+  border-color: #a9c9bd;
+}
+
+.tourism-preview-filter input[type="date"]:focus {
+  border: 1px solid #19735b;
+  box-shadow: 0 0 0 3px rgba(25,115,91,.09);
+}
+
+.tourism-preview-filter input[type="date"]::-webkit-datetime-edit {
+  display: block;
+  height: auto;
+  padding: 0;
+}
+
+.tourism-preview-filter input[type="date"]::-webkit-calendar-picker-indicator {
+  width: 16px;
+  height: 16px;
+  margin: 0 -24px 0 0;
+  padding: 3px;
+  border: 0;
+  border-radius: 5px;
+  background-color: transparent !important;
+  opacity: 1 !important;
+  filter: grayscale(1) opacity(.72);
+  cursor: pointer;
+}
+
+.tourism-preview-filter input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  background-color: #eef2f0 !important;
+  opacity: 1 !important;
+}
+
+.tourism-preview-filter button {
+  height: 38px;
+  border-radius: 8px;
+}
+
+.tourism-preview-actions {
+  align-self: flex-end;
+}
+
+@media (max-width: 720px) {
+  .tourism-preview-filter label,
+  .tourism-preview-filter input[type="date"] {
+    width: 100%;
+  }
+
+  .tourism-preview-filter button {
+    height: 38px;
+  }
+}

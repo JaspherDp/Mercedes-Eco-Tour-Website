@@ -1,0 +1,44 @@
+.required-label-text .required-mark,
+[data-required-label] > .required-mark {
+  color: #c6283e;
+  font-weight: 900;
+}
+
+.required-label-text {
+  display: inline;
+}
+
+.required-choice-title {
+  margin: 0 0 8px;
+  color: #425c54;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.required-step-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0;
+  color: #697b75;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.required-step-note .required-mark {
+  color: #c6283e;
+  font-weight: 900;
+}
+
+.required-footer-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.required-label-text .required-mark,
+[data-required-label] > .required-mark {
+  margin-left: 3px;
+}

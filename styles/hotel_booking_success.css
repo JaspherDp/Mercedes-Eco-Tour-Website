@@ -1,0 +1,252 @@
+:root {
+  color-scheme: light;
+  --success-green: #197158;
+  --success-green-dark: #0f513f;
+  --success-green-soft: #e7f5ef;
+  --success-text: #17362e;
+  --success-muted: #667972;
+  --success-line: #dce8e3;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  color: var(--success-text);
+  background:
+    radial-gradient(circle at 10% 15%, rgba(52, 157, 124, .13), transparent 28rem),
+    radial-gradient(circle at 92% 84%, rgba(240, 182, 73, .11), transparent 25rem),
+    #f4f8f6;
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+}
+
+.success-header {
+  min-height: 78px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 14px clamp(22px, 5vw, 72px);
+  border-bottom: 1px solid rgba(203, 222, 215, .85);
+  background: #fff;
+}
+
+.success-brand { display: inline-flex; align-items: center; gap: 9px; }
+.success-brand img:first-child { width: 42px; height: 42px; object-fit: contain; }
+.success-brand img:last-child { width: 158px; height: 42px; object-fit: contain; }
+
+.secure-payment-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: #557068;
+  font-size: .78rem;
+  font-weight: 700;
+}
+
+.secure-payment-label svg,
+.email-icon svg,
+.success-button svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.secure-payment-label svg { width: 17px; height: 17px; }
+
+.success-page {
+  min-height: calc(100vh - 79px);
+  display: grid;
+  place-items: center;
+  padding: clamp(20px, 4vh, 36px) 20px;
+}
+
+.success-card {
+  width: min(880px, 100%);
+  overflow: hidden;
+  border: 1px solid rgba(210, 227, 220, .95);
+  border-radius: 24px;
+  background: rgba(255, 255, 255, .97);
+  box-shadow: 0 26px 70px rgba(20, 72, 56, .12);
+  text-align: center;
+}
+
+.success-hero {
+  position: relative;
+  padding: 28px clamp(30px, 7vw, 72px) 24px;
+  background: linear-gradient(145deg, #eff9f5, #fbfdfc 70%);
+}
+
+.success-hero::after {
+  position: absolute;
+  inset: auto 0 0;
+  height: 1px;
+  content: "";
+  background: linear-gradient(90deg, transparent, #cfe3db, transparent);
+}
+
+.success-mark {
+  width: 78px;
+  height: 78px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 14px;
+  color: var(--success-green);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 12px 30px rgba(25, 113, 88, .13);
+  animation: successMarkIn .55s ease-out both;
+}
+
+.success-mark svg { width: 65px; height: 65px; fill: none; stroke: currentColor; stroke-width: 4; stroke-linecap: round; stroke-linejoin: round; }
+.success-mark svg circle { opacity: .96; }
+
+.success-eyebrow {
+  margin: 0 0 7px;
+  color: var(--success-green);
+  font-size: .71rem;
+  font-weight: 800;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+
+.success-hero h1 {
+  margin: 0;
+  color: var(--success-green-dark);
+  font-size: clamp(2rem, 6vw, 2.8rem);
+  line-height: 1.12;
+  letter-spacing: -.035em;
+}
+
+.success-hero > p:last-child {
+  max-width: 680px;
+  margin: 11px auto 0;
+  color: var(--success-muted);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.success-details {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 13px;
+  margin: 21px clamp(30px, 7vw, 72px) 11px;
+  padding: 13px 18px;
+  border: 1px solid var(--success-line);
+  border-radius: 14px;
+  background: #f9fcfb;
+  text-align: left;
+}
+
+.email-icon {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 40px;
+  display: grid;
+  place-items: center;
+  color: var(--success-green);
+  border-radius: 11px;
+  background: var(--success-green-soft);
+}
+
+.email-icon svg { width: 21px; height: 21px; }
+.success-details span { display: block; margin-bottom: 3px; color: #71837d; font-size: .76rem; }
+.success-details strong { display: block; overflow-wrap: anywhere; color: #24483d; font-size: .95rem; }
+
+.booking-reference { margin: 0 24px 17px; color: #71817c; font-size: .78rem; }
+.booking-reference strong { color: #345c50; letter-spacing: .035em; }
+
+.success-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 0 clamp(30px, 7vw, 72px);
+}
+
+.success-button {
+  min-height: 50px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: 1px solid transparent;
+  border-radius: 12px;
+  font-size: .88rem;
+  font-weight: 800;
+  text-decoration: none;
+  transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
+}
+
+.success-button svg { width: 18px; height: 18px; }
+.success-button:hover { transform: translateY(-2px); }
+.success-button:focus-visible { outline: 3px solid rgba(25, 113, 88, .25); outline-offset: 3px; }
+.success-button-primary { color: #fff; background: linear-gradient(135deg, #14634d, #25856a); box-shadow: 0 10px 22px rgba(20, 99, 77, .2); }
+.success-button-primary:hover { box-shadow: 0 14px 27px rgba(20, 99, 77, .27); }
+.success-button-secondary { color: #235b4a; border-color: #c9ddd5; background: #fff; }
+.success-button-secondary:hover { background: #f3f9f6; }
+
+.success-note {
+  margin: 17px 22px 20px;
+  color: #82908b;
+  font-size: .74rem;
+  line-height: 1.5;
+}
+
+@keyframes successMarkIn {
+  from { opacity: 0; transform: scale(.72); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@media (max-width: 560px) {
+  .success-header { min-height: 54px; padding: 7px 15px; }
+  .success-brand { gap: 6px; }
+  .success-brand img:first-child { width: 32px; height: 32px; }
+  .success-brand img:last-child { width: 120px; height: 32px; }
+  .secure-payment-label { display: none; }
+  .success-page {
+    min-height: calc(100vh - 54px);
+    min-height: calc(100dvh - 54px);
+    padding: 10px 12px;
+  }
+  .success-card { border-radius: 17px; }
+  .success-hero { padding: 18px 16px 15px; }
+  .success-mark { width: 62px; height: 62px; margin-bottom: 9px; }
+  .success-mark svg { width: 51px; height: 51px; }
+  .success-eyebrow { margin-bottom: 5px; font-size: .62rem; letter-spacing: .09em; }
+  .success-hero h1 { font-size: 1.65rem; line-height: 1.08; }
+  .success-hero > p:last-child {
+    max-width: 240px;
+    margin-top: 8px;
+    font-size: .79rem;
+    line-height: 1.45;
+  }
+  .success-details {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    margin: 12px 14px 8px;
+    padding: 9px 12px;
+    text-align: center;
+  }
+  .success-details > div:last-child { width: 100%; min-width: 0; }
+  .email-icon { width: 30px; height: 30px; flex-basis: 30px; border-radius: 8px; }
+  .email-icon svg { width: 16px; height: 16px; }
+  .success-details span { margin-bottom: 3px; font-size: .65rem; line-height: 1.3; }
+  .success-details strong { font-size: .73rem; line-height: 1.3; }
+  .booking-reference { margin: 0 16px 10px; font-size: .68rem; }
+  .success-actions { grid-template-columns: 1fr; gap: 7px; padding: 0 14px; }
+  .success-button { min-height: 42px; padding: 9px 16px; font-size: .78rem; }
+  .success-button svg { width: 15px; height: 15px; }
+  .success-button-primary { order: 1; }
+  .success-button-secondary { order: 2; }
+  .success-note { margin: 9px 16px 11px; font-size: .64rem; line-height: 1.35; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}

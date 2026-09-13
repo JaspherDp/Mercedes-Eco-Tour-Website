@@ -1,0 +1,57 @@
+node_modules/
+vendor/
+
+# Private environment and credential material
+.env
+.env.*
+!.env.example
+!.env.firebase.example
+!payments/.env.example
+*credential*.json
+*credentials*.json
+*service-account*.json
+*service_account*.json
+*firebase-adminsdk*.json
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Database exports, backups, archives, logs, and debug artifacts
+*.sql
+!*_migration.sql
+!payments/*_migration.sql
+*.dump
+*.bak
+*.backup
+*.old
+*.orig
+*.save
+*.tmp
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.gz
+backups/
+*.log
+debug_*
+debug-*
+
+# Runtime/private data is not application source.
+storage/private/
+uploads/complaints/
+uploads/profile_pictures/
+
+# Runtime uploaded media
+
+/uploads/*
+!/uploads/.htaccess
+!/uploads/.gitkeep
+
+/php/upload/*
+!/php/upload/.htaccess
+!/php/upload/.gitkeep
+
+dist/
+build/

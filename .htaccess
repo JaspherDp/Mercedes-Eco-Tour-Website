@@ -1,0 +1,29 @@
+# Prevent credentials, repository metadata, and deployment artifacts from
+# being served when this project directory is an Apache/LiteSpeed document root.
+Options -Indexes
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # Temporary production HTTPS redirect. Local/private XAMPP hosts remain on
+    # HTTP. Change R=302 to R=308 only after the deployed SSL flows are verified.
+    RewriteCond %{HTTPS} !=on
+    RewriteCond %{HTTP_HOST} !^(?:localhost|127\.0\.0\.1|\[?::1\]?)(?::[0-9]+)?$ [NC]
+    RewriteCond %{HTTP_HOST} !^(?:10\.|192\.168\.|172\.(?:1[6-9]|2[0-9]|3[01])\.) [NC]
+    RewriteCond %{HTTP_HOST} ^([A-Z0-9.-]+)(?::[0-9]+)?$ [NC]
+    RewriteRule ^ https://%1%{REQUEST_URI} [R=302,L]
+    RewriteRule "(^|/)\.(?:git|svn|hg)(?:/|$)" - [F,L,NC]
+    RewriteRule "(^|/)backups(?:/|$)" - [F,L,NC]
+</IfModule>
+
+<IfModule mod_authz_core.c>
+    <FilesMatch "(?i)(?:^\.env(?:\..*)?$|^\.(?:git|svn|hg)|^composer\.(?:json|lock)$|^debug(?:[_-].*)?\.(?:txt|log|json)$|.*(?:credential|service[-_.]?account|backup|database[-_.]?dump).*\.json$|.*\.(?:ini|log|sql|dump|bak|backup|old|orig|save|tmp|key|pem|p12|pfx|zip|tar|tar\.gz|tgz|gz|7z)$)$">
+        Require all denied
+    </FilesMatch>
+</IfModule>
+
+<IfModule !mod_authz_core.c>
+    <FilesMatch "(?i)(?:^\.env(?:\..*)?$|^\.(?:git|svn|hg)|^composer\.(?:json|lock)$|^debug(?:[_-].*)?\.(?:txt|log|json)$|.*(?:credential|service[-_.]?account|backup|database[-_.]?dump).*\.json$|.*\.(?:ini|log|sql|dump|bak|backup|old|orig|save|tmp|key|pem|p12|pfx|zip|tar|tar\.gz|tgz|gz|7z)$)$">
+        Order allow,deny
+        Deny from all
+    </FilesMatch>
+</IfModule>

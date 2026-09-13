@@ -1,0 +1,456 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+:root {
+  --auth-primary: #176b55;
+  --auth-primary-dark: #0e4e3f;
+  --auth-accent: #2c8b70;
+  --auth-ink: #17342d;
+  --auth-muted: #63736f;
+  --auth-border: #cfdad6;
+  --auth-surface: #ffffff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body.auth-page {
+  min-height: 100vh;
+  margin: 0;
+  padding: 32px 18px;
+  display: grid;
+  place-items: center;
+  overflow-x: hidden;
+  color: var(--auth-ink);
+  font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  background:
+    linear-gradient(135deg, rgba(5, 39, 32, 0.9), rgba(16, 91, 72, 0.73)),
+    url("../img/tourscover.png") center / cover fixed;
+}
+
+body.auth-page::before,
+body.auth-page::after {
+  position: fixed;
+  content: "";
+  border-radius: 50%;
+  pointer-events: none;
+  filter: blur(2px);
+}
+
+body.auth-page::before {
+  width: 360px;
+  height: 360px;
+  top: -160px;
+  right: -110px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+body.auth-page::after {
+  width: 280px;
+  height: 280px;
+  bottom: -150px;
+  left: -80px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.adlog-modal {
+  width: min(100%, 452px);
+  max-width: calc(100vw - 36px);
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  padding: 36px 40px 38px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  border-radius: 20px;
+  box-shadow: 0 28px 70px rgba(2, 31, 24, 0.32);
+  animation: authCardIn 0.45s cubic-bezier(0.2, 0.75, 0.25, 1) both;
+}
+
+.adlog-modal::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 5px;
+  content: "";
+  background: linear-gradient(90deg, var(--auth-primary), #51b798);
+}
+
+@keyframes authCardIn {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.adlog-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  margin-bottom: 18px;
+}
+
+.adlog-brand-logo {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  object-fit: contain;
+}
+
+.adlog-brand-wordmark {
+  width: 182px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.adlog-heading {
+  margin-bottom: 26px;
+  text-align: center;
+}
+
+.adlog-role-icon {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 15px;
+  color: var(--auth-primary);
+  border: 1px solid #cce2db;
+  border-radius: 18px;
+  background: #eff8f5;
+}
+
+.adlog-role-icon svg {
+  width: 27px;
+  height: 27px;
+}
+
+.adlog-title {
+  margin: 0;
+  color: var(--auth-ink);
+  font-size: clamp(1.42rem, 5vw, 1.68rem);
+  line-height: 1.25;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.adlog-subtitle {
+  margin: 8px 0 0;
+  color: var(--auth-muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+
+.adlog-form {
+  display: flex;
+  flex-direction: column;
+  gap: 19px;
+}
+
+.adlog-input-group {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.adlog-input-icon {
+  width: 19px;
+  height: 19px;
+  position: absolute;
+  z-index: 2;
+  left: 15px;
+  top: 50%;
+  color: #71827e;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: color 0.2s ease;
+}
+
+.adlog-input-group input {
+  width: 100%;
+  min-height: 55px;
+  padding: 15px 47px 14px 47px;
+  color: var(--auth-ink);
+  font: inherit;
+  font-size: 0.93rem;
+  font-weight: 500;
+  border: 1.5px solid var(--auth-border);
+  border-radius: 12px;
+  outline: none;
+  background: #fff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.adlog-input-group input:hover {
+  border-color: #9db5ae;
+}
+
+.adlog-input-group input:focus {
+  border-color: var(--auth-primary);
+  background: #fff;
+  box-shadow: 0 0 0 4px rgba(23, 107, 85, 0.11);
+}
+
+.adlog-input-group:focus-within .adlog-input-icon {
+  color: var(--auth-primary);
+}
+
+.adlog-input-group label {
+  position: absolute;
+  z-index: 3;
+  left: 42px;
+  top: 17px;
+  padding: 0 6px;
+  color: #71827e;
+  font-size: 0.86rem;
+  font-weight: 500;
+  line-height: 20px;
+  pointer-events: none;
+  background: #fff;
+  transition: top 0.2s ease, left 0.2s ease, color 0.2s ease, font-size 0.2s ease;
+}
+
+/* Preserve the existing floating-label behavior. */
+.adlog-input-group input:focus + label,
+.adlog-input-group input:not(:placeholder-shown) + label {
+  top: -10px;
+  left: 12px;
+  color: var(--auth-primary);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.adlog-password-toggle,
+.adlog-eye-icon {
+  width: 38px;
+  height: 38px;
+  position: absolute;
+  z-index: 4;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: #657873;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  cursor: pointer;
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.adlog-eye-icon {
+  padding: 8px;
+  object-fit: contain;
+  opacity: 0.68;
+}
+
+.adlog-password-toggle:hover,
+.adlog-password-toggle:focus-visible,
+.adlog-eye-icon:hover,
+.adlog-eye-icon:focus-visible {
+  color: var(--auth-primary);
+  background: #edf7f4;
+  outline: none;
+}
+
+.adlog-eye-icon:hover,
+.adlog-eye-icon:focus-visible {
+  opacity: 1;
+}
+
+.adlog-password-toggle svg {
+  width: 21px;
+  height: 21px;
+}
+
+.adlog-btn {
+  min-height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  margin-top: 2px;
+  padding: 13px 18px;
+  color: #fff;
+  font: inherit;
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(135deg, var(--auth-primary), var(--auth-accent));
+  box-shadow: 0 10px 24px rgba(23, 107, 85, 0.24);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+}
+
+.adlog-btn:hover {
+  transform: translateY(-2px);
+  filter: brightness(0.98);
+  box-shadow: 0 14px 28px rgba(23, 107, 85, 0.3);
+}
+
+.adlog-btn:active {
+  transform: translateY(0);
+}
+
+.adlog-btn:focus-visible {
+  outline: 3px solid rgba(62, 151, 124, 0.35);
+  outline-offset: 3px;
+}
+
+.adlog-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.adlog-btn:disabled,
+.adlog-btn.is-loading {
+  transform: none;
+  filter: none;
+  box-shadow: 0 8px 18px rgba(23, 107, 85, 0.2);
+  cursor: wait;
+  opacity: 0.88;
+}
+
+.adlog-btn.is-locked,
+.adlog-btn.is-locked:hover {
+  color: #f4f5f5;
+  background: #8b9391;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 1;
+}
+
+.adlog-btn.is-locked .adlog-spinner {
+  border-color: rgba(255, 255, 255, 0.38);
+  border-top-color: #ffffff;
+}
+
+.adlog-btn.is-loading > svg {
+  display: none;
+}
+
+.adlog-spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  border-top-color: #fff;
+  border-right-color: #fff;
+  border-radius: 50%;
+  transform-origin: 50% 50%;
+  animation: adlogSpinnerRotate 0.65s linear infinite !important;
+  animation-play-state: running !important;
+  will-change: transform;
+}
+
+@keyframes adlogSpinnerRotate {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.adlog-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 20px;
+  padding: 12px 14px;
+  color: #8d2525;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  border: 1px solid #f2caca;
+  border-radius: 11px;
+  background: #fff4f3;
+}
+
+.adlog-alert svg {
+  width: 19px;
+  height: 19px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+}
+
+.adlog-alert.is-success {
+  color: #176b55;
+  border-color: #b9dfd1;
+  background: #edf9f4;
+}
+
+.adlog-form[data-locked="true"] .adlog-input-group {
+  opacity: 0.68;
+}
+
+.adlog-security-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin: 25px 0 0;
+  color: #74827f;
+  font-size: 0.77rem;
+}
+
+.adlog-security-note svg {
+  width: 14px;
+  height: 14px;
+}
+
+@media (max-width: 520px) {
+  body.auth-page {
+    align-items: start;
+    padding: 18px 12px;
+  }
+
+  .adlog-modal {
+    width: 100%;
+    max-width: calc(100vw - 24px);
+    margin: auto 0;
+    padding: 30px 22px 28px;
+    border-radius: 18px;
+  }
+
+  .adlog-brand {
+    margin-bottom: 18px;
+  }
+
+  .adlog-brand-logo {
+    width: 43px;
+    height: 43px;
+    flex-basis: 43px;
+  }
+
+  .adlog-brand-wordmark {
+    width: 158px;
+    height: 43px;
+  }
+
+  .adlog-heading {
+    margin-bottom: 25px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .adlog-modal {
+    animation: none;
+  }
+
+  .adlog-input-group input,
+  .adlog-input-group label,
+  .adlog-btn {
+    transition: none;
+  }
+}

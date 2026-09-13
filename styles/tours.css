@@ -1,0 +1,1046 @@
+body,
+ul {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Roboto", sans-serif;
+  padding-top: 39px;
+}
+
+
+/* Hamburger button */
+.tmodal-menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: white;
+  cursor: pointer;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .tmodal-header-container {
+    justify-content: space-between;
+  }
+
+  .tmodal-nav ul {
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    display: none;
+    background-color: #2E7B45;
+    padding: 1rem;
+  }
+
+  .tmodal-nav ul.show {
+    display: flex;
+  }
+
+  .tmodal-menu-toggle {
+    display: block;
+    margin-left: auto;
+    margin-right: 1rem;
+  }
+}
+
+/* Main */
+.tmodal-main img {
+  width: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tmodal-second-navbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #2E7B45;
+  padding: 0.75rem 1rem;
+  gap: 1rem;
+}
+
+.tmodal-second-navbar ul {
+  display: flex;
+  list-style: none;
+  gap: 3rem;
+  padding: 0;
+  margin: 0;
+}
+
+.tmodal-second-navbar ul li a {
+  text-decoration: none;
+  color: white;
+  font-weight: 500;
+}
+
+.tmodal-sec-nav-btn {
+  margin-left: 2rem;
+}
+
+.tmodal-sec-nav-btn a {
+  display: inline-block;
+  background-color: #3368A1;
+  color: white;
+  text-decoration: none;
+  padding: 0.3rem 0.8rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  font-size: 0.875rem;
+}
+
+/* Footer */
+.tmodal-footer {
+  background-color: #2f2f2f;
+  color: white;
+  font-family: Arial, sans-serif;
+}
+
+.tmodal-footer-container {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* Columns */
+.tmodal-footer-left,
+.tmodal-footer-middle,
+.tmodal-footer-right {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+}
+
+.tmodal-footer-logos {
+  margin-top: 30px;
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  align-items: center;
+}
+
+.tmodal-footer-left p {
+  max-width: 280px;
+  font-size: 14px;
+  line-height: 1.3;
+  margin: 0 auto;
+}
+
+.tmodal-footer-middle h3,
+.tmodal-footer-right h3 {
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+.tmodal-footer-middle ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tmodal-footer-middle ul li a,
+.tmodal-follow-us a {
+  color: white;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.tmodal-footer-middle ul li a:hover,
+.tmodal-follow-us a:hover {
+  text-decoration: underline;
+}
+
+.tmodal-follow-us {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  margin-bottom: 8px;
+  white-space: nowrap;
+}
+
+.tmodal-scroll-top {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.tmodal-scroll-top button {
+  border: 1px solid #999;
+  border-radius: 9999px;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.3s ease;
+}
+
+.tmodal-scroll-top button:hover {
+  background-color: #4b4b4b;
+}
+
+.tmodal-scroll-top button img {
+  width: 16px;
+  height: 16px;
+}
+
+/* Tablet and Up */
+@media (min-width: 640px) {
+  .tmodal-footer-container {
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 24px;
+    text-align: left;
+  }
+
+  .tmodal-footer-left,
+  .tmodal-footer-middle,
+  .tmodal-footer-right {
+    width: 33.333%;
+    text-align: left;
+  }
+
+  .tmodal-footer-left {
+    align-items: flex-start;
+    border-right: 1px solid #4b4b4b;
+    padding-right: 32px;
+  }
+
+  .tmodal-footer-middle {
+    border-right: 1px solid #4b4b4b;
+    padding: 0 32px;
+  }
+
+  .tmodal-footer-right {
+    padding-left: 32px;
+  }
+
+  .tmodal-footer-left p {
+    text-align: left;
+    margin: 0;
+  }
+
+  .tmodal-follow-us {
+    justify-content: flex-start;
+  }
+
+  .tmodal-scroll-top {
+    justify-content: flex-end;
+    margin-top: 0;
+  }
+}
+
+/* Modal container */
+.tmodal-modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  align-items: center;
+  justify-content: center;
+}
+
+/* Modal content */
+.tmodal-modal-content {
+  background: #fff;
+  padding: 2rem;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 500px;
+  position: relative;
+  box-shadow: 0 5px 25px rgba(0, 0, 0, 0.2);
+  animation: tmodal-fadeIn 0.3s ease;
+}
+
+.tmodal-modal-content h2 {
+  text-align: center;
+  margin-bottom: 25px;
+  color: #2E7B45;
+}
+
+.tmodal-second-navbar li a.active {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1px;
+}
+
+@keyframes tmodal-fadeIn {
+  from { opacity: 0; transform: translateY(-20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Close button */
+.tmodal-close {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #444;
+}
+
+/* Form group */
+.tmodal-input-group {
+  position: relative;
+  margin: 1.2rem 0;
+  width: 100%;
+}
+
+/* Inputs & textarea */
+.tmodal-input-group input,
+.tmodal-input-group textarea {
+  width: 100%;
+  padding: 14px 12px;
+  font-size: 1rem;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  background: none;
+  outline: none;
+  box-sizing: border-box;
+}
+
+/* Floating label */
+.tmodal-input-group label {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1rem;
+  color: #666;
+  background: #fff;
+  padding: 0 4px;
+  pointer-events: none;
+  transition: 0.2s ease all;
+}
+
+.tmodal-input-group input:focus + label,
+.tmodal-input-group input:not(:placeholder-shown) + label,
+.tmodal-input-group textarea:focus + label,
+.tmodal-input-group textarea:not(:placeholder-shown) + label {
+  top: -8px;
+  left: 10px;
+  transform: none;
+  font-size: 0.8rem;
+  color: #3368A1;
+  background: #fff;
+}
+
+/* Dropdowns */
+.tmodal-input-group select {
+  width: 100%;
+  padding: 14px 12px;
+  font-size: 1rem;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  outline: none;
+  background: #fff;
+  color: #555;
+  box-sizing: border-box;
+}
+
+.tmodal-input-group select + label {
+  position: static;
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+  color: #444;
+  transform: none;
+}
+
+/* Submit button */
+.tmodal-modal-btn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  background: #2E7B45;
+  color: white;
+  font-size: 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-top: 1.5rem;
+  transition: background 0.3s ease;
+}
+
+.tmodal-modal-btn:hover {
+  background: #3368A1;
+}
+
+body,
+ul {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: "Roboto", sans-serif;
+  padding-top: 39px;
+}
+
+/* Header */
+.tmodal-header {
+  background-color: #e6e6e6;
+}
+
+.tmodal-header-container {
+  padding: 0.75rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+.tmodal-header-logo {
+  width: 52px;
+  height: 50px;
+  object-fit: contain;
+}
+
+.tmodal-header-text {
+  font-size: 0.875rem;
+  color: black;
+  font-weight: 600;
+  text-align: left;
+  flex: 1;
+  min-width: 200px;
+}
+
+/* Navigation */
+.tmodal-nav {
+  background-color: #2E7B45;
+}
+
+.tmodal-nav ul {
+  max-width: 1280px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: center;
+  gap: 6rem;
+  padding: 0.75rem 1rem;
+  list-style: none;
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: white;
+}
+
+.tmodal-nav ul li a {
+  color: white;
+  text-decoration: none;
+}
+
+.tmodal-nav ul li a:hover {
+  text-decoration: underline;
+}
+
+.tmodal-nav ul li a.active {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1px;
+}
+
+/* Hamburger button */
+.tmodal-menu-toggle {
+  display: none;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: white;
+  cursor: pointer;
+}
+
+/* Mobile responsive */
+@media (max-width: 768px) {
+  .tmodal-header-container {
+    justify-content: space-between;
+  }
+
+  .tmodal-nav ul {
+    flex-direction: column;
+    align-items: center;
+    gap: 1rem;
+    display: none;
+    background-color: #2E7B45;
+    padding: 1rem;
+  }
+
+  .tmodal-nav ul.show {
+    display: flex;
+  }
+
+  .tmodal-menu-toggle {
+    display: block;
+    margin-left: auto;
+    margin-right: 1rem;
+  }
+}
+
+/* Main */
+.tmodal-main img {
+  width: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tmodal-second-navbar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border-bottom: 0.1px solid #000;
+  padding: 0.75rem 1rem;
+  gap: 1rem;
+}
+
+.tmodal-second-navbar ul {
+  display: flex;
+  list-style: none;
+  gap: 3rem;
+  padding: 0;
+  margin: 0;
+}
+
+.tmodal-second-navbar ul li a {
+  text-decoration: none;
+  color: #000;
+  font-size: 11px;
+  font-weight: 300;
+}
+
+.tmodal-sec-nav-btn {
+  margin-left: 2rem;
+}
+
+.tmodal-sec-nav-btn a {
+  display: inline-block;
+  background-color: #3368A1;
+  color: white;
+  text-decoration: none;
+  padding: 0.3rem 0.8rem;
+  border-radius: 9999px;
+  font-weight: 600;
+  font-size: 0.7rem;
+}
+
+/* Footer */
+.tmodal-footer {
+  background-color: #2f2f2f;
+  color: white;
+  font-family: Arial, sans-serif;
+}
+
+.tmodal-footer-container {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 32px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+/* Columns */
+.tmodal-footer-left,
+.tmodal-footer-middle,
+.tmodal-footer-right {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: center;
+}
+
+.tmodal-footer-logos {
+  margin-top: 30px;
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  align-items: center;
+}
+
+.tmodal-footer-left p {
+  max-width: 280px;
+  font-size: 14px;
+  line-height: 1.3;
+  margin: 0 auto;
+}
+
+.tmodal-footer-middle h3,
+.tmodal-footer-right h3 {
+  font-weight: 700;
+  margin-bottom: 16px;
+}
+
+.tmodal-footer-middle ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tmodal-footer-middle ul li a,
+.tmodal-follow-us a {
+  color: white;
+  text-decoration: none;
+  font-size: 14px;
+}
+
+.tmodal-footer-middle ul li a:hover,
+.tmodal-follow-us a:hover {
+  text-decoration: underline;
+}
+
+.tmodal-follow-us {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  margin-bottom: 8px;
+  white-space: nowrap;
+}
+
+.tmodal-scroll-top {
+  display: flex;
+  justify-content: center;
+  margin-top: 16px;
+}
+
+.tmodal-scroll-top button {
+  border: 1px solid #999;
+  border-radius: 9999px;
+  width: 36px;
+  height: 36px;
+  background: transparent;
+  cursor: pointer;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.3s ease;
+}
+
+.tmodal-scroll-top button:hover {
+  background-color: #4b4b4b;
+}
+
+.tmodal-scroll-top button img {
+  width: 16px;
+  height: 16px;
+}
+
+/* Tablet and Up */
+@media (min-width: 640px) {
+  .tmodal-footer-container {
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 24px;
+    text-align: left;
+  }
+
+  .tmodal-footer-left,
+  .tmodal-footer-middle,
+  .tmodal-footer-right {
+    width: 33.333%;
+    text-align: left;
+  }
+
+  .tmodal-footer-left {
+    align-items: flex-start;
+    border-right: 1px solid #4b4b4b;
+    padding-right: 32px;
+  }
+
+  .tmodal-footer-middle {
+    border-right: 1px solid #4b4b4b;
+    padding: 0 32px;
+  }
+
+  .tmodal-footer-right {
+    padding-left: 32px;
+  }
+
+  .tmodal-footer-left p {
+    text-align: left;
+    margin: 0;
+  }
+
+  .tmodal-follow-us {
+    justify-content: flex-start;
+  }
+
+  .tmodal-scroll-top {
+    justify-content: flex-end;
+    margin-top: 0;
+  }
+}
+
+/* Modal container */
+.tmodal-modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.6);
+  align-items: center;
+  justify-content: center;
+}
+
+/* Modal content */
+.tmodal-modal-content {
+  background: #fff;
+  padding: 2rem;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 500px;
+  position: relative;
+  box-shadow: 0 5px 25px rgba(0, 0, 0, 0.2);
+  animation: tmodal-fadeIn 0.3s ease;
+}
+
+.tmodal-modal-content h2 {
+  text-align: center;
+  margin-bottom: 25px;
+  color: #2E7B45;
+}
+
+.tmodal-second-navbar li a.active {
+  text-decoration: underline;
+  text-underline-offset: 4px;
+  text-decoration-thickness: 1px;
+}
+
+@keyframes tmodal-fadeIn {
+  from { opacity: 0; transform: translateY(-20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Close button */
+.tmodal-close {
+  position: absolute;
+  top: 15px;
+  right: 20px;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #444;
+}
+
+/* Form group */
+.tmodal-input-group {
+  position: relative;
+  margin: 1.2rem 0;
+  width: 100%;
+}
+
+/* Inputs & textarea */
+.tmodal-input-group input,
+.tmodal-input-group textarea {
+  width: 100%;
+  padding: 14px 12px;
+  font-size: 1rem;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  background: none;
+  outline: none;
+  box-sizing: border-box;
+}
+
+/* Floating label */
+.tmodal-input-group label {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 1rem;
+  color: #666;
+  background: #fff;
+  padding: 0 4px;
+  pointer-events: none;
+  transition: 0.2s ease all;
+}
+
+.tmodal-input-group input:focus + label,
+.tmodal-input-group input:not(:placeholder-shown) + label,
+.tmodal-input-group textarea:focus + label,
+.tmodal-input-group textarea:not(:placeholder-shown) + label {
+  top: -8px;
+  left: 10px;
+  transform: none;
+  font-size: 0.8rem;
+  color: #3368A1;
+  background: #fff;
+}
+
+/* Dropdowns */
+.tmodal-input-group select {
+  width: 100%;
+  padding: 14px 12px;
+  font-size: 1rem;
+  border: 1px solid #bbb;
+  border-radius: 6px;
+  outline: none;
+  background: #fff;
+  color: #555;
+  box-sizing: border-box;
+}
+
+.tmodal-input-group select + label {
+  position: static;
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+  color: #444;
+  transform: none;
+}
+
+/* Submit button */
+.tmodal-modal-btn {
+  width: 100%;
+  padding: 14px;
+  border: none;
+  background: #2E7B45;
+  color: white;
+  font-size: 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-top: 1.5rem;
+  transition: background 0.3s ease;
+}
+
+.tmodal-modal-btn:hover {
+  background: #3368A1;
+}
+
+/* GRID LAYOUT */
+.tour-layout-container {
+    display: flex;
+    gap: 32px;
+    margin: 70px auto;  /* center container horizontally */
+    align-items: flex-start; 
+    max-width: calc(100% - 140px); /* subtract left+right margins */
+    box-sizing: border-box;        /* include padding/margin in width calculation */
+    height: 90vh; /* Set fixed viewport height for scrollable content */
+    margin-top: 30px;
+}
+
+/* FAQ panel stays fixed and scrollable if needed */
+.faq-panel {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+    overflow-y: auto; /* ✅ scroll independently if content is long */
+    max-height: 100%; /* Fill container height */
+    flex: 0 0 30%; /* Left panel width */
+}
+
+/* Operators/packages panel scrolls independently */
+.operators-panel {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+    overflow-y: auto; /* ✅ scroll independently */
+    max-height: 100%; /* Fill container height */
+    flex: 1; /* Right panel takes remaining width */
+}
+
+/* Headings */
+.section-title {
+    font-size: 22px;
+    margin-bottom: 22px;
+    font-weight: 700;
+    color: #2e7b45;
+}
+
+/* FAQ list */
+.faq-list {
+    padding: 0;
+    list-style: none;
+    font-size: 15px;
+    color: #444;
+}
+.faq-list li {
+    margin-bottom: 20px;
+    padding-bottom: 14px;
+    border-bottom: 1px dashed #bfcfbf;
+}
+.faq-list li strong {
+    display: block;
+    margin-bottom: 6px;
+    color: #2e7b45;
+}
+.faq-list li span {
+    display: block;
+    margin-left: 14px; /* ✅ Indent answers */
+    color: #555;
+}
+
+/* Operator groups */
+.operator-block + .operator-block {
+    margin-top: 36px;
+}
+
+.operator-header {
+    display: flex;
+    align-items: center;
+    margin-bottom: 16px;
+}
+.operator-header .line {
+    width: 4px;
+    height: 28px;
+    background: #3368a1;
+    border-radius: 2px;
+    margin-right: 10px;
+}
+.operator-header h4 {
+    margin: 0;
+    font-size: 19px;
+    font-weight: 700;
+    color: #2e7b45;
+}
+
+/* Package card redesign */
+.package-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+}
+
+.package-card {
+    background: #f8faf9;
+    border-radius: 12px;
+    overflow: hidden;
+    text-align: center;
+    padding-bottom: 10px;
+    box-shadow: 0 4px 12px rgba(0,0,0,.05);
+    transition: transform .22s ease, box-shadow .22s ease;
+    cursor: pointer;
+}
+.package-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 16px rgba(0,0,0,.10);
+}
+.package-card img {
+    width: 100%;
+    height: 580px;
+    object-fit: cover;
+    border-bottom: 1px solid #ddd;
+}
+.package-card p {
+    font-size: 14px;
+    font-weight: 600;
+    color: #3368a1;
+    margin: 10px 0 0;
+}
+
+/* Mobile responsiveness */
+@media(max-width: 900px) {
+    .tour-layout-container {
+        flex-direction: column;
+        margin: 20px;
+        gap: 24px;
+        height: auto; /* remove fixed height for mobile */
+    }
+    .faq-panel,
+    .operators-panel {
+        max-height: unset;
+        overflow-y: visible;
+        flex: unset;
+    }
+    .package-grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+}
+
+/* FAQ & Operators panels */
+.faq-panel,
+.operators-panel {
+    position: relative;
+    max-height: 100%;
+    padding-right: 8px; /* spacing to prevent content hiding behind scrollbar */
+    border-radius: 16px;
+    background: #ffffff;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.06);
+    transition: box-shadow 0.3s ease;
+    overflow-y: hidden; /* hide scrollbar initially */
+}
+
+/* Subtle lift on hover */
+.faq-panel:hover,
+.operators-panel:hover {
+    box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+    overflow-y: auto; /* enable scrolling on hover */
+}
+
+/* WebKit browsers (Chrome, Safari, Edge) */
+.faq-panel::-webkit-scrollbar,
+.operators-panel::-webkit-scrollbar {
+    width: 8px;
+    background: transparent; /* hide track background */
+}
+
+/* Remove arrows on top/bottom */
+.faq-panel::-webkit-scrollbar-button,
+.operators-panel::-webkit-scrollbar-button {
+    display: none;
+}
+
+/* Thumb styling */
+.faq-panel::-webkit-scrollbar-thumb,
+.operators-panel::-webkit-scrollbar-thumb {
+    background-color: #3368a1;
+    border-radius: 8px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+    opacity: 0; /* hidden by default */
+    transition: opacity 0.3s ease;
+}
+
+/* Show scrollbar thumb on hover or scroll */
+.faq-panel:hover::-webkit-scrollbar-thumb,
+.operators-panel:hover::-webkit-scrollbar-thumb,
+.faq-panel:active::-webkit-scrollbar-thumb,
+.operators-panel:active::-webkit-scrollbar-thumb {
+    opacity: 1;
+}
+
+/* Track styling (transparent) */
+.faq-panel::-webkit-scrollbar-track,
+.operators-panel::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* Firefox */
+.faq-panel,
+.operators-panel {
+    scrollbar-width: thin;
+    scrollbar-color: #e8e8e8 transparent; /* thumb & track */
+}
+
+/* Optional: smooth fade effect when scrolling (requires JS) */
+.faq-panel.scrolling,
+.operators-panel.scrolling {
+    overflow-y: auto;
+}
+
+
+
+

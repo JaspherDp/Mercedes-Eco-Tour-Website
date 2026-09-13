@@ -1,0 +1,1182 @@
+<!-- logsign-modal.html -->
+<div class="logsign-modal-overlay" id="modalOverlay">
+  <div class="logsign-modal">
+    <span class="logsign-close-modal" id="closeModal">&times;</span>
+
+    <!-- LOGIN FORM -->
+    <form class="logsign-form-container" id="loginForm">
+      <div class="logsign-login-brand">
+        <img class="logsign-login-logo" src="img/newlogo.png" alt="">
+        <img class="logsign-login-wordmark" src="img/textlogo2.png" alt="iTour Mercedes">
+      </div>
+      <div class="logsign-form-heading">
+        <h2 class="logsign-form-title">Tourist Login</h2>
+      </div>
+
+      <div class="logsign-auth-error" id="loginFormError" role="alert" hidden>
+        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="9"></circle>
+          <path d="M12 7v6M12 17h.01"></path>
+        </svg>
+        <span></span>
+      </div>
+
+      <div class="logsign-input-group logsign-email-group logsign-has-leading-icon logsign-icon-email">
+        <input type="email" id="loginEmail" placeholder=" " required>
+        <label for="loginEmail">Email</label>
+      </div>
+
+      <div class="logsign-input-group logsign-password-group logsign-has-leading-icon logsign-icon-lock">
+      <input type="password" id="loginPassword" autocomplete="off" placeholder=" " required>
+      <label for="loginPassword">Password</label>
+      <img src="img/passwordhide.png" 
+          alt="Show Password" 
+          class="logsign-eye-icon" 
+          id="toggleLoginPassword" 
+          data-hidden-icon="img/passwordhide.png" 
+          data-visible-icon="img/passwordsee.png">
+    </div>
+
+      <div class="logsign-checkbox-container">
+        <label><input type="checkbox" id="rememberMe"> Remember Me</label>
+        <span class="forgot-password">Forgot Password?</span>
+      </div>
+
+      <button id="loginBtn" type="submit">Login</button>
+
+      <!-- Google Sign-In -->
+      <div class="or-divider">
+        <span>or</span>
+      </div>
+
+      <!-- Login Google Button -->
+      <button id="googleLoginBtn" class="google-signin-btn" type="button">
+          <img src="img/googlelogo.png" alt="Google Logo">
+          <span class="btn-text">Log in with Google</span>
+      </button>
+
+
+      <p class="center-text">Don't have an account? <span id="goSignup" class="logsign-toggle-link">Sign up now</span></p>
+    </form>
+
+<!-- FORGOT PASSWORD FORM -->
+<div class="logsign-form-container logsign-hidden" id="forgotPasswordForm">
+  <div class="logsign-form-heading">
+    <span class="logsign-heading-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 10V7a5 5 0 0 1 9.8-1.4"/><rect x="4" y="10" width="16" height="11" rx="2"/><path d="m17 2 2 2 3-3"/></svg>
+    </span>
+    <h2 class="logsign-form-title">Reset Your Password</h2>
+    <p>Verify your email to securely regain access.</p>
+  </div>
+
+  <!-- Step Indicator -->
+  <div class="signup-phase-indicator forgot-phase-indicator">
+    <div class="phase-step phase-active" data-phase="1">
+      <div class="circle">1</div><span>Verify Email</span>
+    </div>
+    <div class="phase-line"></div>
+    <div class="phase-step phase-inactive" data-phase="2">
+      <div class="circle">2</div><span>New Password</span>
+    </div>
+  </div>
+
+  <!-- Step 1: Enter Email + Verification Code -->
+  <div class="signup-phase forgot-phase forgot-phase-1 active">
+    <div class="logsign-email-container">
+      <div class="logsign-email-wrapper logsign-input-group logsign-has-leading-icon logsign-icon-email">
+        <input type="email" id="forgotEmail" placeholder=" " required>
+        <label for="forgotEmail">Email</label>
+      </div>
+      <button id="forgotSendCodeBtn" class="logsign-send-code-btn" type="button">Send Code</button>
+    </div>
+    <div id="forgotEmailStatus" class="email-status"></div>
+
+    <div class="verification-code-container">
+      <input type="text" maxlength="1" class="forgot-code-box" disabled>
+      <input type="text" maxlength="1" class="forgot-code-box" disabled>
+      <input type="text" maxlength="1" class="forgot-code-box" disabled>
+      <input type="text" maxlength="1" class="forgot-code-box" disabled>
+      <input type="text" maxlength="1" class="forgot-code-box" disabled>
+      <input type="text" maxlength="1" class="forgot-code-box" disabled>
+    </div>
+    <div class="code-countdown" id="forgotCodeCountdown" style="display:none">Resend code in 90s</div>
+  </div>
+
+  <!-- Step 2: New Password -->
+  <div class="signup-phase forgot-phase forgot-phase-2">
+    <div class="logsign-input-group logsign-password-group logsign-has-leading-icon logsign-icon-lock">
+      <input type="password" id="newPassword" placeholder=" " required>
+      <label for="newPassword">New Password</label>
+      <img src="img/passwordhide.png" alt="Show Password" class="logsign-eye-icon" id="toggleNewPassword" data-hidden-icon="img/passwordhide.png" data-visible-icon="img/passwordsee.png">
+    </div>
+    <div class="logsign-input-group logsign-password-group logsign-has-leading-icon logsign-icon-lock">
+      <input type="password" id="confirmNewPassword" placeholder=" " required>
+      <label for="confirmNewPassword">Confirm Password</label>
+      <img src="img/passwordhide.png" alt="Show Password" class="logsign-eye-icon" id="toggleConfirmNewPassword" data-hidden-icon="img/passwordhide.png" data-visible-icon="img/passwordsee.png">
+    </div>
+    <button id="saveNewPasswordBtn">Save</button>
+  </div>
+</div>
+
+    <!-- SIGNUP FORM (3 STEPS) -->
+    <div class="logsign-form-container logsign-hidden" id="signupForm">
+      <div class="logsign-form-heading">
+        <span class="logsign-heading-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0M19 8v6M16 11h6"/></svg>
+        </span>
+        <h2 class="logsign-form-title">Create Tourist Account</h2>
+        <p>Join iTour Mercedes and make every trip easier.</p>
+      </div>
+
+      <!-- Phase Indicator -->
+      <div class="signup-phase-indicator">
+        <div class="phase-step phase-active" data-phase="1">
+          <div class="circle">1</div><span>Fill up details</span>
+        </div>
+        <div class="phase-line"></div>
+        <div class="phase-step phase-inactive" data-phase="2">
+          <div class="circle">2</div><span>Verify email</span>
+        </div>
+        <div class="phase-line"></div>
+        <div class="phase-step phase-inactive" data-phase="3">
+          <div class="circle">3</div><span>Set password</span>
+        </div>
+      </div>
+
+      <!-- PHASE 1 -->
+      <div class="signup-phase signup-phase-1 active">
+        <div class="signup-name-grid">
+          <div class="logsign-input-group logsign-has-leading-icon logsign-icon-user">
+            <input type="text" id="signupFirstName" placeholder=" " autocomplete="given-name" required>
+            <label for="signupFirstName">First Name</label>
+          </div>
+          <div class="logsign-input-group logsign-has-leading-icon logsign-icon-user">
+            <input type="text" id="signupLastName" placeholder=" " autocomplete="family-name" required>
+            <label for="signupLastName">Last Name</label>
+          </div>
+        </div>
+        <div class="logsign-input-group logsign-has-leading-icon logsign-icon-phone">
+          <input type="tel" id="signupPhone" placeholder=" " autocomplete="tel" maxlength="30" required>
+          <label for="signupPhone">Contact Number</label>
+        </div>
+        <div class="signup-address-heading">
+          <div><strong>Home address</strong><span>Select your country and complete address</span></div>
+          <small>Select each location in order.</small>
+        </div>
+        <div class="signup-address-grid">
+          <label class="signup-select-field signup-address-wide"><span>Country</span><select id="signupCountry" required><option value="">Loading countries...</option></select></label>
+          <label class="signup-select-field"><span>Region / State</span><select id="signupRegion" disabled required><option value="">Select country first</option></select></label>
+          <label class="signup-select-field"><span>Province</span><select id="signupProvince" disabled required><option value="">Select region first</option></select></label>
+          <label class="signup-select-field"><span>City / Municipality</span><select id="signupCity" disabled required><option value="">Select province first</option></select></label>
+          <label class="signup-select-field"><span>Barangay</span><select id="signupBarangay" disabled required><option value="">Select city first</option></select></label>
+          <label class="signup-select-field"><span>Postal Code</span><input type="text" id="signupPostalCode" placeholder="Auto-filled" readonly required></label>
+          <label class="signup-select-field signup-address-wide"><span>Street / House No.</span><input type="text" id="signupStreet" autocomplete="street-address" maxlength="180" placeholder="Street, building, or house number" required></label>
+        </div>
+        <p class="signup-inline-status" id="signupAddressStatus" role="status"></p>
+        <button id="signupDetailsNextBtn" type="button">Continue to Email</button>
+      </div>
+
+      <!-- PHASE 2 -->
+      <div class="signup-phase signup-phase-2">
+        <div class="logsign-email-container">
+          <div class="logsign-email-wrapper logsign-input-group logsign-has-leading-icon logsign-icon-email">
+            <input type="email" id="signupEmail" placeholder=" " required>
+            <label for="signupEmail">Email</label>
+          </div>
+          <button id="sendCodeBtn" class="logsign-send-code-btn" type="button">Send Code</button>
+        </div>
+        <div class="verification-code-container">
+          <input type="text" maxlength="1" class="code-box">
+          <input type="text" maxlength="1" class="code-box">
+          <input type="text" maxlength="1" class="code-box">
+          <input type="text" maxlength="1" class="code-box">
+          <input type="text" maxlength="1" class="code-box">
+          <input type="text" maxlength="1" class="code-box">
+        </div>
+        <div class="code-countdown" id="codeCountdown">Resend code in 90s</div>
+        <p class="signup-inline-status" id="signupEmailStatus" role="status">We will send a 6-digit verification code.</p>
+        <div class="signup-step-actions">
+          <button class="signup-secondary-btn" id="signupEmailBackBtn" type="button">Back</button>
+          <button id="verifySignupCodeBtn" type="button">Verify &amp; Continue</button>
+        </div>
+      </div>
+
+      <!-- PHASE 3 -->
+      <div class="signup-phase signup-phase-3">
+        <div class="signup-verified-email">
+          <span>Email verified</span>
+          <strong id="signupVerifiedEmail"></strong>
+        </div>
+        <div class="logsign-input-group logsign-password-group logsign-has-leading-icon logsign-icon-lock">
+          <input type="password" id="signupPassword" placeholder=" " autocomplete="new-password" required>
+          <label for="signupPassword">Create Password</label>
+          <img src="img/passwordhide.png" alt="Show Password" class="logsign-eye-icon" id="toggleSignupPassword" data-hidden-icon="img/passwordhide.png" data-visible-icon="img/passwordsee.png">
+        </div>
+        <div class="logsign-input-group logsign-password-group logsign-has-leading-icon logsign-icon-lock">
+          <input type="password" id="signupConfirmPassword" placeholder=" " autocomplete="new-password" required>
+          <label for="signupConfirmPassword">Confirm Password</label>
+          <img src="img/passwordhide.png" alt="Show Password" class="logsign-eye-icon" id="toggleConfirmPassword" data-hidden-icon="img/passwordhide.png" data-visible-icon="img/passwordsee.png">
+        </div>
+        <div class="signup-password-rules" id="signupPasswordRules" aria-live="polite">
+          <strong>Your password must include:</strong>
+          <span data-password-rule="length">At least 6 characters</span>
+          <span data-password-rule="letter">At least one letter</span>
+          <span data-password-rule="number">At least one number</span>
+          <span data-password-rule="match">Both passwords match</span>
+        </div>
+        <div class="signup-step-actions">
+          <button class="signup-secondary-btn" id="signupPasswordBackBtn" type="button">Back</button>
+          <button id="signupBtn" type="button">Create Account</button>
+        </div>
+      </div>
+
+      <div class="or-divider">
+        <span>or with</span>
+      </div>
+
+      <button id="googleSignupBtn" class="google-signin-btn">
+          <img src="img/googlelogo.png" alt="Google Logo">
+          <span class="btn-text">Sign up with Google</span>
+      </button>
+
+
+      <p class="center-text">Already have an account? <span id="goLogin" class="logsign-toggle-link">Login here</span></p>
+    </div>
+  </div>
+</div>
+
+<style>
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+/* === Modal === */
+.logsign-modal-overlay { 
+  position: fixed; inset: 0; 
+  background: rgba(0,0,0,0.6); 
+  display: none; 
+  justify-content: center; 
+  align-items: center; 
+  z-index: 9500;
+  transition: opacity 0.3s ease;
+}
+
+.logsign-modal { 
+  background: #fff; 
+  padding: 1.5rem 2rem; 
+  border-radius: 12px; 
+  width: 400px; max-width: 90% !important; 
+  position: relative; 
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.09), 0 4px 8px rgba(0, 0, 0, 0.05);
+  display: flex; 
+  flex-direction: column; 
+  overflow: hidden; 
+  max-height: 90vh !important;
+  animation: modalSlideIn 0.3s ease;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Close button */
+.logsign-close-modal { 
+  position: absolute; top: 12px; right: 18px; 
+  font-size: 1.6rem; cursor: pointer; color: #555;
+  transition: color 0.2s ease;
+}
+
+.logsign-close-modal:hover {
+  color: #333;
+}
+
+/* Form container */
+.logsign-form-container { 
+  display: flex; flex-direction: column; 
+  gap: 1.5rem; 
+  transition: all 0.3s ease; 
+  position: relative;
+  margin-bottom: 10px;
+}
+.logsign-hidden { display: none !important; }
+.logsign-form-title { text-align: center; margin-bottom: 0.3rem; color: #2b7a66; font-weight: 600; font-size: 1.25rem; }
+
+.logsign-auth-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  color: #8d2525;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  border: 1px solid #f2caca;
+  border-radius: 11px;
+  background: #fff4f3;
+}
+
+.logsign-auth-error[hidden] { display: none; }
+.logsign-auth-error svg { width: 19px; height: 19px; flex: 0 0 auto; margin-top: 1px; }
+.logsign-auth-error.is-success { color: #176b55; border-color: #b9dfd1; background: #edf9f4; }
+#loginForm .logsign-auth-error { margin-bottom: 2px; }
+
+/* Floating labels */
+.logsign-input-group { position: relative; display: flex; flex-direction: column; }
+.logsign-input-group input { padding: 12px 10px; font-size: 1rem; border: 2px solid #ccc; border-radius: 6px; outline: none; transition: border-color 0.3s ease; }
+.logsign-input-group input:focus { border-color: #2b7a66; }
+.logsign-input-group label { position: absolute; left: 12px; top: 12px; color: #999; font-size: 0.9rem; pointer-events: none; background: #fff; padding: 0 4px; transition: all 0.3s ease; }
+.logsign-input-group input:focus + label, .logsign-input-group input:not(:placeholder-shown) + label { top: -8px; font-size: 0.75rem; color: #3368A1; }
+
+/* Password toggle */
+.logsign-password-group { position: relative; }
+.logsign-eye-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); width: 22px; height: 22px; cursor: pointer; opacity: 0.6; transition: opacity 0.2s; }
+.logsign-eye-icon:hover { opacity: 1; }
+
+/* Checkbox + Forgot */
+.logsign-checkbox-container { display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; }
+.forgot-password { cursor: pointer; color: #3368A1; text-decoration: underline; transition: color 0.2s ease; }
+.forgot-password:hover { color: #2b7a66; }
+
+/* Buttons */
+.logsign-form-container button {
+  padding: 12px;
+  border-radius: 6px;
+  background-color: #2b7a66;
+  color: #fff;
+  font-size: 1rem;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 500;
+}
+
+.logsign-form-container button:hover:not(:disabled) {
+  background-color: #3368A1;
+  transform: translateY(-1px);
+}
+
+.logsign-form-container button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+#loginBtn.is-login-locked,
+#loginBtn.is-login-locked:hover {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #fff;
+  background: #8b9391;
+  box-shadow: none;
+  opacity: 1;
+  transform: none;
+  cursor: not-allowed;
+}
+
+.logsign-login-spinner {
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
+  border: 2px solid rgba(255,255,255,.38);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: logsign-login-spin .75s linear infinite;
+}
+
+@keyframes logsign-login-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Google Sign-In distinct button */
+.logsign-form-container .google-signin-btn {
+    display: flex;
+    align-items: center;       /* vertically center */
+    justify-content: center;   /* center horizontally */
+    gap: 10px;                 /* space between logo and text */
+    background-color: #fff !important;
+    color: #000 !important;
+    border: 1px solid #d3d3d3;
+    border-radius: 6px;
+    padding: 10px 16px;        /* adjust padding for better height */
+    font-weight: 500;
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.logsign-form-container .google-signin-btn img {
+    width: 22px;    /* slightly bigger for better proportion */
+    height: 22px;
+    object-fit: contain;  /* ensure logo doesn’t stretch */
+}
+
+.logsign-form-container .google-signin-btn:hover {
+    background-color: #f8f8f8 !important;
+    border-color: #999;
+    transform: translateY(-1px);
+}
+
+.logsign-form-container .google-signin-btn:disabled {
+    opacity: 0.6;
+}
+
+.logsign-form-container .google-signin-btn.is-processing {
+    opacity: 1;
+    cursor: wait;
+    border-color: #b8d5cc;
+    background: #f4faf8 !important;
+    transform: none;
+}
+
+.google-signin-spinner {
+    width: 19px;
+    height: 19px;
+    flex: 0 0 19px;
+    border: 2.5px solid #d1d5db;
+    border-top-color: #6b7280;
+    border-radius: 50%;
+    animation: google-signin-spin 0.7s linear infinite;
+}
+
+@keyframes google-signin-spin {
+    to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .google-signin-spinner { animation-duration: 1.4s; }
+}
+
+
+/* Toggle links */
+.logsign-toggle-link { color: #3368A1; cursor: pointer; text-decoration: underline; font-weight: 500; transition: color 0.3s; }
+.logsign-toggle-link:hover { color: #2b7a66; }
+
+/* Signup Phase Indicator */
+.signup-phase-indicator { display: flex; align-items: center; margin-bottom: 0.7rem; gap: 5px; }
+.phase-step { display: flex; flex-direction: column; align-items: center; font-size: 0.85rem; }
+.phase-step .circle { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #ccc; display: flex; align-items: center; justify-content: center; margin-bottom: 4px; background-color: #fff; font-weight: 600; transition: all 0.3s; }
+.phase-line { flex: 1; height: 2px; background: #ccc; transition: all 0.3s; }
+
+/* Step colors */
+.phase-step.phase-active .circle { background: #2b7a66; border-color: #2b7a66; color: #fff; }
+.phase-step.phase-completed .circle { background: #eee; border-color: #ccc; color: #999; }
+.phase-step.phase-inactive .circle { background: #eee; border-color: #ccc; color: #999; }
+
+/* Phase content */
+.signup-phase {
+  display: none; 
+  flex-direction: column; 
+  gap: 0.5rem; 
+}
+.signup-phase.active {
+  display: flex;
+}
+
+
+/* Email + Send Code */
+.logsign-email-container { display: flex; gap: 6px; flex-wrap: nowrap; align-items: center; margin-bottom: 0.3rem; }
+.logsign-email-wrapper { flex: 1; position: relative; min-width: 0; }
+.logsign-send-code-btn { padding: 10px 14px; font-size: 0.85rem; flex-shrink: 0; }
+
+/* Verification code input */
+.verification-code-container { display: flex; gap: 10px; justify-content: center; margin: 0.2rem 0; }
+.verification-code-container input {
+  width: 51px;
+  height: 51px;
+  text-align: center;
+  font-size: 1.1rem;
+  border: 2px solid #ccc;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.verification-code-container input:focus {
+  border-color: #2b7a66;
+  box-shadow: 0 0 0 3px rgba(43, 122, 102, 0.1);
+}
+
+/* Countdown */
+.code-countdown { text-align: center; font-size: 0.85rem; color: #555; margin: 0.2rem 0; }
+
+/* Signup button */
+#signupBtn { padding: 10px; margin-top: 0.3rem; }
+
+/* OR Divider */
+.or-divider { display: flex; align-items: center; text-align: center; margin: 10px 0; color: #555; font-weight: 500; font-size: 0.9rem; }
+.or-divider::before, .or-divider::after { content: ""; flex: 1; border-bottom: 1px solid #ccc; }
+.or-divider:not(:empty)::before { margin-right: 10px; }
+.or-divider:not(:empty)::after { margin-left: 10px; }
+
+.center-text { text-align: center; margin-top: 8px; font-size: 0.9rem; }
+
+/* Forgot password uses same phase styles */
+.forgot-phase-indicator { margin-bottom: 0.7rem; }
+.forgot-phase { display: none; flex-direction: column; gap: 0.5rem; }
+.forgot-phase.active { display: flex; }
+
+.email-status {
+  font-size: 0.85rem;
+  margin-top: 4px;
+  min-height: 18px;
+}
+
+/* === Refined tourist authentication experience === */
+.logsign-modal-overlay {
+  padding: 20px;
+  background: rgba(4, 28, 23, 0.7);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.logsign-modal {
+  width: 440px;
+  max-width: min(94vw, 440px) !important;
+  max-height: 92vh !important;
+  padding: 34px 38px 32px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  color: #17342d;
+  font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 22px;
+  box-shadow: 0 28px 70px rgba(2, 31, 24, 0.34);
+  scrollbar-width: thin;
+  scrollbar-color: #a8c7bd transparent;
+  color: #17342d;
+  font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.logsign-modal input,
+.logsign-modal button,
+.logsign-modal select {
+  font-family: inherit;
+}
+
+.logsign-modal::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 5px;
+  content: "";
+  background: linear-gradient(90deg, #176b55, #54b899);
+}
+
+.logsign-close-modal {
+  width: 36px;
+  height: 36px;
+  top: 14px;
+  right: 14px;
+  z-index: 5;
+  display: grid;
+  place-items: center;
+  color: #60716d;
+  font-size: 1.65rem;
+  line-height: 1;
+  border-radius: 10px;
+}
+
+.logsign-close-modal:hover {
+  color: #175f4d;
+  background: #edf7f4;
+}
+
+.logsign-form-container {
+  gap: 18px;
+  margin: 0;
+}
+
+.logsign-login-brand {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 0 auto 2px;
+}
+
+.logsign-login-logo {
+  width: 44px;
+  height: 44px;
+  flex: 0 0 44px;
+  object-fit: contain;
+}
+
+.logsign-login-wordmark {
+  width: 172px;
+  height: 44px;
+  object-fit: contain;
+}
+
+#loginForm .logsign-form-heading {
+  padding-top: 0;
+}
+
+.logsign-form-heading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 3px 28px 0;
+  text-align: center;
+}
+
+.logsign-heading-icon {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 13px;
+  color: #176b55;
+  border: 1px solid #cee4dd;
+  border-radius: 17px;
+  background: #eff8f5;
+}
+
+.logsign-heading-icon svg {
+  width: 27px;
+  height: 27px;
+}
+
+.logsign-form-title {
+  margin: 0;
+  color: #17342d;
+  font-size: 1.45rem;
+  line-height: 1.2;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.logsign-form-heading p {
+  margin: 7px 0 0;
+  color: #687975;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.logsign-input-group::before {
+  width: 20px;
+  height: 20px;
+  position: absolute;
+  z-index: 2;
+  left: 15px;
+  top: 50%;
+  content: "";
+  pointer-events: none;
+  background-color: #71827e;
+  transform: translateY(-50%);
+  transition: background-color 0.2s ease;
+  -webkit-mask: center / contain no-repeat;
+  mask: center / contain no-repeat;
+}
+
+.logsign-input-group:not(.logsign-has-leading-icon)::before {
+  display: none;
+}
+
+.logsign-icon-email::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='3' y='5' width='18' height='14' rx='2' fill='none' stroke='black' stroke-width='2'/%3E%3Cpath d='m4 7 8 6 8-6' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='3' y='5' width='18' height='14' rx='2' fill='none' stroke='black' stroke-width='2'/%3E%3Cpath d='m4 7 8 6 8-6' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E");
+}
+
+.logsign-icon-user::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='8' r='4' fill='none' stroke='black' stroke-width='2'/%3E%3Cpath d='M5 21a7 7 0 0 1 14 0' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Ccircle cx='12' cy='8' r='4' fill='none' stroke='black' stroke-width='2'/%3E%3Cpath d='M5 21a7 7 0 0 1 14 0' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E");
+}
+
+.logsign-icon-lock::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='4' y='10' width='16' height='11' rx='2' fill='none' stroke='black' stroke-width='2'/%3E%3Cpath d='M8 10V7a4 4 0 0 1 8 0v3' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='4' y='10' width='16' height='11' rx='2' fill='none' stroke='black' stroke-width='2'/%3E%3Cpath d='M8 10V7a4 4 0 0 1 8 0v3' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E");
+}
+
+.logsign-input-group:focus-within::before {
+  background-color: #176b55;
+}
+
+.logsign-input-group input {
+  min-height: 52px;
+  width: 100%;
+  padding: 14px 46px 13px;
+  color: #17342d;
+  font-size: 0.93rem;
+  font-weight: 500;
+  font-family: inherit;
+  font-size: 0.96rem;
+  border: 1.5px solid #cfdad6;
+  border-radius: 12px;
+  background: #fff;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.logsign-input-group input:hover {
+  border-color: #9db5ae;
+}
+
+.logsign-input-group input:focus {
+  border-color: #176b55;
+  box-shadow: 0 0 0 4px rgba(23, 107, 85, 0.11);
+}
+
+.logsign-input-group label {
+  left: 42px;
+  top: 16px;
+  padding: 0 6px;
+  color: #71827e;
+  font-size: 0.86rem;
+  font-weight: 500;
+  font-size: 0.9rem;
+  line-height: 20px;
+}
+
+/* Keep and refine the original animated floating placeholder. */
+.logsign-input-group input:focus + label,
+.logsign-input-group input:not(:placeholder-shown) + label {
+  top: -10px;
+  left: 12px;
+  color: #176b55;
+  font-size: 0.74rem;
+  font-weight: 700;
+}
+
+.logsign-eye-icon {
+  width: 36px;
+  height: 36px;
+  right: 8px;
+  padding: 8px;
+  opacity: 0.65;
+  border-radius: 9px;
+  object-fit: contain;
+}
+
+.logsign-eye-icon:hover {
+  opacity: 1;
+  background: #edf7f4;
+}
+
+.logsign-checkbox-container {
+  gap: 12px;
+  color: #435651;
+  font-size: 0.86rem;
+}
+
+.logsign-checkbox-container label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.logsign-checkbox-container input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: #176b55;
+}
+
+.forgot-password,
+.logsign-toggle-link {
+  color: #176b55;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.forgot-password:hover,
+.logsign-toggle-link:hover {
+  color: #0e4e3f;
+  text-decoration: underline;
+}
+
+.logsign-form-container button {
+  min-height: 50px;
+  padding: 12px 17px;
+  font-family: inherit;
+  font-size: 0.95rem;
+  font-weight: 750;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #176b55, #2c8b70);
+  box-shadow: 0 9px 22px rgba(23, 107, 85, 0.2);
+}
+
+.logsign-form-container button:hover:not(:disabled) {
+  background: linear-gradient(135deg, #125b49, #247b63);
+  box-shadow: 0 12px 25px rgba(23, 107, 85, 0.27);
+}
+
+.or-divider {
+  margin: 2px 0;
+  color: #7a8985;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.or-divider::before,
+.or-divider::after {
+  border-color: #d9e1de;
+}
+
+.logsign-form-container .google-signin-btn {
+  min-height: 50px;
+  color: #2c3c38 !important;
+  border: 1.5px solid #d4ddda;
+  border-radius: 12px;
+  background: #fff !important;
+  box-shadow: none;
+}
+
+.logsign-form-container .google-signin-btn:hover {
+  border-color: #aabbb6;
+  background: #f7faf9 !important;
+  box-shadow: 0 7px 18px rgba(23, 52, 45, 0.08);
+}
+
+.center-text {
+  margin: 1px 0 0;
+  color: #5b6c68;
+  font-size: 0.84rem;
+}
+
+.signup-phase-indicator {
+  margin: 0 4px 4px;
+}
+
+.phase-step {
+  min-width: 88px;
+  color: #6c7d78;
+  font-size: 0.75rem;
+  font-weight: 650;
+}
+
+.phase-step .circle {
+  width: 30px;
+  height: 30px;
+  color: #71817d;
+  border: 1.5px solid #d1dcd8;
+  background: #f4f7f6;
+}
+
+.phase-line {
+  height: 1.5px;
+  background: #d5dfdc;
+}
+
+.phase-step.phase-active .circle {
+  border-color: #176b55;
+  background: #176b55;
+  box-shadow: 0 0 0 4px rgba(23, 107, 85, 0.1);
+}
+
+.phase-step.phase-completed .circle {
+  color: #176b55;
+  border-color: #a9cdc2;
+  background: #eaf5f1;
+}
+
+.signup-phase,
+.forgot-phase {
+  gap: 15px;
+}
+
+.logsign-email-container {
+  align-items: stretch;
+  gap: 9px;
+  margin-bottom: 0;
+}
+
+.logsign-send-code-btn {
+  min-width: 105px;
+}
+
+.verification-code-container {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin: 3px 0;
+}
+
+.verification-code-container input {
+  width: 100%;
+  min-width: 0;
+  height: 49px;
+  color: #17342d;
+  font-family: inherit;
+  font-weight: 750;
+  border: 1.5px solid #cfdad6;
+  border-radius: 10px;
+  outline: none;
+}
+
+.verification-code-container input:focus {
+  border-color: #176b55;
+  box-shadow: 0 0 0 3px rgba(23, 107, 85, 0.11);
+}
+
+.code-countdown {
+  color: #687975;
+  font-size: 0.78rem;
+}
+
+@media (max-width: 520px) {
+  .logsign-modal-overlay {
+    align-items: flex-start;
+    padding: 12px;
+  }
+
+  .logsign-modal {
+    max-width: 100% !important;
+    max-height: calc(100vh - 24px) !important;
+    margin: auto 0;
+    padding: 29px 20px 25px;
+    border-radius: 18px;
+  }
+
+  .logsign-form-heading {
+    padding-inline: 24px;
+  }
+
+  .logsign-form-title {
+    font-size: 1.35rem;
+  }
+
+  .logsign-login-logo {
+    width: 40px;
+    height: 40px;
+    flex-basis: 40px;
+  }
+
+  .logsign-login-wordmark {
+    width: 150px;
+    height: 40px;
+  }
+
+  .logsign-email-container {
+    flex-direction: column;
+  }
+
+  .logsign-send-code-btn {
+    width: 100%;
+  }
+
+  .verification-code-container {
+    gap: 5px;
+  }
+
+  .verification-code-container input {
+    height: 44px;
+    padding: 2px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logsign-modal {
+    animation: none;
+  }
+
+  .logsign-input-group input,
+  .logsign-input-group label,
+  .logsign-form-container button {
+    transition: none;
+  }
+}
+
+/* Three-step tourist signup */
+#signupForm .signup-phase-indicator {
+  align-items: flex-start;
+}
+
+#signupForm .phase-step {
+  min-width: 76px;
+  text-align: center;
+}
+
+.signup-name-grid,
+.signup-address-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.signup-address-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2px;
+}
+
+.signup-address-heading div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.signup-address-heading strong {
+  color: #17342d;
+  font-size: 0.84rem;
+}
+
+.signup-address-heading span,
+.signup-address-heading small {
+  color: #71827e;
+  font-size: 0.68rem;
+}
+
+.signup-address-wide {
+  grid-column: 1 / -1;
+}
+
+.signup-select-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  color: #445b55;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.signup-select-field select,
+.signup-select-field input {
+  width: 100%;
+  min-width: 0;
+  height: 43px;
+  padding: 9px 11px;
+  color: #17342d;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  border: 1.5px solid #cfdad6;
+  border-radius: 10px;
+  outline: 0;
+  background: #fff;
+}
+
+.signup-select-field select:focus,
+.signup-select-field input:focus {
+  border-color: #176b55;
+  box-shadow: 0 0 0 3px rgba(23, 107, 85, 0.11);
+}
+
+.signup-select-field select:disabled,
+.signup-select-field input:read-only {
+  color: #7d8e89;
+  background: #f3f6f5;
+}
+
+.signup-inline-status {
+  min-height: 17px;
+  margin: -3px 0 0;
+  color: #687975;
+  font-size: 0.73rem;
+  line-height: 1.4;
+}
+
+.signup-inline-status.is-error { color: #a43b43; }
+.signup-inline-status.is-success { color: #176b55; }
+
+.signup-step-actions {
+  display: grid;
+  grid-template-columns: 0.7fr 1.3fr;
+  gap: 10px;
+}
+
+.logsign-form-container .signup-secondary-btn {
+  color: #315048;
+  border: 1.5px solid #cad9d4;
+  background: #fff;
+  box-shadow: none;
+}
+
+.logsign-form-container .signup-secondary-btn:hover:not(:disabled) {
+  color: #175f4d;
+  border-color: #94b9ae;
+  background: #f1f8f5;
+  box-shadow: none;
+}
+
+.signup-verified-email {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid #cde4dc;
+  border-radius: 11px;
+  background: #eef8f4;
+}
+
+.signup-verified-email span {
+  color: #26745f;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.signup-verified-email strong {
+  color: #17342d;
+  font-size: 0.83rem;
+  overflow-wrap: anywhere;
+}
+
+.signup-password-rules {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px 10px;
+  padding: 13px 14px;
+  border: 1px solid #d7e2de;
+  border-radius: 11px;
+  background: #f8faf9;
+}
+
+.signup-password-rules strong {
+  grid-column: 1 / -1;
+  color: #3e554f;
+  font-size: 0.73rem;
+}
+
+.signup-password-rules span {
+  position: relative;
+  padding-left: 18px;
+  color: #758580;
+  font-size: 0.7rem;
+}
+
+.signup-password-rules span::before {
+  position: absolute;
+  left: 0;
+  content: "\2022";
+  color: #a6b3af;
+  font-size: 1rem;
+  line-height: 0.75;
+}
+
+.signup-password-rules span.is-valid { color: #176b55; }
+.signup-password-rules span.is-valid::before { content: "\2713"; color: #176b55; font-size: 0.76rem; line-height: 1; }
+
+.logsign-icon-phone::before {
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 3h4l2 5-3 2a16 16 0 0 0 6 6l2-3 5 2v4a2 2 0 0 1-2 2C10 21 3 14 3 5a2 2 0 0 1 2-2Z' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 3h4l2 5-3 2a16 16 0 0 0 6 6l2-3 5 2v4a2 2 0 0 1-2 2C10 21 3 14 3 5a2 2 0 0 1 2-2Z' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E");
+}
+
+@media (max-width: 520px) {
+  .signup-name-grid,
+  .signup-address-grid,
+  .signup-password-rules {
+    grid-template-columns: 1fr;
+  }
+
+  .signup-address-wide,
+  .signup-password-rules strong {
+    grid-column: auto;
+  }
+
+  #signupForm .phase-step {
+    min-width: 64px;
+    font-size: 0.68rem;
+  }
+}
+
+</style>
+
