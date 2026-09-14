@@ -78,6 +78,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($action === 'save') {
             $rawId = $_POST['destination_id'] ?? '';
             $id = ($rawId === '' || $rawId === '0') ? 0 : ItourValidationInt($rawId, 'Destination ID', 1, PHP_INT_MAX);
+            $currentCardImage = '';
+            $currentHeroImage = '';
+            if ($id > 0) {
+                $currentImageStatement = $pdo->prepare('SELECT card_image, hero_image FROM destinations WHERE destination_id=? LIMIT 1');
+                $currentImageStatement->execute([$id]);
+                $currentImages = $currentImageStatement->fetch(PDO::FETCH_ASSOC);
+                if (!$currentImages) throw new RuntimeException('Destination not found.');
+                $currentCardImage = (string)($currentImages['card_image'] ?? '');
+                $currentHeroImage = (string)($currentImages['hero_image'] ?? '');
+            }
             $title = ItourValidationText($_POST['title'] ?? null, 'Destination name', 180, true);
             $description = ItourValidationText($_POST['description'] ?? null, 'Destination description', 10000, true);
             $tagline = ItourValidationText($_POST['tagline'] ?? '', 'Destination tagline', 255);
@@ -91,12 +101,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new InvalidArgumentException('Destination status must be published or archived.');
             }
             $activities = destinationActivities(ItourValidationText($_POST['activities'] ?? '', 'Activities', 5000));
-            foreach (['card_image_current', 'hero_image_current'] as $pathField) {
-                $currentPath = (string)($_POST[$pathField] ?? '');
-                if ($currentPath !== '' && !preg_match('#^uploads/destinations/[A-Za-z0-9._-]+$#D', $currentPath)) {
-                    throw new InvalidArgumentException('Invalid destination image path.');
-                }
-            }
             $keepGalleryRaw = $_POST['keep_gallery'] ?? [];
             if (!is_array($keepGalleryRaw) || count($keepGalleryRaw) > 50) {
                 throw new InvalidArgumentException('Existing gallery selections must be a valid list of at most 50 images.');
@@ -135,8 +139,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $check = $pdo->prepare('SELECT COUNT(*) FROM destinations WHERE slug=? AND destination_id<>?');
             $check->execute([$slug,$id]);
             if ((int)$check->fetchColumn()) $slug .= '-' . substr(bin2hex(random_bytes(3)), 0, 6);
-            $cardImage = destinationUpload('card_image', (string)($_POST['card_image_current'] ?? ''));
-            $heroImage = destinationUpload('hero_image', (string)($_POST['hero_image_current'] ?? ''));
+            $cardImage = destinationUpload('card_image', $currentCardImage);
+            $heroImage = destinationUpload('hero_image', $currentHeroImage);
             if ($cardImage === '' || $heroImage === '') throw new RuntimeException('A separate card image and hero cover image are both required.');
             $values = [$slug,$title,$tagline,$description,$destinationType,$location,$latitude,$longitude,json_encode($activities, JSON_UNESCAPED_UNICODE),$cardImage,$heroImage,$status,isset($_POST['is_featured']) ? 1 : 0,$sortOrder];
             $pdo->beginTransaction();
