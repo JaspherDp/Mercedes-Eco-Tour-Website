@@ -157,7 +157,7 @@
       loginButton.click();
       return;
     }
-    window.location.href = config.loginUrl || 'homepage.php?open_login=1';
+    window.location.href = config.loginUrl || './?open_login=1';
   }
 
   function openModal() {

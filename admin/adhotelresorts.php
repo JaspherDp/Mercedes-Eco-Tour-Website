@@ -76,7 +76,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'fetch') {
 
 if (isset($_GET['action']) && $_GET['action'] === 'logout') {
     AppDestroySession();
-    echo "<script>alert('Logged out.');window.location.href='homepage.php';</script>";
+    echo "<script>alert('Logged out.');window.location.href='./';</script>";
     exit();
 }
 

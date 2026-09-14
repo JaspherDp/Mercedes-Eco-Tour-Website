@@ -22,7 +22,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'logout') {
         confirmButtonColor: '#2B7066',
         confirmButtonText: 'OK'
     }).then(() => {
-        window.location.href='homepage.php';
+        window.location.href='./';
     });";
 }
 

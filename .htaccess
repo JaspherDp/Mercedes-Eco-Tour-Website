@@ -3,7 +3,7 @@
 Options -Indexes
 
 # Load the PHP homepage when visiting the root domain.
-DirectoryIndex homepage.php index.php index.html
+DirectoryIndex index.php
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
@@ -14,6 +14,12 @@ DirectoryIndex homepage.php index.php index.html
     RewriteCond %{HTTP_HOST} !^(?:10\.|192\.168\.|172\.(?:1[6-9]|2[0-9]|3[01])\.) [NC]
     RewriteCond %{HTTP_HOST} ^([A-Z0-9.-]+)(?::[0-9]+)?$ [NC]
     RewriteRule ^ https://%1%{REQUEST_URI} [R=302,L]
+
+    # Temporary canonical redirect for the retired homepage filename.
+    # Capture only URL path segments so production roots and XAMPP subdirectories
+    # canonicalize safely without trusting Host headers or exposing filesystem paths.
+    RewriteCond %{THE_REQUEST} "\s/+((?:[^/?\x20]+/)*)homepage\.php(?:[?\x20])" [NC]
+    RewriteRule ^homepage\.php$ /%1 [R=302,L,NE]
     RewriteRule "(^|/)\.(?:git|svn|hg)(?:/|$)" - [F,L,NC]
     RewriteRule "(^|/)backups(?:/|$)" - [F,L,NC]
 </IfModule>

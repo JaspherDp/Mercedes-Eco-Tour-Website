@@ -12,7 +12,7 @@ AppSessionStart();
 // --- Logout action
 if (isset($_GET['action']) && $_GET['action'] === 'logout') {
     AppDestroySession();
-    echo "<script>alert('You have been logged out. Session expired.'); window.location.href='homepage.php';</script>";
+    echo "<script>alert('You have been logged out. Session expired.'); window.location.href='./';</script>";
     exit();
 }
 

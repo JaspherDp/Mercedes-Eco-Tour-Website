@@ -164,7 +164,7 @@ try {
             <a href="hotel_resorts.php?tab=tours" class="hero-btn hero-btn--ghost">Browse all tours <span aria-hidden="true">→</span></a>
           </div>
           <nav class="hero-mobile-nav" aria-label="Mobile quick links">
-            <a href="homepage.php" aria-current="page">
+            <a href="./" aria-current="page">
               <span class="hero-mobile-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m3.5 10.5 8.5-7 8.5 7M5.5 9v11.5h13V9"/><path class="icon-accent" d="M9.5 20.5v-6h5v6"/></svg></span>
               <span>Home</span>
             </a>

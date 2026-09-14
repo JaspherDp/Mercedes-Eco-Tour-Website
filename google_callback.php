@@ -27,7 +27,7 @@ if ($expectedState === '' || $submittedState === '' || !hash_equals($expectedSta
 
 // --- Check for authorization code ---
 if (!isset($_GET['code'])) {
-    header('Location: homepage.php');
+    header('Location: ./');
     exit();
 }
 
@@ -147,7 +147,7 @@ if ($user) {
 }
 
 // --- Redirect back to requested page if available ---
-$redirectUrl = $_SESSION['post_login_redirect'] ?? 'homepage.php';
+$redirectUrl = $_SESSION['post_login_redirect'] ?? './';
 unset($_SESSION['post_login_redirect']);
 header('Location: ' . $redirectUrl);
 exit();

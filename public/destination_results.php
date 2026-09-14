@@ -103,7 +103,7 @@ $tabs = [
     <section class="destination-results-hero" aria-labelledby="destinationResultsTitle">
       <div class="destination-results-hero__glow" aria-hidden="true"></div>
       <div class="destination-results-shell destination-results-hero__inner">
-        <a class="destination-results-back" href="homepage.php">
+        <a class="destination-results-back" href="./">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"></path></svg>
           Back to home
         </a>

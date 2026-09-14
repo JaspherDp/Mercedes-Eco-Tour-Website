@@ -27,7 +27,7 @@ function TouristValidateSession(PDO $pdo): array|false
 function TouristRequireLogin(
     PDO $pdo,
     string $mode = 'redirect',
-    string $loginUrl = '../homepage.php?open_login=1',
+    string $loginUrl = '../?open_login=1',
     ?string $returnTo = null
 ): array {
     $tourist = TouristValidateSession($pdo);
@@ -53,4 +53,3 @@ function TouristRequireLogin(
     header('Location: ' . $loginUrl);
     exit;
 }
-

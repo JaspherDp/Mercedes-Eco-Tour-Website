@@ -17,7 +17,7 @@ ensureComplaintsIncidentsTable($pdo);
 ensureBookingCancellationRequestsTable($pdo);
 
 // ---------- AUTH ----------
-$user = TouristRequireLogin($pdo, 'redirect', '../homepage.php?open_login=1', (string)($_SERVER['REQUEST_URI'] ?? ''));
+$user = TouristRequireLogin($pdo, 'redirect', '../?open_login=1', (string)($_SERVER['REQUEST_URI'] ?? ''));
 $tourist_id = (int) $_SESSION['tourist_id'];
 
 // Used by the shared PayMongo balance-checkout endpoint. The token is tied to
@@ -448,7 +448,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 // Signing out should still succeed if activity logging is unavailable.
             }
             AppDestroySession();
-            header('Location: ../homepage.php');
+            header('Location: ../');
             exit;
         }
 
@@ -1143,7 +1143,7 @@ while ($row = $feedback_stmt->fetch(PDO::FETCH_ASSOC)) {
 /* Keep a stable return destination for the Profile back controls. */
 (function rememberProfileEntryPage() {
   const storageKey = 'profileReturnUrl';
-  const fallbackUrl = new URL('../homepage.php', window.location.href).href;
+  const fallbackUrl = new URL('../', window.location.href).href;
   try {
     const currentUrl = new URL(window.location.href);
     const referrerUrl = document.referrer ? new URL(document.referrer, currentUrl) : null;
@@ -1166,7 +1166,7 @@ while ($row = $feedback_stmt->fetch(PDO::FETCH_ASSOC)) {
 })();
 
 function returnFromProfile() {
-  const fallbackUrl = new URL('../homepage.php', window.location.href);
+  const fallbackUrl = new URL('../', window.location.href);
   let destination = fallbackUrl;
   try {
     const storedUrl = sessionStorage.getItem('profileReturnUrl');
@@ -3978,7 +3978,7 @@ document.addEventListener("DOMContentLoaded", function () {
       <button class="sidebar-brand-back" type="button" aria-label="Back to previous page" title="Back to previous page" onclick="returnFromProfile()">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"></path></svg>
       </button>
-      <a class="sidebar-brand" href="../homepage.php" aria-label="iTour Mercedes homepage">
+      <a class="sidebar-brand" href="../" aria-label="iTour Mercedes homepage">
         <img class="sidebar-brand-mark" src="../img/email-logo.png" alt="">
         <span class="sidebar-brand-copy">
           <img src="../img/textlogo2-white.png" alt="iTour Mercedes">
@@ -5160,7 +5160,7 @@ document.addEventListener("DOMContentLoaded", function () {
       <span class="complaints-placeholder-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 3.8 6.4v5.2c0 4.7 3.5 7.9 8.2 9.4 4.7-1.5 8.2-4.7 8.2-9.4V6.4L12 3Z"></path><path d="M9 12.5 11 14l4-4"></path></svg></span>
       <h4>No reports submitted</h4>
       <p>Complaints and incident reports submitted through your tourist account will appear here with their tracking status.</p>
-      <a href="../homepage.php#complaintIncidentModal">Submit a report</a>
+      <a href="../#complaintIncidentModal">Submit a report</a>
     </div>
   <?php endif; ?>
 </section>
@@ -8467,7 +8467,7 @@ window.ComplaintModalConfig = {
   csrfToken: <?= json_encode(complaintCsrfToken(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
   endpoint: 'submit_complaint_incident.php',
   profileUrl: 'profile.php?section=complaints',
-  loginUrl: '../homepage.php?open_login=1'
+  loginUrl: '../?open_login=1'
 };
 </script>
 <script src="../js/complaint-modal.js?v=<?= (int)@filemtime(__DIR__ . '/../js/complaint-modal.js') ?>"></script>

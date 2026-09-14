@@ -391,7 +391,7 @@ function initHeader() {
                 text: 'You have been logged out.',
                 confirmButtonColor: '#2B7066'
               }).then(() => {
-                window.location.href = "homepage.php";
+                window.location.href = "./";
               });
             } else {
               Swal.fire({

@@ -120,7 +120,7 @@ $paymentLabel = $paymentLabels[$bookingDomain] ?? 'Reservation payment confirmed
 </head>
 <body>
   <header class="success-header">
-    <a href="homepage.php" class="success-brand" aria-label="iTour Mercedes home">
+    <a href="./" class="success-brand" aria-label="iTour Mercedes home">
       <img src="img/newlogo.png" alt="">
       <img src="img/textlogo2.png" alt="iTour Mercedes">
     </a>

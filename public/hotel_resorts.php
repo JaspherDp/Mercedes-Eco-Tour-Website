@@ -580,7 +580,7 @@ unset($hotel);
   role="dialog"
   aria-modal="true">
   <div class="service-drawer-topbar">
-    <a class="service-drawer-brand" href="homepage.php" aria-label="iTour Mercedes home">
+    <a class="service-drawer-brand" href="./" aria-label="iTour Mercedes home">
       <img class="service-drawer-brand-seal" src="img/newlogo.png" alt="">
       <img class="service-drawer-brand-wordmark" src="img/textlogo2.png" alt="iTour Mercedes">
     </a>

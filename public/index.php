@@ -1,5 +1,5 @@
 <?php
-$target = 'homepage.php';
+$target = '../';
 if (!empty($_SERVER['QUERY_STRING'])) {
     $target .= '?' . $_SERVER['QUERY_STRING'];
 }

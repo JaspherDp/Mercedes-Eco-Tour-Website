@@ -13,7 +13,7 @@ if (str_ends_with(strtolower($tourAvailabilityBase), '/public')) {
 $tourAvailabilityEndpoint = $tourAvailabilityBase . '/php/tour_resource_availability.php';
 
 $target = (string)($_SERVER['REQUEST_URI'] ?? 'tour_booking.php');
-$user = TouristRequireLogin($pdo, 'redirect', 'homepage.php?open_login=1', $target);
+$user = TouristRequireLogin($pdo, 'redirect', './?open_login=1', $target);
 $bookingCheckoutCsrf = (string)($_SESSION['paymongo_booking_csrf'] ?? '');
 if ($bookingCheckoutCsrf === '') {
     $bookingCheckoutCsrf = bin2hex(random_bytes(32));

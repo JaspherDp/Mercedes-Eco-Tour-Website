@@ -323,7 +323,7 @@
       if (rateLimited) return;
       if (!response.ok || result.status !== "success") throw new Error(result.message || "Your account could not be created.");
       await showAlert("success", "Account created", "Welcome to iTour Mercedes!");
-      window.location.href = result.redirect_url || "homepage.php";
+      window.location.href = result.redirect_url || "./";
     } catch (error) { showAlert("error", "Signup failed", error.message); }
     finally { if (!rateLimited) { button.disabled = false; button.textContent = "Create account"; } }
   });
@@ -447,7 +447,7 @@
       try { localStorage.removeItem(touristLoginStateKey); } catch (_) {}
       if (rememberMe.checked) saveRememberedCredentials(email, password); else clearRememberedCredentials();
       await showAlert("success", "Login successful", "Welcome back! Redirecting to your account.");
-      window.location.href = result.redirect_url || "homepage.php";
+      window.location.href = result.redirect_url || "./";
     } catch (error) { showPageLoginError(error.message); }
     finally {
       button.classList.remove("is-login-loading");

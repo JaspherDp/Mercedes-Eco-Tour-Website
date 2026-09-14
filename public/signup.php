@@ -5,7 +5,7 @@ require_once __DIR__ . '/../php/session_security.php';
 AppSessionStart();
 }
 if (!empty($_SESSION['tourist_id'])) {
-    header('Location: homepage.php');
+    header('Location: ./');
     exit;
 }
 $initialRateLimitNotice = $_SESSION['request_rate_limit_notice'] ?? null;
@@ -29,7 +29,7 @@ unset($_SESSION['request_rate_limit_notice']);
     <section class="tourist-auth-shell" aria-labelledby="authPageTitle">
       <aside class="tourist-auth-story">
         <div class="tourist-auth-story-shade"></div>
-        <a class="tourist-auth-brand" href="homepage.php" aria-label="iTour Mercedes home">
+        <a class="tourist-auth-brand" href="./" aria-label="iTour Mercedes home">
           <img src="img/newlogo.png" alt="">
           <img class="tourist-auth-wordmark" src="img/textlogo2-transparent.png" alt="iTour Mercedes">
         </a>

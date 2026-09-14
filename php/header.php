@@ -31,7 +31,16 @@ if (isset($_SESSION['tourist_id'])) {
 }
 
 $refererUrl = (string)($_SERVER['HTTP_REFERER'] ?? '');
-$currentPage = basename(parse_url($refererUrl !== '' ? $refererUrl : ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_PATH));
+$currentUrl = $refererUrl !== '' ? $refererUrl : (string)($_SERVER['REQUEST_URI'] ?? '');
+$currentPath = rawurldecode((string)(parse_url($currentUrl, PHP_URL_PATH) ?? ''));
+$currentPage = basename(rtrim($currentPath, '/'));
+$headerScriptPath = rawurldecode(str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? '/php/header.php')));
+$applicationRootPath = rtrim(str_replace('\\', '/', dirname(dirname($headerScriptPath))), '/');
+if ($applicationRootPath === '.' || $applicationRootPath === '/') {
+    $applicationRootPath = '';
+}
+$isHomepage = rtrim($currentPath, '/') === $applicationRootPath
+    || in_array(strtolower($currentPage), ['index.php', 'homepage.php'], true);
 $refererQuery = [];
 parse_str((string)parse_url($refererUrl, PHP_URL_QUERY), $refererQuery);
 $currentTabRaw = strtolower(trim((string)($refererQuery['tab'] ?? ($_GET['tab'] ?? ''))));
@@ -222,7 +231,7 @@ $popularDestinations = [
 $popularPackages = [];
 $popularHotels = [];
 
-if ($currentPage === 'homepage.php' && headSubnavTableExists($pdo, 'tour_packages')) {
+if ($isHomepage && headSubnavTableExists($pdo, 'tour_packages')) {
     if (headSubnavTableExists($pdo, 'operators')) {
         $stmt = $pdo->prepare("
             SELECT
@@ -252,7 +261,7 @@ if ($currentPage === 'homepage.php' && headSubnavTableExists($pdo, 'tour_package
     $popularPackages = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 }
 
-if ($currentPage === 'homepage.php' && headSubnavTableExists($pdo, 'hotel_resorts')) {
+if ($isHomepage && headSubnavTableExists($pdo, 'hotel_resorts')) {
     $stmt = $pdo->prepare("
         SELECT
           hotel_resort_id,
@@ -328,7 +337,7 @@ if ($currentPage === 'homepage.php' && headSubnavTableExists($pdo, 'hotel_resort
     </div>
   <?php endif; ?>
   <div class="head-nav-drawer-section-title">Navigation Links</div>
-  <a href="homepage.php" class="<?= ($currentPage === 'homepage.php') ? 'active' : '' ?>"><svg class="head-nav-page-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8"/></svg><span>HOME</span><span class="head-nav-page-arrow" aria-hidden="true">›</span></a>
+  <a href="./" class="<?= $isHomepage ? 'active' : '' ?>"><svg class="head-nav-page-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8"/></svg><span>HOME</span><span class="head-nav-page-arrow" aria-hidden="true">›</span></a>
   <a href="destination.php" class="<?= in_array($currentPage, ['destination.php', 'destination_results.php'], true) ? 'active' : '' ?>"><svg class="head-nav-page-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2"/></svg><span>DESTINATIONS</span><span class="head-nav-page-arrow" aria-hidden="true">›</span></a>
   <a href="hotel_resorts.php?tab=tours" class="<?= $isHotelsActive ? 'active' : '' ?>"><svg class="head-nav-page-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="14" rx="3"/><path d="M8 7V3h8v4M8 7v14M16 7v14"/></svg><span>TOURS</span><span class="head-nav-page-arrow" aria-hidden="true">›</span></a>
   <a href="about.php" class="<?= ($currentPage == 'about.php') ? 'active' : '' ?>"><svg class="head-nav-page-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v1"/></svg><span>ABOUT</span><span class="head-nav-page-arrow" aria-hidden="true">›</span></a>
@@ -413,12 +422,12 @@ if ($currentPage === 'homepage.php' && headSubnavTableExists($pdo, 'hotel_resort
   </div>
 </header>
 
-<?php if ($currentPage === 'homepage.php'): ?>
+<?php if ($isHomepage): ?>
 
 <!-- SECOND NAVBAR -->
 <div class="head-subnav">
   <nav class="head-subnav-mobile-links" aria-label="Sticky mobile navigation">
-    <a href="homepage.php" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8"/></svg><span>Home</span></a>
+    <a href="./" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8"/></svg><span>Home</span></a>
     <a href="destination.php"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2"/></svg><span>Destinations</span></a>
     <a href="hotel_resorts.php?tab=tours"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="14" rx="3"/><path d="M8 7V3h8v4M8 7v14M16 7v14"/></svg><span>Tours</span></a>
     <a href="about.php"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v1"/></svg><span>About</span></a>
@@ -524,7 +533,7 @@ body {
 
 <?php endif; ?>
 
-<?php if ($currentPage !== 'homepage.php'): ?>
+<?php if (!$isHomepage): ?>
 <style>
 .head-nav-main-header {
   border-bottom: 3px solid #2b7a66 !important;
