@@ -26,8 +26,12 @@ try {
   <link rel="stylesheet" href="styles/homepage.css" />
   <link rel="stylesheet" href="styles/about.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/about.css') ?>">
   <link rel="stylesheet" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>">
+  <script>document.documentElement.classList.add('itour-page-loading');</script>
+  <link rel="stylesheet" href="styles/page-loader.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/page-loader.css') ?>">
+  <script defer src="js/page-loader.js?v=<?= (int)@filemtime(__DIR__ . '/../js/page-loader.js') ?>"></script>
 </head>
 <body class="about-page">
+<?php include __DIR__ . '/../includes/page_loader.php'; ?>
 <!-- Header -->
 <div id="header"></div>
 <!-- Placeholder for Login/Signup Modal -->

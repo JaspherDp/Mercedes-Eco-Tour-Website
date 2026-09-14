@@ -1,0 +1,172 @@
+:root {
+  --itour-loader-green: #08745b;
+  --itour-loader-deep: #035344;
+  --itour-loader-line: #dce9e4;
+}
+
+html.itour-page-loading,
+html.itour-page-loading body {
+  overflow: hidden !important;
+}
+
+.itour-page-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 13px;
+  min-height: 100dvh;
+  padding: 24px;
+  color: var(--itour-loader-deep);
+  background: #fff;
+  opacity: 1;
+  visibility: visible;
+  transition: opacity .3s ease, visibility .3s ease;
+}
+
+.itour-page-loader.is-leaving {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.itour-loader-scene {
+  position: relative;
+  width: clamp(174px, 22vw, 214px);
+  height: 116px;
+}
+
+.itour-loader-boat {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: 0;
+  width: 172px;
+  max-width: 84%;
+  transform: translateX(-50%);
+  overflow: visible;
+  transform-origin: 50% 76%;
+  animation: itour-boat-float 1.8s ease-in-out infinite;
+}
+
+.itour-loader-outrigger,
+.itour-loader-hull-line,
+.itour-loader-mast {
+  fill: none;
+  stroke: var(--itour-loader-deep);
+  stroke-width: 4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.itour-loader-hull { fill: var(--itour-loader-green); }
+.itour-loader-hull-line { stroke: rgba(255, 255, 255, .82); stroke-width: 2.3; }
+.itour-loader-mast { stroke-width: 4.5; }
+.itour-loader-sail { fill: #fff; stroke: var(--itour-loader-green); stroke-width: 3; stroke-linejoin: round; }
+.itour-loader-sail-accent { fill: #83cdb5; stroke: var(--itour-loader-green); stroke-width: 3; stroke-linejoin: round; }
+
+.itour-loader-wave {
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 100%;
+  height: 29px;
+  transform: translateX(-50%);
+  overflow: visible;
+}
+
+.itour-loader-wave path {
+  fill: none;
+  stroke: #1688a0;
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-dasharray: 48 10;
+  animation: itour-wave-flow 1.7s linear infinite;
+}
+
+.itour-loader-wave path:last-child {
+  stroke: #73c4ca;
+  stroke-width: 2.4;
+  opacity: .72;
+  animation-duration: 2.15s;
+  animation-direction: reverse;
+}
+
+.itour-loader-copy {
+  display: grid;
+  justify-items: center;
+  gap: 5px;
+}
+
+.itour-loader-copy img {
+  display: block;
+  width: clamp(170px, 23vw, 215px);
+  height: auto;
+}
+
+.itour-loader-copy span {
+  color: #688078;
+  font: 600 10px/1.2 Inter, Poppins, sans-serif;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.itour-loader-progress {
+  position: relative;
+  width: clamp(178px, 24vw, 224px);
+  height: 3px;
+  margin-top: 3px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--itour-loader-line);
+}
+
+.itour-loader-progress span {
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 38%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, transparent, var(--itour-loader-green) 24%, #41aa8c 76%, transparent);
+  animation: itour-progress 1.25s cubic-bezier(.45, 0, .55, 1) infinite;
+}
+
+.itour-loader-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@keyframes itour-boat-float {
+  0%, 100% { transform: translateX(-50%) translateY(2px) rotate(-.7deg); }
+  50% { transform: translateX(-50%) translateY(-4px) rotate(.7deg); }
+}
+
+@keyframes itour-wave-flow {
+  to { stroke-dashoffset: -58; }
+}
+
+@keyframes itour-progress {
+  0% { transform: translateX(-110%); }
+  55% { width: 52%; }
+  100% { transform: translateX(285%); width: 38%; }
+}
+
+@media (max-width: 600px) {
+  .itour-page-loader { gap: 11px; }
+  .itour-loader-scene { height: 108px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .itour-loader-boat,
+  .itour-loader-wave path,
+  .itour-loader-progress span { animation: none; }
+}

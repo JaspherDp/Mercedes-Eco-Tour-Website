@@ -547,6 +547,9 @@ unset($hotel);
   <link rel="stylesheet" href="styles/hotel_resorts.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/hotel_resorts.css') ?>" />
   <link rel="stylesheet" href="styles/favorites.css" />
   <link rel="stylesheet" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>" />
+  <script>document.documentElement.classList.add('itour-page-loading');</script>
+  <link rel="stylesheet" href="styles/page-loader.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/page-loader.css') ?>" />
+  <script defer src="js/page-loader.js?v=<?= (int)@filemtime(__DIR__ . '/../js/page-loader.js') ?>"></script>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
@@ -562,6 +565,7 @@ unset($hotel);
 </div>
 
 <body>
+<?php include __DIR__ . '/../includes/page_loader.php'; ?>
 
 <!-- Header -->
 <div id="header"></div>

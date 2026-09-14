@@ -47,9 +47,13 @@ foreach (destinationRows($pdo, true) as $destination) {
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="styles/destination.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/destination.css') ?>" />
     <link rel="stylesheet" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>" />
+    <script>document.documentElement.classList.add('itour-page-loading');</script>
+    <link rel="stylesheet" href="styles/page-loader.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/page-loader.css') ?>" />
+    <script defer src="js/page-loader.js?v=<?= (int)@filemtime(__DIR__ . '/../js/page-loader.js') ?>"></script>
   </head>
   
 <body class="destination-page">
+<?php include __DIR__ . '/../includes/page_loader.php'; ?>
 
 <!-- Header -->
   <div id="header"></div>
