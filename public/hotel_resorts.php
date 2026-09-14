@@ -2073,7 +2073,7 @@ include 'footer.php';
         }
         updateIslandFieldState();
 
-        fetch("logsign-modal.html?v=10")
+        fetch("logsign-modal.html?v=11")
           .then(res => res.text())
           .then(html => {
             const modalContainer = document.getElementById("loginModal");
@@ -2084,7 +2084,7 @@ include 'footer.php';
             swalScript.src = "https://cdn.jsdelivr.net/npm/sweetalert2@11";
             swalScript.onload = () => {
               const logsignScript = document.createElement("script");
-              logsignScript.src = "logsign.js?v=10";
+              logsignScript.src = "logsign.js?v=11";
               logsignScript.onload = () => {
                 if (typeof initLogSignEvents === "function") initLogSignEvents();
                 else console.error("initLogSignEvents not found in logsign.js");

@@ -14,6 +14,7 @@ error_reporting(E_ALL);
 
 require_once 'db_connection.php';
 require_once __DIR__ . '/request_rate_limiter.php';
+require_once __DIR__ . '/turnstile.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
@@ -36,6 +37,12 @@ try {
 
     // --- Send code ---
     if ($action === 'send_code') {
+        if (!ItourTurnstileRequestPassed()) {
+            http_response_code(403);
+            echo json_encode(['status' => 'error', 'message' => ITOUR_TURNSTILE_ERROR]);
+            exit;
+        }
+
         $forgotLimit = requestRateLimitConsume($pdo, 'forgot_password_request', requestRateLimitClientIp(), 3, 900);
         if (!$forgotLimit['allowed']) {
             requestRateLimitReject($forgotLimit);

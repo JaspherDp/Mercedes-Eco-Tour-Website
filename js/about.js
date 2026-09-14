@@ -48,12 +48,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const loadLoginModal = () => {
     if (!loginHost) return;
-    fetch('logsign-modal.html?v=10')
+    fetch('logsign-modal.html?v=11')
       .then((response) => response.text())
       .then((html) => {
         loginHost.innerHTML = html;
         const script = document.createElement('script');
-        script.src = 'logsign.js?v=10';
+        script.src = 'logsign.js?v=11';
         script.addEventListener('load', () => {
           if (typeof initLogSignEvents === 'function') initLogSignEvents();
         });

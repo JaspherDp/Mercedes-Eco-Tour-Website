@@ -42,6 +42,7 @@
         <span class="forgot-password">Forgot Password?</span>
       </div>
 
+      <div class="itour-turnstile" data-itour-turnstile="modal-login"></div>
       <button id="loginBtn" type="submit">Login</button>
 
       <!-- Google Sign-In -->
@@ -82,6 +83,7 @@
 
   <!-- Step 1: Enter Email + Verification Code -->
   <div class="signup-phase forgot-phase forgot-phase-1 active">
+    <div class="itour-turnstile" data-itour-turnstile="modal-forgot-send"></div>
     <div class="logsign-email-container">
       <div class="logsign-email-wrapper logsign-input-group logsign-has-leading-icon logsign-icon-email">
         <input type="email" id="forgotEmail" placeholder=" " required>
@@ -178,6 +180,7 @@
 
       <!-- PHASE 2 -->
       <div class="signup-phase signup-phase-2">
+        <div class="itour-turnstile" data-itour-turnstile="modal-signup-send"></div>
         <div class="logsign-email-container">
           <div class="logsign-email-wrapper logsign-input-group logsign-has-leading-icon logsign-icon-email">
             <input type="email" id="signupEmail" placeholder=" " required>
@@ -224,6 +227,7 @@
           <span data-password-rule="number">At least one number</span>
           <span data-password-rule="match">Both passwords match</span>
         </div>
+        <div class="itour-turnstile" data-itour-turnstile="modal-signup-complete"></div>
         <div class="signup-step-actions">
           <button class="signup-secondary-btn" id="signupPasswordBackBtn" type="button">Back</button>
           <button id="signupBtn" type="button">Create Account</button>
@@ -247,6 +251,12 @@
 
 <style>
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
+
+.itour-turnstile { width: 100%; max-width: 100%; min-height: 65px; overflow: hidden; margin: 6px 0 10px; }
+.itour-turnstile iframe { max-width: 100% !important; }
+.itour-turnstile-development,
+.itour-turnstile-unavailable { min-height: 0; padding: 9px 11px; border: 1px solid #d7e5df; border-radius: 7px; background: #f5faf8; color: #60736c; font-size: 0.76rem; line-height: 1.35; }
+.itour-turnstile-unavailable { border-color: #e5c9cc; background: #fff7f7; color: #923d46; }
 
 /* === Modal === */
 .logsign-modal-overlay { 

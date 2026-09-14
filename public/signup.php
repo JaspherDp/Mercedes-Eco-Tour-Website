@@ -114,6 +114,7 @@ unset($_SESSION['request_rate_limit_notice']);
                 <input class="page-code-box" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 6" required>
               </div>
               <p class="tourist-form-status" id="pageEmailStatus" role="status">The code remains valid for 10 minutes.</p>
+              <div class="itour-turnstile" data-itour-turnstile="page-signup-send"></div>
               <div class="tourist-form-actions"><button class="tourist-secondary-button" data-go-step="2" type="button">Back</button><button class="tourist-primary-button" id="pageVerifyCode" type="button">Verify and continue</button></div>
             </section>
 
@@ -123,6 +124,7 @@ unset($_SESSION['request_rate_limit_notice']);
               <label class="tourist-field tourist-password-field" data-icon="lock"><span>Create password</span><input id="pageSignupPassword" type="password" autocomplete="new-password" placeholder="Enter your password" required><button class="tourist-password-toggle" type="button" data-toggle-password="pageSignupPassword" aria-label="Show password" aria-pressed="false"><svg class="eye-open" viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg><svg class="eye-off" viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.2A10.7 10.7 0 0 1 12 6c6 0 9.5 6 9.5 6s-.8 1.4-2.3 2.9M6.1 6.1C3.8 7.8 2.5 12 2.5 12s3.5 6 9.5 6a10.7 10.7 0 0 0 3.4-.5M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg></button></label>
               <label class="tourist-field tourist-password-field" data-icon="lock"><span>Confirm password</span><input id="pageSignupConfirm" type="password" autocomplete="new-password" placeholder="Enter it again" required><button class="tourist-password-toggle" type="button" data-toggle-password="pageSignupConfirm" aria-label="Show password" aria-pressed="false"><svg class="eye-open" viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg><svg class="eye-off" viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.2A10.7 10.7 0 0 1 12 6c6 0 9.5 6 9.5 6s-.8 1.4-2.3 2.9M6.1 6.1C3.8 7.8 2.5 12 2.5 12s3.5 6 9.5 6a10.7 10.7 0 0 0 3.4-.5M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg></button></label>
               <div class="tourist-password-rules" aria-live="polite"><strong>Password requirements</strong><span data-rule="length">At least 6 characters</span><span data-rule="letter">At least one letter</span><span data-rule="number">At least one number</span><span data-rule="match">Passwords match</span></div>
+              <div class="itour-turnstile" data-itour-turnstile="page-signup-complete"></div>
               <div class="tourist-form-actions"><button class="tourist-secondary-button" data-go-step="3" type="button">Back</button><button class="tourist-primary-button" id="pageCreateAccount" type="button">Create account</button></div>
             </section>
           </form>
@@ -147,6 +149,7 @@ unset($_SESSION['request_rate_limit_notice']);
             <label class="tourist-field" data-icon="mail"><span>Email address</span><input id="pageLoginEmail" type="email" autocomplete="email" placeholder="you@example.com" required></label>
             <label class="tourist-field tourist-password-field" data-icon="lock"><span>Password</span><input id="pageLoginPassword" type="password" autocomplete="off" placeholder="Enter your password" required><button class="tourist-password-toggle" type="button" data-toggle-password="pageLoginPassword" aria-label="Show password" aria-pressed="false"><svg class="eye-open" viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg><svg class="eye-off" viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.2A10.7 10.7 0 0 1 12 6c6 0 9.5 6 9.5 6s-.8 1.4-2.3 2.9M6.1 6.1C3.8 7.8 2.5 12 2.5 12s3.5 6 9.5 6a10.7 10.7 0 0 0 3.4-.5M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg></button></label>
             <div class="tourist-login-options"><label class="tourist-remember"><input id="pageRememberMe" type="checkbox"> <span>Remember me</span></label><button class="tourist-forgot-link" id="showPageForgot" type="button">Forgot password?</button></div>
+            <div class="itour-turnstile" data-itour-turnstile="page-login"></div>
             <button class="tourist-primary-button" id="pageLoginButton" type="submit">Login</button>
           </form>
           <div class="tourist-auth-divider"><span>or continue with</span></div>
@@ -174,6 +177,7 @@ unset($_SESSION['request_rate_limit_notice']);
                 <button class="tourist-send-button" id="pageForgotSendCode" type="button" disabled>Send code</button>
               </div>
               <p class="tourist-form-status" id="pageForgotStatus" role="status">Use the email registered to your tourist account.</p>
+              <div class="itour-turnstile" data-itour-turnstile="page-forgot-send"></div>
               <div class="tourist-code-boxes tourist-recovery-code" aria-label="Six-digit password reset code">
                 <input class="page-forgot-code" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 1" required><input class="page-forgot-code" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 2" required><input class="page-forgot-code" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 3" required><input class="page-forgot-code" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 4" required><input class="page-forgot-code" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 5" required><input class="page-forgot-code" type="text" inputmode="numeric" maxlength="1" aria-label="Digit 6" required>
               </div>
@@ -200,6 +204,7 @@ unset($_SESSION['request_rate_limit_notice']);
   <?php if (is_array($initialRateLimitNotice)): ?>
   <script>window.RequestLimitModal.show(<?= json_encode($initialRateLimitNotice, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) ?>);</script>
   <?php endif; ?>
+  <script src="js/turnstile.js?v=<?= (int)@filemtime(__DIR__ . '/../js/turnstile.js') ?>"></script>
   <script src="js/signup-page.js?v=<?= (int)@filemtime(__DIR__ . '/../js/signup-page.js') ?>"></script>
 </body>
 </html>

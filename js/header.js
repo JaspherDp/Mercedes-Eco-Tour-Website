@@ -62,7 +62,7 @@ function ensureGlobalAuthModal() {
       await loadScriptOnce("https://cdn.jsdelivr.net/npm/sweetalert2@11", "sweetalert2", () => !!window.Swal);
     }
 
-    const response = await fetch("logsign-modal.html?v=10");
+    const response = await fetch("logsign-modal.html?v=11");
     if (!response.ok) {
       throw new Error(`Failed to load auth modal markup (${response.status})`);
     }
@@ -75,7 +75,7 @@ function ensureGlobalAuthModal() {
       document.body.appendChild(portal);
     }
 
-    await loadScriptOnce("logsign.js?v=10", "logsign", () => typeof window.initLogSignEvents === "function");
+    await loadScriptOnce("logsign.js?v=11", "logsign", () => typeof window.initLogSignEvents === "function");
     if (typeof window.initLogSignEvents === "function") {
       window.initLogSignEvents();
     }

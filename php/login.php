@@ -4,6 +4,7 @@ AppSessionStart();
 require 'db_connection.php';
 require_once __DIR__ . '/activity_logger.php';
 require_once __DIR__ . '/login_throttle.php';
+require_once __DIR__ . '/turnstile.php';
 
 header('Content-Type: application/json');
 
@@ -18,6 +19,12 @@ try {
 
     if (empty($email) || empty($password)) {
         echo json_encode(["status" => "error", "message" => "Email and password are required"]);
+        exit;
+    }
+
+    if (!ItourTurnstileRequestPassed()) {
+        http_response_code(403);
+        echo json_encode(["status" => "error", "message" => ITOUR_TURNSTILE_ERROR]);
         exit;
     }
 

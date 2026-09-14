@@ -425,7 +425,7 @@ $faqs = $stmt->fetchAll();
     });
 
     // Load modal after header exists
-    return fetch("logsign-modal.html?v=10");
+    return fetch("logsign-modal.html?v=11");
   })
   .then(res => res.text())
   .then(html => {
@@ -433,7 +433,7 @@ $faqs = $stmt->fetchAll();
 
     // Load logsign.js only after modal is added
     const script = document.createElement("script");
-    script.src = "logsign.js?v=10";
+    script.src = "logsign.js?v=11";
     script.onload = () => {
       if (typeof initLogSignEvents === "function") {
         initLogSignEvents();

@@ -16,6 +16,11 @@
     window.RequestLimitModal?.handle(response, payload, { button, defaultText })
   );
 
+  async function addTurnstileToken(body, widgetName) {
+    const token = await window.ItourTurnstile.token(widgetName);
+    if (token) body.append("cf-turnstile-response", token);
+  }
+
   function setCookie(name, value, days) {
     document.cookie = `${name}=${encodeURIComponent(value)}; expires=${new Date(Date.now() + days * 864e5).toUTCString()}; path=/; SameSite=Lax`;
   }
@@ -63,6 +68,8 @@
       const badge = indicator.querySelector("b");
       if (badge) badge.textContent = number < step ? "✓" : String(number);
     });
+    if (step === 3) window.ItourTurnstile.render("page-signup-send").catch(() => {});
+    if (step === 4) window.ItourTurnstile.render("page-signup-complete").catch(() => {});
   }
 
   document.querySelectorAll("[data-go-step]").forEach(button => button.addEventListener("click", () => goToStep(Number(button.dataset.goStep))));
@@ -71,6 +78,7 @@
     signupPanel.hidden = true;
     forgotPanel.hidden = true;
     loginPanel.hidden = false;
+    window.ItourTurnstile.render("page-login").catch(() => {});
     byId("pageLoginError").hidden = true;
     byId("pageLoginEmail").focus();
   });
@@ -84,6 +92,7 @@
     signupPanel.hidden = true;
     loginPanel.hidden = true;
     forgotPanel.hidden = false;
+    window.ItourTurnstile.render("page-forgot-send").catch(() => {});
     resetRecovery();
     const recoveryEmail = byId("pageForgotEmail");
     recoveryEmail.value = byId("pageLoginEmail").value.trim();
@@ -261,6 +270,7 @@
     try {
       const body = new FormData();
       body.append("action", "send_code"); body.append("email", email); body.append("fname", byId("pageSignupFirstName").value.trim()); body.append("lname", byId("pageSignupLastName").value.trim());
+      await addTurnstileToken(body, "page-signup-send");
       const response = await fetch("php/signup.php", { method: "POST", body });
       const result = await response.json();
       if (handleRateLimit(response, result, button, "Send code")) return;
@@ -278,6 +288,8 @@
     } catch (error) {
       button.disabled = false; button.textContent = "Send code";
       setStatus("pageEmailStatus", error.message, "error");
+    } finally {
+      window.ItourTurnstile.reset("page-signup-send");
     }
   });
 
@@ -317,6 +329,7 @@
     try {
       const body = new FormData();
       body.append("action", "complete_signup"); body.append("fname", byId("pageSignupFirstName").value.trim()); body.append("lname", byId("pageSignupLastName").value.trim()); body.append("phone", byId("pageSignupPhone").value.trim()); body.append("address", addressLine()); body.append("email", byId("pageSignupEmail").value.trim()); body.append("password", byId("pageSignupPassword").value); body.append("confirm", byId("pageSignupConfirm").value);
+      await addTurnstileToken(body, "page-signup-complete");
       const response = await fetch("php/signup.php", { method: "POST", body });
       const result = await response.json();
       rateLimited = handleRateLimit(response, result, button, "Create account");
@@ -325,7 +338,7 @@
       await showAlert("success", "Account created", "Welcome to iTour Mercedes!");
       window.location.href = result.redirect_url || "./";
     } catch (error) { showAlert("error", "Signup failed", error.message); }
-    finally { if (!rateLimited) { button.disabled = false; button.textContent = "Create account"; } }
+    finally { window.ItourTurnstile.reset("page-signup-complete"); if (!rateLimited) { button.disabled = false; button.textContent = "Create account"; } }
   });
 
   const loginEmail = byId("pageLoginEmail");
@@ -433,6 +446,7 @@
     button.innerHTML = '<span class="tourist-login-spinner" aria-hidden="true"></span><span>Logging in...</span>';
     try {
       const body = new FormData(); body.append("email", email); body.append("password", password);
+      await addTurnstileToken(body, "page-login");
       const response = await fetch("php/login.php", { method: "POST", body });
       const result = await response.json();
       if (!response.ok || result.status !== "success") {
@@ -450,6 +464,7 @@
       window.location.href = result.redirect_url || "./";
     } catch (error) { showPageLoginError(error.message); }
     finally {
+      window.ItourTurnstile.reset("page-login");
       button.classList.remove("is-login-loading");
       if (loginFormElement.dataset.locked !== "true") { button.disabled = false; button.textContent = "Login"; }
     }
@@ -595,6 +610,7 @@
       const body = new FormData();
       body.append("action", "send_code");
       body.append("email", forgotEmail.value.trim());
+      await addTurnstileToken(body, "page-forgot-send");
       const response = await fetch("php/send_verification_codeFP.php", { method: "POST", body });
       const result = await response.json();
       if (handleRateLimit(response, result, button, "Send code")) return;
@@ -616,6 +632,8 @@
       button.disabled = false;
       button.textContent = "Send code";
       setStatus("pageForgotStatus", error.message, "error");
+    } finally {
+      window.ItourTurnstile.reset("page-forgot-send");
     }
   });
 

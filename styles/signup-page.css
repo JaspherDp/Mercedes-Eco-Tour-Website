@@ -497,3 +497,8 @@ button, .tourist-google-button { font-family: inherit; }
   .tourist-form-step { animation: none; }
   .tourist-primary-button, .tourist-secondary-button, .tourist-send-button, .tourist-google-button { transition: none; }
 }
+.itour-turnstile { width: 100%; max-width: 100%; min-height: 65px; overflow: hidden; margin: 8px 0 12px; }
+.itour-turnstile iframe { max-width: 100% !important; }
+.itour-turnstile-development,
+.itour-turnstile-unavailable { min-height: 0; padding: 10px 12px; border: 1px solid #d7e5df; border-radius: 8px; background: #f5faf8; color: #60736c; font-size: .78rem; line-height: 1.35; }
+.itour-turnstile-unavailable { border-color: #e5c9cc; background: #fff7f7; color: #923d46; }

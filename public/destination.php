@@ -334,13 +334,13 @@ fetch("php/header.php")
     swalScript.src = "https://cdn.jsdelivr.net/npm/sweetalert2@11";
     swalScript.onload = () => {
       // Now load logsign modal
-      fetch("logsign-modal.html?v=10")
+      fetch("logsign-modal.html?v=11")
         .then(res => res.text())
         .then(html => {
           document.getElementById("loginModal").innerHTML = html;
 
           const logsignScript = document.createElement("script");
-          logsignScript.src = "logsign.js?v=10";
+          logsignScript.src = "logsign.js?v=11";
           logsignScript.onload = () => {
             if (typeof initLogSignEvents === "function") initLogSignEvents();
           };

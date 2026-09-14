@@ -4,6 +4,7 @@ AppSessionStart();
 require_once __DIR__ . '/../Ho_common.php';
 require_once __DIR__ . '/activity_logger.php';
 require_once __DIR__ . '/login_throttle.php';
+require_once __DIR__ . '/turnstile.php';
 
 $errorMessage = '';
 $isAjaxLogin = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
@@ -23,6 +24,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($username === '' || $password === '') {
         $errorMessage = 'Username and password are required.';
+    } elseif (!ItourTurnstileRequestPassed()) {
+        $errorMessage = ITOUR_TURNSTILE_ERROR;
     } else {
         $throttle = loginThrottleStatus($pdo, 'hotel-administrator', $username);
         if ($throttle['locked']) {
@@ -125,7 +128,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>iTour Mercedes - Hotel and Resort Owner Login</title>
 <link rel="icon" type="image/png" href="../img/newlogo.png" />
-<link rel="stylesheet" href="../styles/auth-portal.css?v=9">
+<link rel="stylesheet" href="../styles/auth-portal.css?v=10">
 </head>
 <body class="auth-page">
 
@@ -161,6 +164,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <img class="adlog-eye-icon" id="toggleOwnerPassword" src="../img/passwordhide.png" data-hidden-icon="../img/passwordhide.png" data-visible-icon="../img/passwordsee.png" data-password-input="ownerPassword" alt="Show password" role="button" tabindex="0">
         </div>
 
+        <div class="itour-turnstile" data-itour-turnstile="hotel-owner-login"></div>
         <button type="submit" class="adlog-btn">
             <span>Login</span>
             <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
@@ -168,6 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </form>
 </div>
 
-<script src="../js/auth-portal.js?v=9"></script>
+<script src="../js/turnstile.js?v=1"></script>
+<script src="../js/auth-portal.js?v=10"></script>
 </body>
 </html>

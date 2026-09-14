@@ -179,9 +179,12 @@ document.addEventListener("DOMContentLoaded", () => {
       submitButton.insertBefore(spinner, buttonLabel);
 
       try {
+        const body = new FormData(form);
+        const turnstileToken = await window.ItourTurnstile.token(form);
+        if (turnstileToken) body.set("cf-turnstile-response", turnstileToken);
         const response = await fetch(form.action || window.location.href, {
           method: "POST",
-          body: new FormData(form),
+          body,
           credentials: "same-origin",
           headers: {
             Accept: "application/json",
@@ -191,6 +194,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
         const payload = await response.json();
         if (!response.ok || !payload.success) {
+          window.ItourTurnstile.reset(form);
           if (payload.locked && Number(payload.retry_after) > 0) {
             startLockout(payload.retry_after, 0, usernameInput?.value || "");
           } else {
@@ -207,6 +211,7 @@ document.addEventListener("DOMContentLoaded", () => {
         buttonLabel.textContent = "Opening dashboard...";
         await openDashboard(payload.redirect);
       } catch (error) {
+        window.ItourTurnstile.reset(form);
         showLoginError(error instanceof Error ? error.message : "Unable to log in. Please try again.");
         resetSubmitButton();
       }

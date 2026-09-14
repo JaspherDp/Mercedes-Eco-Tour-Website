@@ -5,6 +5,7 @@ require 'db_connection.php';
 require_once __DIR__ . '/activity_logger.php';
 require_once __DIR__ . '/admin_auth_helper.php';
 require_once __DIR__ . '/login_throttle.php';
+require_once __DIR__ . '/turnstile.php';
 require 'alert.php';
 
 $requestedAdminReturn = trim((string)($_POST['return_to'] ?? $_GET['return_to'] ?? ''));
@@ -13,8 +14,25 @@ $isPhoneSetupReturn = $adminReturnPage === 'admin-phone-setup.php';
 $isAjaxLogin = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $username = trim($_POST['username']);
-    $password = trim($_POST['password']);
+    $username = trim((string)($_POST['username'] ?? ''));
+    $password = trim((string)($_POST['password'] ?? ''));
+
+    if ($username === '' || $password === '' || !ItourTurnstileRequestPassed()) {
+        $message = $username === '' || $password === '' ? 'Username and password are required.' : ITOUR_TURNSTILE_ERROR;
+        if ($isAjaxLogin) {
+            header('Content-Type: application/json; charset=utf-8');
+            http_response_code(403);
+            echo json_encode(['success' => false, 'locked' => false, 'message' => $message, 'retry_after' => 0]);
+            exit();
+        }
+        $_SESSION['alert'] = ['type' => 'error', 'title' => 'Login Failed', 'message' => $message];
+        $securityFailureLocation = 'admin_login.php';
+        if ($adminReturnPage !== 'adhomepage.php') {
+            $securityFailureLocation .= '?return_to=' . rawurlencode($adminReturnPage);
+        }
+        header('Location: ' . $securityFailureLocation);
+        exit();
+    }
 
     $throttle = loginThrottleStatus($pdo, 'administrator', $username);
     if ($throttle['locked']) {
@@ -112,7 +130,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>iTour Mercedes - Admin Login</title>
 <link rel="icon" type="image/png" href="../img/newlogo.png">
-<link rel="stylesheet" href="../styles/auth-portal.css?v=9">
+<link rel="stylesheet" href="../styles/auth-portal.css?v=10">
 </head>
 <body class="auth-page">
 
@@ -143,6 +161,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             <img class="adlog-eye-icon" id="toggleAdminPassword" src="../img/passwordhide.png" data-hidden-icon="../img/passwordhide.png" data-visible-icon="../img/passwordsee.png" data-password-input="adminPassword" alt="Show password" role="button" tabindex="0">
         </div>
 
+        <div class="itour-turnstile" data-itour-turnstile="administrator-login"></div>
         <button type="submit" class="adlog-btn">
             <span>Login</span>
             <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
@@ -150,7 +169,8 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
     </form>
 </div>
 
-<script src="../js/auth-portal.js?v=9"></script>
+<script src="../js/turnstile.js?v=1"></script>
+<script src="../js/auth-portal.js?v=10"></script>
 </body>
 </html>
 

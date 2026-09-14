@@ -1,3 +1,26 @@
+const logsignScriptUrl = document.currentScript?.src || document.baseURI;
+let logsignTurnstilePromise = null;
+function getLogsignTurnstile() {
+  if (window.ItourTurnstile) return Promise.resolve(window.ItourTurnstile);
+  if (!logsignTurnstilePromise) {
+    logsignTurnstilePromise = new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = new URL('js/turnstile.js', logsignScriptUrl).href;
+      script.async = true;
+      script.onload = () => window.ItourTurnstile ? resolve(window.ItourTurnstile) : reject(new Error('Security verification is unavailable.'));
+      script.onerror = () => reject(new Error('Security verification is unavailable.'));
+      document.head.appendChild(script);
+    });
+  }
+  return logsignTurnstilePromise;
+}
+
+async function addLogsignTurnstileToken(formData, widgetName) {
+  const helper = await getLogsignTurnstile();
+  const token = await helper.token(widgetName);
+  if (token) formData.append('cf-turnstile-response', token);
+}
+
 // --- Cookie utilities for Remember Me ---
 function setCookie(name, value, days) {
   const expires = new Date(Date.now() + days * 864e5).toUTCString();
@@ -195,6 +218,8 @@ function initLogSignEvents() {
     return;
   }
 
+  getLogsignTurnstile().then(helper => helper.scan(modalOverlay)).catch(() => {});
+
   const authStore = window.AuthModalStore || {};
   const authSubscribers = authStore._listeners instanceof Set ? authStore._listeners : new Set();
   authStore._listeners = authSubscribers;
@@ -230,10 +255,16 @@ function initLogSignEvents() {
     signupForm.classList.add("logsign-hidden");
     forgotPasswordForm?.classList.add("logsign-hidden");
     resetSignupStep();
+    getLogsignTurnstile().then(helper => {
+      if (!loginForm.classList.contains('logsign-hidden')) helper.render('modal-login');
+    }).catch(() => {});
     publishAuthState(true);
   };
 
   const closeAuthModal = () => {
+    if (window.ItourTurnstile) {
+      ['modal-login', 'modal-forgot-send', 'modal-signup-send', 'modal-signup-complete'].forEach(name => window.ItourTurnstile.reset(name));
+    }
     modalOverlay.style.display = "none";
     publishAuthState(false);
   };
@@ -272,6 +303,7 @@ function initLogSignEvents() {
     goLogin.addEventListener("click", () => {
       signupForm.classList.add("logsign-hidden");
       loginForm.classList.remove("logsign-hidden");
+      getLogsignTurnstile().then(helper => helper.render('modal-login')).catch(() => {});
     });
   }
 
@@ -311,6 +343,8 @@ function initLogSignEvents() {
       else if (index + 1 === phaseNumber) step.classList.add("phase-active");
       else step.classList.add("phase-inactive");
     });
+    if (phaseNumber === 2) getLogsignTurnstile().then(helper => helper.render('modal-signup-send')).catch(() => {});
+    if (phaseNumber === 3) getLogsignTurnstile().then(helper => helper.render('modal-signup-complete')).catch(() => {});
   };
 
   const signupField = (id) => document.getElementById(id);
@@ -454,6 +488,7 @@ function initLogSignEvents() {
       formData.append("fname", signupField("signupFirstName").value.trim());
       formData.append("lname", signupField("signupLastName").value.trim());
       formData.append("action", "send_code");
+      await addLogsignTurnstileToken(formData, "modal-signup-send");
 
       const res = await fetch("php/signup.php", { method: "POST", body: formData });
       const data = await res.json();
@@ -468,6 +503,8 @@ function initLogSignEvents() {
       sendCodeBtn.textContent = "Send Code";
       sendCodeBtn.style.cursor = "pointer";
       return;
+    } finally {
+      window.ItourTurnstile?.reset("modal-signup-send");
     }
 
     sendCodeBtn.textContent = "Resend Code";
@@ -635,6 +672,7 @@ async function handleLogin(event) {
     formData.append('password', password);
 
     try {
+        await addLogsignTurnstileToken(formData, 'modal-login');
         const res = await fetch('php/login.php', { method: 'POST', body: formData });
         const data = await res.json();
 
@@ -701,7 +739,9 @@ async function handleLogin(event) {
         loginBtn.style.opacity = '1';
         loginBtn.style.cursor = 'pointer';
 
-        showLoginFormError('Something went wrong. Please try again.');
+        showLoginFormError(err.message || 'Something went wrong. Please try again.');
+    } finally {
+        window.ItourTurnstile?.reset('modal-login');
     }
 }
 
@@ -926,6 +966,7 @@ if (false) {
       formData.append("email", signupField("signupEmail").value.trim());
       formData.append("password", signupPasswordInput.value);
       formData.append("confirm", signupConfirmInput.value);
+      await addLogsignTurnstileToken(formData, "modal-signup-complete");
       const response = await fetch("php/signup.php", { method: "POST", body: formData });
       const data = await response.json();
       rateLimited = handleAuthRateLimit(response, data, signupBtn, originalBtnText);
@@ -937,6 +978,7 @@ if (false) {
     } catch (error) {
       Swal.fire({ icon: "error", title: "Signup Failed", text: error.message, confirmButtonColor: "#2B7066" });
     } finally {
+      window.ItourTurnstile?.reset("modal-signup-complete");
       if (!rateLimited) {
         signupBtn.disabled = false;
         signupBtn.textContent = originalBtnText;
@@ -1069,6 +1111,7 @@ if (forgotPasswordLink && forgotPasswordForm && forgotEmailInput && forgotSendCo
     loginForm.classList.add('logsign-hidden');
     signupForm.classList.add('logsign-hidden');
     forgotPasswordForm.classList.remove('logsign-hidden');
+    getLogsignTurnstile().then(helper => helper.render('modal-forgot-send')).catch(() => {});
 
     forgotEmailInput.value = '';
     clearTimeout(forgotEmailCheckTimer);
@@ -1159,6 +1202,7 @@ if (forgotPasswordLink && forgotPasswordForm && forgotEmailInput && forgotSendCo
       const formData = new FormData();
       formData.append('action', 'send_code');
       formData.append('email', email);
+      await addLogsignTurnstileToken(formData, 'modal-forgot-send');
 
       const res = await fetch('php/send_verification_codeFP.php', { method: 'POST', body: formData });
       const data = await res.json();
@@ -1195,6 +1239,8 @@ if (forgotPasswordLink && forgotPasswordForm && forgotEmailInput && forgotSendCo
       forgotSendCodeBtn.textContent = 'Send Code';
       forgotSendCodeBtn.style.cursor = canRetry ? 'pointer' : 'not-allowed';
       forgotSendCodeBtn.style.backgroundColor = canRetry ? '#2E7B45' : '#999';
+    } finally {
+      window.ItourTurnstile?.reset('modal-forgot-send');
     }
   });
 

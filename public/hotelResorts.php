@@ -222,7 +222,7 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       // --- Load login/signup modal dynamically ---
-      fetch("logsign-modal.html?v=10")
+      fetch("logsign-modal.html?v=11")
         .then(res => res.text())
         .then(html => {
           const modalContainer = document.getElementById("loginModal");
@@ -235,7 +235,7 @@ document.addEventListener("DOMContentLoaded", () => {
           swalScript.onload = () => {
             // Load logsign.js after SweetAlert2
             const logsignScript = document.createElement("script");
-            logsignScript.src = "logsign.js?v=10";
+            logsignScript.src = "logsign.js?v=11";
             logsignScript.onload = () => {
               if (typeof initLogSignEvents === "function") {
                 initLogSignEvents();

@@ -40,12 +40,12 @@
     const modalContainer = document.getElementById("loginModal");
     if (!modalContainer || document.getElementById("modalOverlay")) return;
 
-    const modalResponse = await fetch("logsign-modal.html?v=10", { credentials: "same-origin" });
+    const modalResponse = await fetch("logsign-modal.html?v=11", { credentials: "same-origin" });
     if (!modalResponse.ok) return;
     modalContainer.innerHTML = await modalResponse.text();
 
     await loadScriptOnce("https://cdn.jsdelivr.net/npm/sweetalert2@11", "sweetalert2", () => !!window.Swal);
-    await loadScriptOnce("logsign.js?v=10", "logsign", () => typeof window.initLogSignEvents === "function");
+    await loadScriptOnce("logsign.js?v=11", "logsign", () => typeof window.initLogSignEvents === "function");
     if (typeof window.initLogSignEvents === "function") {
       window.initLogSignEvents();
     }

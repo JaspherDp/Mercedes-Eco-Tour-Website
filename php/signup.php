@@ -5,6 +5,7 @@ require 'db_connection.php'; // Connects $pdo to db_itourmercedes
 require_once __DIR__ . '/activity_logger.php';
 require_once __DIR__ . '/request_rate_limiter.php';
 require_once __DIR__ . '/input_validation.php';
+require_once __DIR__ . '/turnstile.php';
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
@@ -47,6 +48,12 @@ try {
     }
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
         echo json_encode(['status' => 'error', 'title' => 'Invalid Email', 'message' => 'Enter a valid email address.']);
+        exit;
+    }
+
+    if (in_array($action, ['send_code', 'complete_signup'], true) && !ItourTurnstileRequestPassed()) {
+        http_response_code(403);
+        echo json_encode(['status' => 'error', 'title' => 'Security Check', 'message' => ITOUR_TURNSTILE_ERROR]);
         exit;
     }
 
