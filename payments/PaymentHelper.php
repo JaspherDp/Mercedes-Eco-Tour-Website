@@ -34,6 +34,7 @@ final class PaymentHelper
         $privateCandidates = [
             dirname($projectRoot) . DIRECTORY_SEPARATOR . 'private' . DIRECTORY_SEPARATOR . 'itour-mercedes.env',
             dirname($projectRoot, 2) . DIRECTORY_SEPARATOR . 'private' . DIRECTORY_SEPARATOR . 'itour-mercedes.env',
+            dirname($projectRoot, 3) . DIRECTORY_SEPARATOR . 'private' . DIRECTORY_SEPARATOR . 'itour-mercedes.env',
         ];
         foreach (array_unique($privateCandidates) as $candidate) {
             if ($outsideDocumentRoot($candidate) && is_file($candidate) && is_readable($candidate)) {
