@@ -2,6 +2,9 @@
 # being served when this project directory is an Apache/LiteSpeed document root.
 Options -Indexes
 
+# Load the PHP homepage when visiting the root domain.
+DirectoryIndex homepage.php index.php index.html
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
     # Temporary production HTTPS redirect. Local/private XAMPP hosts remain on
