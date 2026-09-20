@@ -34,7 +34,7 @@
 
 .cookie-consent__actions,
 .cookie-consent__details-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
-.cookie-consent__button { min-height: 40px; padding: 9px 17px; border-radius: 8px; font: inherit; font-size: .78rem; font-weight: 750; cursor: pointer; transition: border-color .16s ease, background .16s ease, color .16s ease, transform .16s ease; }
+.cookie-consent__button { min-height: 40px; padding: 9px 17px; border-radius: 8px; font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important; font-size: .78rem; font-style: normal !important; font-weight: 800 !important; line-height: 1.2 !important; letter-spacing: 0 !important; cursor: pointer; transition: border-color .16s ease, background .16s ease, color .16s ease, transform .16s ease; }
 .cookie-consent__button:hover { transform: translateY(-1px); }
 .cookie-consent__button:focus-visible,
 .cookie-consent__switch input:focus-visible + span,
@@ -43,6 +43,18 @@
 .cookie-consent__button--primary:hover { background: var(--cookie-green-dark); }
 .cookie-consent__button--secondary { border: 1px solid #b9d0c9; color: #185443; background: #fff; }
 .cookie-consent__button--secondary:hover { border-color: #6fa792; background: #f3f9f6; }
+
+@media (min-width: 761px) {
+  .cookie-consent__actions .cookie-consent__button {
+    box-sizing: border-box !important;
+    height: 40px !important;
+    min-height: 40px !important;
+    padding: 0 17px !important;
+    font-size: 12px !important;
+  }
+  .cookie-consent__actions .cookie-consent__button--secondary { min-width: 112px !important; }
+  .cookie-consent__actions .cookie-consent__button--primary { min-width: 100px !important; }
+}
 
 .cookie-consent__details { grid-column: 1 / -1; padding-top: 15px; border-top: 1px solid #e1ebe7; }
 .cookie-consent.is-expanded .cookie-consent__details { max-height: min(68dvh, 620px); overflow-y: auto; overscroll-behavior: contain; padding-right: 5px; scrollbar-width: thin; scrollbar-color: #238064 transparent; }

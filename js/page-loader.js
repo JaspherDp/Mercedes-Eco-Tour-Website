@@ -2,8 +2,8 @@
   'use strict';
 
   var startedAt = Date.now();
-  var minimumDisplayMs = 450;
-  var fallbackMs = 9000;
+  var minimumDisplayMs = 180;
+  var maximumDisplayMs = 900;
   var dismissed = false;
 
   function removeLoader() {
@@ -26,15 +26,18 @@
     window.setTimeout(removeLoader, remaining);
   }
 
-  if (document.readyState === 'complete') {
+  // Reveal as soon as the document is usable. Waiting for window.load kept the
+  // whole screen covered while below-the-fold images and third-party map/CDN
+  // assets were still downloading.
+  if (document.readyState === 'interactive' || document.readyState === 'complete') {
     dismissAfterMinimum();
   } else {
-    window.addEventListener('load', dismissAfterMinimum, { once: true });
+    document.addEventListener('DOMContentLoaded', dismissAfterMinimum, { once: true });
   }
 
   window.addEventListener('pageshow', function (event) {
     if (event.persisted) removeLoader();
   }, { once: true });
 
-  window.setTimeout(removeLoader, fallbackMs);
+  window.setTimeout(removeLoader, maximumDisplayMs);
 }());

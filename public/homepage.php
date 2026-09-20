@@ -133,7 +133,7 @@ try {
   <link rel="stylesheet" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>">
   <script>document.documentElement.classList.add('itour-page-loading');</script>
   <link rel="stylesheet" href="styles/page-loader.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/page-loader.css') ?>">
-  <script defer src="js/page-loader.js?v=<?= (int)@filemtime(__DIR__ . '/../js/page-loader.js') ?>"></script>
+  <script src="js/page-loader.js?v=<?= (int)@filemtime(__DIR__ . '/../js/page-loader.js') ?>"></script>
 </head>
 <body class="homepage">
   <?php include __DIR__ . '/../includes/page_loader.php'; ?>

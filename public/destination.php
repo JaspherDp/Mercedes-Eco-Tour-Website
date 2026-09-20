@@ -6,12 +6,25 @@ AppSessionStart();
 }
 require_once 'php/db_connection.php';
 require_once 'php/destination_repository.php';
-destinationEnsureSchema($pdo);
-destinationSeedDefaults($pdo);
+$schemaTables = $pdo->query("
+    SELECT COUNT(*)
+    FROM information_schema.tables
+    WHERE table_schema = DATABASE()
+      AND table_name IN ('destination_settings', 'destinations', 'destination_gallery')
+")->fetchColumn();
+if ((int)$schemaTables < 3) {
+    destinationEnsureSchema($pdo);
+    destinationSeedDefaults($pdo);
+}
 
 $publicDestinations = [];
+$galleryByDestination = [];
+$galleryRows = $pdo->query('SELECT destination_id, image_path FROM destination_gallery ORDER BY destination_id, sort_order, gallery_id')->fetchAll(PDO::FETCH_ASSOC);
+foreach ($galleryRows as $photo) {
+    $galleryByDestination[(int)$photo['destination_id']][] = (string)$photo['image_path'];
+}
 foreach (destinationRows($pdo, true) as $destination) {
-    $gallery = array_map(static fn(array $photo): string => (string)$photo['image_path'], destinationGallery($pdo, (int)$destination['destination_id']));
+    $gallery = $galleryByDestination[(int)$destination['destination_id']] ?? [];
     $publicDestinations[(string)$destination['slug']] = [
         'title' => (string)$destination['title'],
         'name' => (string)$destination['tagline'],
@@ -40,18 +53,21 @@ foreach (destinationRows($pdo, true) as $destination) {
     <link rel="canonical" href="https://itourmercedes.com/destination.php" />
     <title>Tourist Destinations in Mercedes, Camarines Norte | iTour Mercedes</title>
     <link rel="icon" type="image/png" href="img/newlogo.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://unpkg.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles/homepage.css" />
+    <link rel="stylesheet" href="styles/homepage.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/homepage.css') ?>" />
     <link rel="stylesheet" href="styles/style.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous" />
     <link rel="stylesheet" href="styles/destination.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/destination.css') ?>" />
     <link rel="stylesheet" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>" />
     <script>document.documentElement.classList.add('itour-page-loading');</script>
     <link rel="stylesheet" href="styles/page-loader.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/page-loader.css') ?>" />
-    <script defer src="js/page-loader.js?v=<?= (int)@filemtime(__DIR__ . '/../js/page-loader.js') ?>"></script>
+    <script src="js/page-loader.js?v=<?= (int)@filemtime(__DIR__ . '/../js/page-loader.js') ?>"></script>
   </head>
   
 <body class="destination-page">
@@ -285,9 +301,9 @@ foreach (destinationRows($pdo, true) as $destination) {
 
 <?php include 'footer.php'; ?>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
+<script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
 <script>window.destinationData = <?= json_encode($publicDestinations, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
-<script src="destination.js?v=<?= (int)@filemtime(__DIR__ . '/../destination.js') ?>"></script>
+<script defer src="destination.js?v=<?= (int)@filemtime(__DIR__ . '/../destination.js') ?>"></script>
 <script src="js/header.js?v=<?= (int)@filemtime(__DIR__ . '/../js/header.js') ?>"></script>
 <script>
 fetch("php/header.php")

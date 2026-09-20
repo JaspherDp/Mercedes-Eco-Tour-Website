@@ -23,13 +23,15 @@ try {
   <link rel="canonical" href="https://itourmercedes.com/about.php">
   <title>About iTour Mercedes | Mercedes, Camarines Norte Tourism</title>
   <link rel="icon" type="image/png" href="img/newlogo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
-  <link rel="stylesheet" href="styles/homepage.css" />
+  <link rel="stylesheet" href="styles/homepage.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/homepage.css') ?>" />
   <link rel="stylesheet" href="styles/about.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/about.css') ?>">
   <link rel="stylesheet" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>">
   <script>document.documentElement.classList.add('itour-page-loading');</script>
   <link rel="stylesheet" href="styles/page-loader.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/page-loader.css') ?>">
-  <script defer src="js/page-loader.js?v=<?= (int)@filemtime(__DIR__ . '/../js/page-loader.js') ?>"></script>
+  <script src="js/page-loader.js?v=<?= (int)@filemtime(__DIR__ . '/../js/page-loader.js') ?>"></script>
 </head>
 <body class="about-page">
 <?php include __DIR__ . '/../includes/page_loader.php'; ?>
@@ -48,7 +50,7 @@ try {
 
       <div class="about-profile-grid">
         <figure class="about-profile-image">
-          <img src="img/mercedes-hall.png" alt="Mercedes Municipal Hall and Tourism Office">
+          <img src="img/mercedes-hall.png" alt="Mercedes Municipal Hall and Tourism Office" decoding="async" fetchpriority="high">
           <div class="about-profile-shade"></div>
           <figcaption><small>Municipal Tourism Office</small><strong>Your local gateway to Mercedes</strong><span>Visitor information &bull; Planning assistance &bull; Local coordination</span></figcaption>
           <div class="about-profile-status"><i aria-hidden="true"></i><span><strong>Open weekdays</strong><small>8:00 AM&ndash;5:00 PM</small></span></div>
@@ -104,7 +106,7 @@ try {
             data-desc="<?= htmlspecialchars($item['short_desc'] ?? '') ?>"
             data-longdesc="<?= htmlspecialchars($item['long_desc'] ?? '') ?>">
 
-          <img src="<?= htmlspecialchars($imgPath) ?>" 
+          <img src="<?= htmlspecialchars($imgPath) ?>" loading="lazy" decoding="async"
               alt="<?= htmlspecialchars($item['title'] ?? '') ?>">
 
           <div class="overlay">

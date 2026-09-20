@@ -921,8 +921,40 @@ body {
   border: none;
   background-color: #2b7a66;
   color: white;
-  font-weight: bold;
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+  font-style: normal !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  letter-spacing: 0 !important;
   cursor: pointer;
+}
+.head-nav-btn-login .head-nav-login-label {
+  font-family: inherit !important;
+  font-size: inherit !important;
+  font-style: normal !important;
+  font-weight: 800 !important;
+  line-height: inherit !important;
+  letter-spacing: 0 !important;
+}
+@media (min-width: 481px) {
+  .head-nav-main-header .head-nav-btn-login {
+    box-sizing: border-box !important;
+    width: 76px !important;
+    min-width: 76px !important;
+    height: 32px !important;
+    min-height: 32px !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 0 16px !important;
+    border-radius: 999px !important;
+    font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+    font-size: 14px !important;
+    font-style: normal !important;
+    font-weight: 800 !important;
+    line-height: 1 !important;
+    letter-spacing: 0 !important;
+  }
 }
 
 .head-nav-btn-login:hover{

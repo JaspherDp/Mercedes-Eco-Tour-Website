@@ -31,6 +31,10 @@ function HoEnsureHotelRoomsTable(PDO $pdo): void
     }
     $ensured = true;
 
+    if (HoRoomsTableExists($pdo, 'hotel_rooms')) {
+        return;
+    }
+
     $pdo->exec("
         CREATE TABLE IF NOT EXISTS hotel_rooms (
           hotel_room_id INT AUTO_INCREMENT PRIMARY KEY,

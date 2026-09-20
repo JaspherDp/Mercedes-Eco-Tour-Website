@@ -15,7 +15,10 @@ DirectoryIndex index.php
     # Clear inherited/application copies before setting one canonical value.
     Header unset Strict-Transport-Security
     Header always unset Strict-Transport-Security
-    Header always set Strict-Transport-Security "max-age=31536000" env=ITOUR_HTTPS
+    # Test value. After HTTPS is confirmed across production, change only the
+    # max-age below to 31536000. Do not add includeSubDomains until every
+    # subdomain is confirmed to support HTTPS.
+    Header always set Strict-Transport-Security "max-age=300" env=ITOUR_HTTPS
 
     Header unset X-Content-Type-Options
     Header always unset X-Content-Type-Options

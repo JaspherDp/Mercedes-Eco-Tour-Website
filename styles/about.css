@@ -314,6 +314,18 @@
 .about-page .close:hover { color: #fff; background: var(--about-green-700); transform: rotate(5deg); }
 
 @media (max-width: 980px) {
+  html,
+  body.about-page {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    min-height: 100%;
+    overflow-x: clip;
+    overflow-y: visible;
+    overscroll-behavior-y: auto;
+    touch-action: pan-y;
+  }
+
   .about-page .about-masthead-grid { grid-template-columns: minmax(0,1fr) minmax(300px,.72fr); gap: 40px; }
   .about-page .about-office-visual { height: 330px; }
   .about-page .about-profile-grid { grid-template-columns: 1fr 1fr; }

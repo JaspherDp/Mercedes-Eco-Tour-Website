@@ -46,6 +46,7 @@
 
   const progressCircle = button.querySelector('.back-to-top__progress');
   const boat = button.querySelector('.back-to-top__boat');
+  const destinationDetailScroller = document.getElementById('des_placePage');
   const radius = 27;
   const circumference = 2 * Math.PI * radius;
   let animationFrame = 0;
@@ -78,10 +79,30 @@
     }
   }
 
+  function getActiveScrollTarget() {
+    if (destinationDetailScroller?.classList.contains('open')) {
+      return destinationDetailScroller;
+    }
+    return document.scrollingElement || document.documentElement;
+  }
+
+  function getScrollState() {
+    const target = getActiveScrollTarget();
+    const isPageScroll = target === document.scrollingElement || target === document.documentElement || target === document.body;
+    const scrollTop = isPageScroll ? window.scrollY : target.scrollTop;
+    const viewportHeight = isPageScroll ? window.innerHeight : target.clientHeight;
+    return {
+      target,
+      isPageScroll,
+      scrollTop,
+      scrollable: Math.max(target.scrollHeight - viewportHeight, 0)
+    };
+  }
+
   function updateTarget() {
-    const scrollable = Math.max(document.documentElement.scrollHeight - window.innerHeight, 0);
-    targetProgress = scrollable ? Math.min(Math.max(window.scrollY / scrollable, 0), 1) : 0;
-    const isVisible = window.scrollY > 180 && scrollable > 0;
+    const state = getScrollState();
+    targetProgress = state.scrollable ? Math.min(Math.max(state.scrollTop / state.scrollable, 0), 1) : 0;
+    const isVisible = state.scrollTop > 180 && state.scrollable > 0;
     button.classList.toggle('is-visible', isVisible);
     document.body.classList.toggle('back-to-top-visible', isVisible);
     if (!animationFrame) animationFrame = window.requestAnimationFrame(animateProgress);
@@ -89,10 +110,22 @@
 
   button.addEventListener('click', function () {
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+    const state = getScrollState();
+    const scrollOptions = { top: 0, behavior: reduceMotion ? 'auto' : 'smooth' };
+    if (state.isPageScroll) {
+      window.scrollTo(scrollOptions);
+    } else {
+      state.target.scrollTo(scrollOptions);
+    }
   });
 
   window.addEventListener('scroll', updateTarget, { passive: true });
+  destinationDetailScroller?.addEventListener('scroll', updateTarget, { passive: true });
+  if (destinationDetailScroller) {
+    new MutationObserver(function () {
+      window.requestAnimationFrame(updateTarget);
+    }).observe(destinationDetailScroller, { attributes: true, attributeFilter: ['class'] });
+  }
   window.addEventListener('resize', updateTarget, { passive: true });
   window.addEventListener('load', updateTarget, { once: true });
   render(0);

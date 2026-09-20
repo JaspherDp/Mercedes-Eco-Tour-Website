@@ -221,13 +221,17 @@
   background: #176f58;
   color: #fff;
   box-shadow: 0 10px 28px rgba(7, 53, 41, .25);
-  font-family: Inter, Roboto, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
   font-size: 12px;
-  font-weight: 800;
+  font-style: normal !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+  letter-spacing: 0 !important;
   cursor: pointer;
   transition: right .24s ease, width .22s ease, min-width .22s ease, padding .22s ease, background-color .18s ease, box-shadow .18s ease, transform .18s ease;
   -webkit-tap-highlight-color: transparent;
 }
+.itour-ai-launcher__label { flex: 0 0 auto; font-family: inherit !important; font-size: inherit !important; font-style: normal !important; font-weight: 800 !important; line-height: inherit !important; letter-spacing: 0 !important; white-space: nowrap !important; }
 body.back-to-top-visible .itour-ai-launcher { right: calc(clamp(18px, 3vw, 36px) + 58px); }
 .itour-ai-launcher:hover { background: #0f5c48; box-shadow: 0 13px 32px rgba(7, 53, 41, .31); transform: translateY(-2px); }
 .itour-ai-launcher:focus-visible { outline: 3px solid rgba(63, 175, 139, .34); outline-offset: 3px; }
@@ -250,6 +254,22 @@ body.back-to-top-visible .itour-ai-launcher { right: calc(clamp(18px, 3vw, 36px)
 .itour-ai-launcher.is-open .itour-ai-launcher__label { display: none; }
 .itour-ai-launcher.is-open .itour-ai-launcher__close { display: grid; place-items: center; }
 
+@media (min-width: 601px) {
+  .itour-ai-launcher {
+    box-sizing: border-box !important;
+    width: 142px !important;
+    min-width: 142px !important;
+    height: 50px !important;
+    padding: 0 15px 0 9px !important;
+    font-size: 12px !important;
+  }
+  .itour-ai-launcher.is-open {
+    width: 50px !important;
+    min-width: 50px !important;
+    padding: 0 !important;
+  }
+}
+
 .itour-ai-panel[hidden] { display: none !important; }
 .itour-ai-panel {
   position: fixed;
@@ -266,7 +286,7 @@ body.back-to-top-visible .itour-ai-launcher { right: calc(clamp(18px, 3vw, 36px)
   background: #fff;
   color: #183e33;
   box-shadow: 0 26px 70px rgba(5, 42, 32, .30);
-  font-family: Inter, Roboto, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
   transform-origin: right bottom;
   animation: itourAiPanelIn .22s cubic-bezier(.2, .75, .25, 1) both;
 }

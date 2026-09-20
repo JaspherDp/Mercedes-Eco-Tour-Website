@@ -473,6 +473,20 @@
   .destination-page .des_places-grid { grid-template-columns: repeat(3, minmax(0,1fr)); }
 }
 
+@media (max-width: 980px) {
+  html,
+  body.destination-page {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    min-height: 100%;
+    overflow-x: clip;
+    overflow-y: visible;
+    overscroll-behavior-y: auto;
+    touch-action: pan-y;
+  }
+}
+
 @media (max-width: 800px) {
   .destination-page .des_page-intro { padding-block: 32px 40px; }
   .destination-page .des_intro-inner { grid-template-columns: 1fr; }
@@ -514,7 +528,7 @@
     position: fixed;
     right: 14px;
     bottom: 16px;
-    z-index: 1199;
+    z-index: 4300;
     min-height: 50px;
     display: inline-flex;
     align-items: center;
