@@ -517,7 +517,7 @@ if (
   <div class="head-subnav-item head-subnav-item--destinations">
     <a href="destination.php" class="head-subnav-link" aria-haspopup="true">
       Popular Destinations
-      <img src="img/dropdownicon2.png" class="head-subnav-dropdown-icon" alt="" aria-hidden="true">
+      <svg class="head-subnav-dropdown-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 9 5 5 5-5"/></svg>
     </a>
 
     <div class="head-subnav-popup" aria-label="Popular destinations">
@@ -542,7 +542,7 @@ if (
   <div class="head-subnav-item head-subnav-item--packages">
     <a href="hotel_resorts.php?tab=tours" class="head-subnav-link" aria-haspopup="true">
       Popular Packages
-      <img src="img/dropdownicon2.png" class="head-subnav-dropdown-icon" alt="" aria-hidden="true">
+      <svg class="head-subnav-dropdown-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 9 5 5 5-5"/></svg>
     </a>
 
     <div class="head-subnav-popup" aria-label="Popular packages">
@@ -567,7 +567,7 @@ if (
   <div class="head-subnav-item head-subnav-item--hotels">
     <a href="hotel_resorts.php" class="head-subnav-link" aria-haspopup="true">
       Hotel & Resorts
-      <img src="img/dropdownicon2.png" class="head-subnav-dropdown-icon" alt="" aria-hidden="true">
+      <svg class="head-subnav-dropdown-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 9 5 5 5-5"/></svg>
     </a>
 
     <div class="head-subnav-popup" aria-label="Popular hotels and resorts">
@@ -1088,8 +1088,13 @@ body {
 .head-subnav-dropdown-icon {
   width: 23px;
   height: 20px;
-  object-fit: contain;
+  flex: 0 0 auto;
   margin-top: 2px;
+  fill: none;
+  stroke: #3a9a7c;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 
   /* optional: subtle look */
   opacity: 0.7;
