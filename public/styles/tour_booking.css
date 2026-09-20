@@ -1347,6 +1347,40 @@ body.other-fees-modal-open {
     grid-template-columns: 1fr;
   }
 
+  .location-chip input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    flex: 0 0 18px;
+  }
+
+  .checkbox-box label {
+    display: grid;
+    grid-template-columns: 18px minmax(0, 1fr);
+    align-items: start;
+    column-gap: 9px;
+  }
+
+  .checkbox-box input[type="checkbox"] {
+    grid-column: 1;
+    width: 18px;
+    height: 18px;
+    min-width: 18px;
+    margin: 1px 0 0;
+  }
+
+  .checkbox-box label > span:not(.field-error) {
+    grid-column: 2;
+    min-width: 0;
+    line-height: 1.4;
+  }
+
+  .checkbox-box label > .field-error {
+    grid-column: 2;
+    width: 100%;
+    margin-top: 0;
+  }
+
   .booking-stepper {
     gap: 5px;
     padding: 14px 10px;

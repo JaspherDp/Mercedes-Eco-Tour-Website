@@ -128,14 +128,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>iTour Mercedes - Hotel and Resort Owner Login</title>
 <link rel="icon" type="image/png" href="../img/newlogo.png" />
-<link rel="stylesheet" href="../styles/auth-portal.css?v=10">
+<link rel="stylesheet" href="../styles/auth-portal.css?v=14">
 </head>
 <body class="auth-page">
 
 <div class="adlog-modal">
     <div class="adlog-brand">
         <img class="adlog-brand-logo" src="../img/newlogo.png" alt="">
-        <img class="adlog-brand-wordmark" src="../img/textlogo2.png" alt="iTour Mercedes">
+        <img class="adlog-brand-wordmark" src="../img/textlogo2-transparent.png" alt="iTour Mercedes">
     </div>
 
     <header class="adlog-heading">
@@ -172,7 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </form>
 </div>
 
-<script src="../js/turnstile.js?v=1"></script>
+<script src="../js/turnstile.js?v=7"></script>
 <script src="../js/auth-portal.js?v=10"></script>
 </body>
 </html>

@@ -121,8 +121,10 @@ try {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Discover island tours, local guides, boats, hotels, and resorts in Mercedes, Camarines Norte.">
-  <title>iTour Mercedes</title>
+  <meta name="theme-color" content="#155a49">
+  <meta name="description" content="Discover Mercedes, Camarines Norte with iTour Mercedes. Explore tourist destinations, island hopping tours, hotels, resorts, and local tourism experiences.">
+  <link rel="canonical" href="https://itourmercedes.com/">
+  <title>iTour Mercedes | Tourism Guide to Mercedes, Camarines Norte</title>
   <link rel="icon" type="image/png" href="img/newlogo.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -400,23 +402,23 @@ try {
         <div class="tc-viewport" data-tour-category-viewport>
           <div class="tc-track">
             <a class="tc-card is-active" href="hotel_resorts.php?tab=tours" data-tour-category-card>
-              <span class="tc-card-media"><img src="imagess/Apuao Grande_header-img.png" alt="Aerial view of Apuao Grande island" loading="lazy"><span class="tc-card-number">01</span><span class="tc-card-icon" aria-hidden="true">&#9965;</span></span>
+              <span class="tc-card-media"><img src="imagess/Apuao Grande.jpg" alt="Aerial view of Apuao Grande island" loading="lazy"><span class="tc-card-number">01</span><span class="tc-card-icon" aria-hidden="true">&#9965;</span></span>
               <strong>Island hopping</strong><small>See curated tours <span aria-hidden="true">&rarr;</span></small>
             </a>
             <a class="tc-card" href="destination.php" data-tour-category-card>
-              <span class="tc-card-media"><img src="imagess/Caringo_header-img.png" alt="Clear coastal water and beach at Caringo Island" loading="lazy"><span class="tc-card-number">02</span><span class="tc-card-icon" aria-hidden="true">&#9728;</span></span>
+              <span class="tc-card-media"><img src="imagess/Caringo.jpg" alt="Clear coastal water and beach at Caringo Island" loading="lazy"><span class="tc-card-number">02</span><span class="tc-card-icon" aria-hidden="true">&#9728;</span></span>
               <strong>Beach escapes</strong><small>Find a quiet shore <span aria-hidden="true">&rarr;</span></small>
             </a>
             <a class="tc-card" href="destination.php" data-tour-category-card>
-              <span class="tc-card-media"><img src="imagess/Canimog_header-img.png" alt="Lush natural scenery on Canimog Island" loading="lazy"><span class="tc-card-number">03</span><span class="tc-card-icon" aria-hidden="true">&#10047;</span></span>
+              <span class="tc-card-media"><img src="imagess/Canimog.jpg" alt="Lush natural scenery on Canimog Island" loading="lazy"><span class="tc-card-number">03</span><span class="tc-card-icon" aria-hidden="true">&#10047;</span></span>
               <strong>Nature discoveries</strong><small>Explore island life <span aria-hidden="true">&rarr;</span></small>
             </a>
             <a class="tc-card" href="destination.php" data-tour-category-card>
-              <span class="tc-card-media"><img src="imagess/Church_header-img.png" alt="Historic church and local heritage site in Mercedes" loading="lazy"><span class="tc-card-number">04</span><span class="tc-card-icon" aria-hidden="true">&#9670;</span></span>
+              <span class="tc-card-media"><img src="imagess/Church.jpg" alt="Historic church and local heritage site in Mercedes" loading="lazy"><span class="tc-card-number">04</span><span class="tc-card-icon" aria-hidden="true">&#9670;</span></span>
               <strong>Culture &amp; heritage</strong><small>Meet local stories <span aria-hidden="true">&rarr;</span></small>
             </a>
             <a class="tc-card" href="hotel_resorts.php?tab=boats" data-tour-category-card>
-              <span class="tc-card-media"><img src="imagess/Quinapaguian_header-img.png" alt="Blue water surrounding Quinapaguian Island" loading="lazy"><span class="tc-card-number">05</span><span class="tc-card-icon" aria-hidden="true">&#9875;</span></span>
+              <span class="tc-card-media"><img src="imagess/Quinapaguian.jpg" alt="Blue water surrounding Quinapaguian Island" loading="lazy"><span class="tc-card-number">05</span><span class="tc-card-icon" aria-hidden="true">&#9875;</span></span>
               <strong>Boat adventures</strong><small>Choose your ride <span aria-hidden="true">&rarr;</span></small>
             </a>
           </div>

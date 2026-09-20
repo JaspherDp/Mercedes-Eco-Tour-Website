@@ -451,7 +451,7 @@ function ratingValue($value): float {
   <title><?= htmlspecialchars($hotel['name']) ?> | iTour Mercedes</title>
   <link rel="icon" type="image/png" href="img/newlogo.png" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous" />
   <link rel="stylesheet" href="styles/hotel_details.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/hotel_details.css') ?>" />
   <link rel="stylesheet" href="styles/favorites.css" />
   <link rel="stylesheet" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>" />
@@ -982,10 +982,10 @@ function ratingValue($value): float {
       #overview .overview-top-row{order:-3;margin:0;padding:0 2px;gap:8px;}
       #overview .overview-property-tagline{display:none;}
       #overview .overview-title{font-size:1.24rem;line-height:1.15;letter-spacing:-.015em;}
-      #overview .overview-subtitle{margin-top:5px;font-size:.68rem;letter-spacing:.02em;}
+      #overview .overview-subtitle{margin-top:5px;font-size:.75rem;letter-spacing:.02em;}
       #overview .overview-actions{width:100%;align-items:stretch;}
       #overview .overview-actions-top{width:100%;justify-content:space-between;flex-wrap:nowrap;gap:10px;}
-      #overview .overview-price{margin-right:auto;font-size:.67rem;white-space:normal;}
+      #overview .overview-price{margin-right:auto;font-size:.75rem;white-space:normal;}
       #overview .overview-price strong{font-size:.88rem;}
       #overview .overview-reserve-btn{min-height:38px;padding:8px 13px;border-radius:9px;font-size:.7rem;white-space:nowrap;}
       #overview .mobile-overview-share{
@@ -1000,7 +1000,7 @@ function ratingValue($value): float {
       }
       #overview .overview-location-row{order:-2;margin:9px 2px 12px;flex-direction:row;align-items:center;justify-content:space-between;gap:10px;}
       #overview .overview-location-text{align-items:center;gap:8px;}
-      #overview .overview-location-row p{font-size:.67rem;line-height:1.35;}
+      #overview .overview-location-row p{font-size:.75rem;line-height:1.45;}
       #overview .location-pin{display:none;}
       #overview .mobile-map-trigger{
         width:30px;
@@ -1044,24 +1044,24 @@ function ratingValue($value): float {
         display:block;
         margin-bottom:7px;
         color:#173826;
-        font-size:.8rem;
+        font-size:.9rem;
         font-weight:750;
       }
-      #overview .overview-description-card p{margin:0 0 8px;color:#52665f;font-size:.64rem;line-height:1.55;}
+      #overview .overview-description-card p{margin:0 0 10px;color:#52665f;font-size:.8125rem;line-height:1.65;}
       #overview .overview-description-card p:last-of-type{margin-bottom:0;}
       #overview .overview-description-points{
         display:block;
         margin:9px 0 0;
         padding-left:17px;
         color:#52665f;
-        font-size:.62rem;
-        line-height:1.5;
+        font-size:.8125rem;
+        line-height:1.65;
       }
       #overview .overview-description-points li{margin-bottom:4px;}
       #overview .overview-amenities-card{padding:12px;border-radius:11px;}
-      #overview .overview-amenities-card h3{margin-bottom:9px;font-size:.8rem;}
+      #overview .overview-amenities-card h3{margin-bottom:9px;font-size:.875rem;}
       #overview .overview-amenities-list{gap:6px;}
-      #overview .overview-amenities-list span{padding:5px 8px;font-size:.58rem;}
+      #overview .overview-amenities-list span{padding:5px 8px;font-size:.6875rem;}
       .mobile-floating-reserve{
         position:fixed;
         z-index:1180;
@@ -1284,8 +1284,10 @@ function ratingValue($value): float {
 }
 
 .summary-text {
-  display: flex;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  align-items: start;
+  column-gap: 10px;
   font-size: 0.9375rem;
   line-height: 1.6;
   color: #1f2b35;
@@ -1302,21 +1304,24 @@ function ratingValue($value): float {
 .summary-check {
   flex-shrink: 0;
   color: #22c55e;
-  width: 20px;
-  height: 20px;
-  margin-top: 2px;
+  width: 26px;
+  height: 26px;
+  margin-top: 0;
+  align-self: start;
 }
 
 .summary-x {
   flex-shrink: 0;
   color: #ef4444;
-  width: 20px;
-  height: 20px;
-  margin-top: 2px;
+  width: 26px;
+  height: 26px;
+  margin-top: 0;
+  align-self: start;
 }
 
 .summary-text p {
   margin: 0;
+  padding-top: 2px;
 }
 
 .summary-helpful {
@@ -1608,8 +1613,86 @@ function ratingValue($value): float {
 }
 
 .summary-text svg {
-  margin-right: 6px;
+  width: 26px;
+  height: 26px;
+  margin-right: 0;
   vertical-align: middle;
+}
+
+/* One predictable typography scale for hotel details on phones. */
+@media (max-width: 768px) {
+  .hotel-details-page {
+    --hotel-mobile-section-title: 1.125rem;
+    --hotel-mobile-card-title: .875rem;
+    --hotel-mobile-body: .8125rem;
+    --hotel-mobile-caption: .6875rem;
+  }
+
+  .hotel-details-page .detail-section h2,
+  .hotel-details-page .reviews-section-header h2 {
+    font-size: var(--hotel-mobile-section-title) !important;
+    line-height: 1.25 !important;
+  }
+
+  .hotel-details-page #overview .overview-title {
+    font-size: 1.25rem !important;
+    line-height: 1.2 !important;
+  }
+
+  .hotel-details-page #overview .overview-description-card::before,
+  .hotel-details-page #overview .overview-amenities-card h3,
+  .hotel-details-page .property-guest-info-grid h3,
+  .hotel-details-page #roomsContent .room-card h3,
+  .hotel-details-page #roomsContent .room-inclusions h4,
+  .hotel-details-page .summary-header h3,
+  .hotel-details-page .rating-label,
+  .hotel-details-page .review-user strong {
+    font-size: var(--hotel-mobile-card-title) !important;
+    line-height: 1.35 !important;
+  }
+
+  .hotel-details-page #overview .overview-description-card p,
+  .hotel-details-page #overview .overview-description-points,
+  .hotel-details-page .rooms-prompt p,
+  .hotel-details-page #roomsContent .room-meta,
+  .hotel-details-page #roomsContent .room-inclusions li,
+  .hotel-details-page .rules-list,
+  .hotel-details-page .property-guest-info-grid p,
+  .hotel-details-page .property-guest-info-grid ul,
+  .hotel-details-page .summary-text,
+  .hotel-details-page .review-message,
+  .hotel-details-page .review-owner-response {
+    font-size: var(--hotel-mobile-body) !important;
+    line-height: 1.6 !important;
+  }
+
+  .hotel-details-page #overview .overview-subtitle,
+  .hotel-details-page #overview .overview-price,
+  .hotel-details-page #overview .overview-location-row p,
+  .hotel-details-page .reviews-verified-badge,
+  .hotel-details-page .rating-count,
+  .hotel-details-page .category-label,
+  .hotel-details-page .rating-value {
+    font-size: .75rem !important;
+    line-height: 1.5 !important;
+  }
+
+  .hotel-details-page #overview .overview-amenities-list span,
+  .hotel-details-page .property-guest-info-grid article > span,
+  .hotel-details-page .summary-source,
+  .hotel-details-page .review-user p,
+  .hotel-details-page .review-owner-response strong {
+    font-size: var(--hotel-mobile-caption) !important;
+    line-height: 1.4 !important;
+  }
+
+  .hotel-details-page .pill,
+  .hotel-details-page .rooms-prompt button,
+  .hotel-details-page .room-book-btn,
+  .hotel-details-page .helpful-btn,
+  .hotel-details-page .mention-btn {
+    font-size: .75rem !important;
+  }
 }
   </style>
 </head>
@@ -2075,7 +2158,7 @@ function ratingValue($value): float {
     <br>
 
  <div class="summary-text positive">
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#34A853" stroke-width="2" style="margin-right:6px; vertical-align:middle;">
+  <svg class="summary-check" viewBox="0 0 24 24" fill="none" stroke="#34A853" stroke-width="2">
     <polyline points="20 6 9 17 4 12"></polyline>
   </svg>
 
@@ -2085,7 +2168,7 @@ function ratingValue($value): float {
 </div>
 
    <div class="summary-text negative">
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#EA4335" stroke-width="2" style="margin-right:6px; vertical-align:middle;">
+  <svg class="summary-x" viewBox="0 0 24 24" fill="none" stroke="#EA4335" stroke-width="2">
     <circle cx="12" cy="12" r="10"></circle>
     <line x1="15" y1="9" x2="9" y2="15"></line>
     <line x1="9" y1="9" x2="15" y2="15"></line>
@@ -2276,7 +2359,7 @@ function ratingValue($value): float {
   <script src="js/favorites.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
   <script>
     const hotelData = <?= json_encode($hotel, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     const registeredMapHotels = <?= json_encode($registeredMapHotels, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;

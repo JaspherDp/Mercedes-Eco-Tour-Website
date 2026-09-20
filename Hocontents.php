@@ -364,7 +364,7 @@ $contentCompletionPercent = (int)round(($completedContentSections / max(1, $tota
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Hocontents | Hotel Owner Contents</title>
   <link rel="icon" type="image/png" href="img/newlogo.png" />
-  <link rel="stylesheet" href="styles/Ho_panel.css?v=notifications-4" />
+  <link rel="stylesheet" href="styles/Ho_panel.css?v=<?= (int)@filemtime(__DIR__ . '/styles/Ho_panel.css') ?>" />
   <link rel="stylesheet" href="styles/Ho_contents_redesign.css?v=2" />
 </head>
 <body class="ho-body">
@@ -755,9 +755,11 @@ $contentCompletionPercent = (int)round(($completedContentSections / max(1, $tota
               <label>Main Image Path (big photo)
                 <input type="text" name="image_path" value="<?= htmlspecialchars($coverImagePath) ?>" placeholder="img/sampleimage.png or full URL" />
               </label>
-              <label>Upload New Main Image
-                <input type="file" name="main_image_file" accept="image/*" />
-              </label>
+              <div class="ho-room-image-control">
+                <input type="file" name="main_image_file" accept="image/*" data-room-image-input hidden />
+                <button type="button" class="ho-room-image-trigger" data-room-image-trigger>Update cover image</button>
+                <small>JPG, PNG, or WebP up to 8 MB</small>
+              </div>
             </div>
           </div>
         </div>
@@ -786,10 +788,8 @@ $contentCompletionPercent = (int)round(($completedContentSections / max(1, $tota
                 <img src="<?= htmlspecialchars((string)$galleryPath) ?>" alt="Gallery image preview" class="ho-gallery-thumb" />
                 <div class="ho-gallery-input-stack">
                   <input type="text" name="gallery_paths[]" value="<?= htmlspecialchars((string)$galleryPath) ?>" />
-                  <label class="ho-gallery-upload-inline">
-                    <span>Upload image</span>
-                    <input type="file" name="gallery_row_files[]" accept="image/*" />
-                  </label>
+                  <button type="button" class="ho-gallery-upload-inline" data-room-image-trigger>Update image</button>
+                  <input type="file" name="gallery_row_files[]" accept="image/*" data-room-image-input hidden />
                 </div>
                 <button type="button" class="ho-gallery-remove" data-remove-gallery-row aria-label="Remove image">&times;</button>
               </div>
@@ -804,6 +804,34 @@ $contentCompletionPercent = (int)round(($completedContentSections / max(1, $tota
           <button type="submit" class="ho-btn confirm">Save Gallery</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <div class="ho-modal" id="hoRoomImageUploadModal" aria-hidden="true">
+    <div class="ho-modal-card ho-room-image-upload-card" role="dialog" aria-modal="true" aria-labelledby="hoRoomImageUploadTitle">
+      <div class="ho-modal-head">
+        <div><h3 id="hoRoomImageUploadTitle">Update property image</h3><p>Choose a high-quality image before applying it to your property.</p></div>
+        <button type="button" class="ho-close" id="hoRoomImageUploadClose" aria-label="Close image upload">&times;</button>
+      </div>
+      <div class="ho-room-image-upload-body">
+        <label class="ho-room-image-dropzone" for="hoRoomImagePicker" data-room-image-dropzone>
+          <span class="ho-room-image-upload-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M10 1a1 1 0 0 0-.71.29l-6 6A1 1 0 0 0 3 8v12a3 3 0 0 0 3 3h1a1 1 0 1 0 0-2H6a1 1 0 0 1-1-1V9h5a1 1 0 0 0 1-1V3h7a1 1 0 0 1 1 1v5a1 1 0 1 0 2 0V4a3 3 0 0 0-3-3h-8ZM9 7H6.41L9 4.41V7Zm7.5 4a4.5 4.5 0 0 0-4.48 4.12A4 4 0 0 0 13 23h7a4 4 0 0 0 .98-7.88A4.5 4.5 0 0 0 16.5 11Zm0 2a2.5 2.5 0 0 1 2.5 2.5V17h1a2 2 0 1 1 0 4h-7a2 2 0 1 1 0-4h1v-1.5a2.5 2.5 0 0 1 2.5-2.5Z"/></svg>
+          </span>
+          <strong>Click or drag an image here</strong>
+          <small>JPG, PNG, or WebP · maximum 8 MB</small>
+          <input type="file" id="hoRoomImagePicker" accept="image/jpeg,image/png,image/webp" hidden />
+        </label>
+        <div class="ho-room-image-selected" id="hoRoomImageSelected" hidden>
+          <img id="hoRoomImageSelectedPreview" alt="Selected property image preview" />
+          <div><strong id="hoRoomImageSelectedName"></strong><span>Ready to apply</span></div>
+          <button type="button" id="hoRoomImageChooseAgain">Choose another</button>
+        </div>
+      </div>
+      <div class="ho-room-image-upload-actions">
+        <button type="button" class="ho-btn" id="hoRoomImageUploadCancel">Cancel</button>
+        <button type="button" class="ho-btn confirm" id="hoRoomImageUploadApply" disabled>Apply image</button>
+      </div>
     </div>
   </div>
 
@@ -916,7 +944,8 @@ $contentCompletionPercent = (int)round(($completedContentSections / max(1, $tota
           lightbox.setAttribute('aria-hidden', 'true');
           return;
         }
-        const modal = document.querySelector('.ho-modal.open');
+        const openModals = [...document.querySelectorAll('.ho-modal.open')];
+        const modal = openModals[openModals.length - 1];
         if (!modal) return;
         modal.classList.remove('open');
         modal.setAttribute('aria-hidden', 'true');
@@ -993,10 +1022,8 @@ $contentCompletionPercent = (int)round(($completedContentSections / max(1, $tota
           <img src="${value || 'img/sampleimage.png'}" alt="Gallery image preview" class="ho-gallery-thumb" />
           <div class="ho-gallery-input-stack">
             <input type="text" name="gallery_paths[]" value="${value}" />
-            <label class="ho-gallery-upload-inline">
-              <span>Upload image</span>
-              <input type="file" name="gallery_row_files[]" accept="image/*" />
-            </label>
+            <button type="button" class="ho-gallery-upload-inline" data-room-image-trigger>Choose image</button>
+            <input type="file" name="gallery_row_files[]" accept="image/*" data-room-image-input hidden />
           </div>
           <button type="button" class="ho-gallery-remove" data-remove-gallery-row aria-label="Remove image">&times;</button>
         `;
@@ -1046,6 +1073,94 @@ $contentCompletionPercent = (int)round(($completedContentSections / max(1, $tota
             });
           }
         });
+      });
+
+      const propertyImageModal = document.getElementById('hoRoomImageUploadModal');
+      const propertyImagePicker = document.getElementById('hoRoomImagePicker');
+      const propertyImageDropzone = propertyImageModal?.querySelector('[data-room-image-dropzone]');
+      const propertyImageSelected = document.getElementById('hoRoomImageSelected');
+      const propertyImagePreview = document.getElementById('hoRoomImageSelectedPreview');
+      const propertyImageName = document.getElementById('hoRoomImageSelectedName');
+      const propertyImageApply = document.getElementById('hoRoomImageUploadApply');
+      const propertyImageCancel = document.getElementById('hoRoomImageUploadCancel');
+      const propertyImageClose = document.getElementById('hoRoomImageUploadClose');
+      const propertyImageChooseAgain = document.getElementById('hoRoomImageChooseAgain');
+      let propertyImageTargetInput = null;
+      let propertyImagePendingFile = null;
+      let propertyImagePreviewUrl = '';
+
+      const resetPropertyImageUpload = () => {
+        propertyImagePendingFile = null;
+        if (propertyImagePicker) propertyImagePicker.value = '';
+        if (propertyImagePreviewUrl) URL.revokeObjectURL(propertyImagePreviewUrl);
+        propertyImagePreviewUrl = '';
+        if (propertyImagePreview) propertyImagePreview.removeAttribute('src');
+        if (propertyImageName) propertyImageName.textContent = '';
+        if (propertyImageSelected) propertyImageSelected.hidden = true;
+        if (propertyImageDropzone) propertyImageDropzone.hidden = false;
+        if (propertyImageApply) propertyImageApply.disabled = true;
+      };
+
+      const closePropertyImageUpload = () => {
+        propertyImageModal?.classList.remove('open');
+        propertyImageModal?.setAttribute('aria-hidden', 'true');
+        propertyImageTargetInput = null;
+        resetPropertyImageUpload();
+      };
+
+      const openPropertyImageUpload = targetInput => {
+        if (!propertyImageModal || !targetInput) return;
+        resetPropertyImageUpload();
+        propertyImageTargetInput = targetInput;
+        propertyImageModal.classList.add('open');
+        propertyImageModal.setAttribute('aria-hidden', 'false');
+      };
+
+      const selectPropertyImage = file => {
+        if (!file) return;
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!allowedTypes.includes(file.type) || file.size > 8 * 1024 * 1024) {
+          window.alert('Choose a JPG, PNG, or WebP image no larger than 8 MB.');
+          return;
+        }
+        if (propertyImagePreviewUrl) URL.revokeObjectURL(propertyImagePreviewUrl);
+        propertyImagePendingFile = file;
+        propertyImagePreviewUrl = URL.createObjectURL(file);
+        if (propertyImagePreview) propertyImagePreview.src = propertyImagePreviewUrl;
+        if (propertyImageName) propertyImageName.textContent = file.name;
+        if (propertyImageDropzone) propertyImageDropzone.hidden = true;
+        if (propertyImageSelected) propertyImageSelected.hidden = false;
+        if (propertyImageApply) propertyImageApply.disabled = false;
+      };
+
+      document.addEventListener('click', event => {
+        const trigger = event.target instanceof Element ? event.target.closest('[data-room-image-trigger]') : null;
+        if (!trigger) return;
+        const scope = trigger.closest('.ho-main-image-fields, .ho-gallery-input-stack');
+        openPropertyImageUpload(scope?.querySelector('[data-room-image-input]'));
+      });
+      propertyImagePicker?.addEventListener('change', () => selectPropertyImage(propertyImagePicker.files?.[0]));
+      propertyImageChooseAgain?.addEventListener('click', () => propertyImagePicker?.click());
+      [propertyImageCancel, propertyImageClose].forEach(button => button?.addEventListener('click', closePropertyImageUpload));
+      propertyImageModal?.addEventListener('click', event => {
+        if (event.target === propertyImageModal) closePropertyImageUpload();
+      });
+      ['dragenter', 'dragover'].forEach(type => propertyImageDropzone?.addEventListener(type, event => {
+        event.preventDefault();
+        propertyImageDropzone.classList.add('is-dragging');
+      }));
+      ['dragleave', 'drop'].forEach(type => propertyImageDropzone?.addEventListener(type, event => {
+        event.preventDefault();
+        propertyImageDropzone.classList.remove('is-dragging');
+      }));
+      propertyImageDropzone?.addEventListener('drop', event => selectPropertyImage(event.dataTransfer?.files?.[0]));
+      propertyImageApply?.addEventListener('click', () => {
+        if (!propertyImageTargetInput || !propertyImagePendingFile) return;
+        const transfer = new DataTransfer();
+        transfer.items.add(propertyImagePendingFile);
+        propertyImageTargetInput.files = transfer.files;
+        propertyImageTargetInput.dispatchEvent(new Event('change', { bubbles: true }));
+        closePropertyImageUpload();
       });
 
       document.addEventListener('click', (e) => {

@@ -12,7 +12,7 @@
     const container = document.getElementById("loginModal");
     if (!container) return;
 
-    fetch("logsign-modal.html?v=11")
+    fetch("logsign-modal.html?v=15")
       .then((response) => {
         if (!response.ok) throw new Error("Unable to load the login form.");
         return response.text();
@@ -21,7 +21,7 @@
         container.innerHTML = html;
         const loadAuthScript = () => {
           const script = document.createElement("script");
-          script.src = "logsign.js?v=11";
+          script.src = "logsign.js?v=16";
           script.onload = () => {
           if (typeof window.initLogSignEvents === "function") window.initLogSignEvents();
           const params = new URLSearchParams(window.location.search);
@@ -201,6 +201,7 @@
   function initGallery() {
     const slides = Array.from(document.querySelectorAll(".fe-slide"));
     const dots = Array.from(document.querySelectorAll(".fe-dots button"));
+    const slider = document.querySelector(".fe-slider");
     const modal = document.getElementById("feModal");
     const modalImage = document.getElementById("feModalImg");
     const closeButton = modal?.querySelector(".fe-close");
@@ -209,6 +210,11 @@
     let current = 0;
     let intervalId = 0;
     let lastFocused = null;
+    let swipePointerId = null;
+    let swipeStartX = 0;
+    let swipeStartY = 0;
+    let swipeLastX = 0;
+    let suppressSwipeClickUntil = 0;
 
     const show = (index) => {
       current = (index + slides.length) % slides.length;
@@ -269,8 +275,66 @@
       if (event.key === "Escape") closeModal();
     });
 
-    document.querySelector(".fe-slider")?.addEventListener("mouseenter", stop);
-    document.querySelector(".fe-slider")?.addEventListener("mouseleave", start);
+    const finishSwipe = (event, cancelled = false) => {
+      if (swipePointerId === null || event.pointerId !== swipePointerId) return;
+      const distanceX = swipeLastX - swipeStartX;
+      const distanceY = event.clientY - swipeStartY;
+      const threshold = Math.min(64, Math.max(38, (slider?.clientWidth || 320) * 0.12));
+      const isHorizontalSwipe = !cancelled
+        && Math.abs(distanceX) >= threshold
+        && Math.abs(distanceX) > Math.abs(distanceY);
+
+      if (slider?.hasPointerCapture?.(swipePointerId)) {
+        slider.releasePointerCapture(swipePointerId);
+      }
+      swipePointerId = null;
+      slider?.classList.remove("is-swiping");
+
+      if (isHorizontalSwipe) {
+        suppressSwipeClickUntil = window.performance.now() + 500;
+        show(current + (distanceX < 0 ? 1 : -1));
+      }
+      start();
+    };
+
+    slider?.addEventListener("pointerdown", (event) => {
+      if (!event.isPrimary || (event.pointerType === "mouse" && event.button !== 0)) return;
+      swipePointerId = event.pointerId;
+      swipeStartX = event.clientX;
+      swipeStartY = event.clientY;
+      swipeLastX = event.clientX;
+      suppressSwipeClickUntil = 0;
+      slider.classList.add("is-swiping");
+      slider.setPointerCapture?.(event.pointerId);
+      stop();
+    });
+
+    slider?.addEventListener("pointermove", (event) => {
+      if (swipePointerId === null || event.pointerId !== swipePointerId) return;
+      swipeLastX = event.clientX;
+      const distanceX = swipeLastX - swipeStartX;
+      const distanceY = event.clientY - swipeStartY;
+      if (Math.abs(distanceX) > Math.abs(distanceY) && Math.abs(distanceX) > 8 && event.cancelable) {
+        event.preventDefault();
+      }
+    });
+
+    slider?.addEventListener("pointerup", (event) => finishSwipe(event));
+    slider?.addEventListener("pointercancel", (event) => finishSwipe(event, true));
+    slider?.addEventListener("click", (event) => {
+      if (window.performance.now() > suppressSwipeClickUntil) return;
+      event.preventDefault();
+      event.stopPropagation();
+      suppressSwipeClickUntil = 0;
+    }, true);
+    slider?.addEventListener("keydown", (event) => {
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      event.preventDefault();
+      show(current + (event.key === "ArrowRight" ? 1 : -1));
+      start();
+    });
+    slider?.addEventListener("mouseenter", stop);
+    slider?.addEventListener("mouseleave", start);
     show(0);
     start();
   }
@@ -789,6 +853,31 @@
     });
   }
 
+  function restoreHomepageDocumentScroll() {
+    const body = document.body;
+    const mobileNav = document.getElementById("headNavPrimary");
+    const gallery = document.getElementById("feModal");
+    const legal = document.getElementById("legalPolicyModal");
+    const complaint = document.getElementById("complaintIncidentModal");
+    const developers = document.getElementById("developersModal");
+
+    if (!mobileNav?.classList.contains("is-open")) body.classList.remove("mobile-nav-open");
+    if (!legal || legal.hidden) body.classList.remove("legal-policy-modal-open");
+    if (!complaint || complaint.hidden) body.classList.remove("complaint-modal-open");
+    if (!developers || developers.hidden) body.classList.remove("developers-modal-open");
+
+    const hasOpenOverlay = Boolean(
+      mobileNav?.classList.contains("is-open")
+      || (gallery && !gallery.hidden)
+      || (legal && !legal.hidden)
+      || (complaint && !complaint.hidden)
+      || (developers && !developers.hidden)
+      || document.querySelector("#modalOverlay.is-open, #modalOverlay[style*='display: flex']")
+    );
+
+    if (!hasOpenOverlay) body.style.removeProperty("overflow");
+  }
+
   document.addEventListener("DOMContentLoaded", () => {
     loadHeader();
     initHeroVisual();
@@ -798,5 +887,7 @@
     initRecentlyViewedControls();
     initHomepageReveals();
     initHeroSearchAutocomplete();
+    restoreHomepageDocumentScroll();
   });
+  window.addEventListener("pageshow", restoreHomepageDocumentScroll);
 })();

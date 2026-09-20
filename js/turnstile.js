@@ -51,13 +51,56 @@
     return document.querySelector(`[data-itour-turnstile="${CSS.escape(String(target || ""))}"]`);
   }
 
+  function showLoading(container) {
+    container.classList.remove("itour-turnstile-development", "itour-turnstile-unavailable");
+    container.classList.add("itour-turnstile-loading");
+    container.setAttribute("aria-busy", "true");
+  }
+
+  function clearLoading(container) {
+    container.classList.remove("itour-turnstile-loading");
+    container.removeAttribute("aria-busy");
+  }
+
+  function showUnavailable(container) {
+    clearLoading(container);
+    container.classList.remove("itour-turnstile-development");
+    container.classList.add("itour-turnstile-unavailable");
+    container.textContent = "Security verification is unavailable. Please try again later.";
+  }
+
+  function clearLoadingWhenVisible(container) {
+    let observer = null;
+    const finishIfVisible = () => {
+      const frame = container.querySelector("iframe");
+      if (!frame || frame.getClientRects().length === 0 || frame.getBoundingClientRect().height <= 0) return false;
+      clearLoading(container);
+      observer?.disconnect();
+      return true;
+    };
+
+    if (finishIfVisible()) return;
+    observer = new MutationObserver(finishIfVisible);
+    observer.observe(container, { childList: true, subtree: true, attributes: true, attributeFilter: ["style", "class"] });
+    requestAnimationFrame(finishIfVisible);
+  }
+
   async function render(target) {
     const container = resolveContainer(target);
     if (!container) return null;
     if (widgets.has(container)) return widgets.get(container);
 
-    const config = await configuration();
+    showLoading(container);
+
+    let config;
+    try {
+      config = await configuration();
+    } catch (error) {
+      showUnavailable(container);
+      throw error;
+    }
     if (config.development_bypass) {
+      clearLoading(container);
       container.classList.add("itour-turnstile-development");
       container.textContent = "Security verification is disabled for local development.";
       const state = { mode: "development-bypass", id: null };
@@ -65,22 +108,29 @@
       return state;
     }
     if (!config.enabled || !config.site_key) {
-      container.classList.add("itour-turnstile-unavailable");
-      container.textContent = "Security verification is unavailable. Please try again later.";
+      showUnavailable(container);
       const state = { mode: "unavailable", id: null };
       widgets.set(container, state);
       return state;
     }
 
-    const api = await loadApi();
-    const widgetId = api.render(container, {
-      sitekey: config.site_key,
-      theme: "light",
-      size: "flexible",
-      appearance: "always"
-    });
+    let api;
+    let widgetId;
+    try {
+      api = await loadApi();
+      widgetId = api.render(container, {
+        sitekey: config.site_key,
+        theme: "light",
+        size: "flexible",
+        appearance: "always"
+      });
+    } catch (error) {
+      showUnavailable(container);
+      throw error;
+    }
     const state = { mode: "enabled", id: widgetId };
     widgets.set(container, state);
+    clearLoadingWhenVisible(container);
     return state;
   }
 
@@ -90,8 +140,7 @@
       : Array.from(root.querySelectorAll?.("[data-itour-turnstile]") || []);
     const visibleContainers = containers.filter(container => container.getClientRects().length > 0);
     await Promise.all(visibleContainers.map(container => render(container).catch(() => {
-      container.classList.add("itour-turnstile-unavailable");
-      container.textContent = "Security verification is unavailable. Please try again later.";
+      showUnavailable(container);
     })));
   }
 

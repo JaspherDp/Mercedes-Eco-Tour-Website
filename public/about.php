@@ -19,8 +19,9 @@ try {
 <head>
   <meta charset="utf-8"/>
   <meta content="width=device-width, initial-scale=1" name="viewport"/>
-  <meta name="description" content="Learn about the Mercedes Municipal Tourism Office, its visitor services, local tourism programs, and office location.">
-  <title>About the Tourism Office | iTour Mercedes</title>
+  <meta name="description" content="Learn about iTour Mercedes, a web-based tourism management platform designed to help visitors explore Mercedes, Camarines Norte.">
+  <link rel="canonical" href="https://itourmercedes.com/about.php">
+  <title>About iTour Mercedes | Mercedes, Camarines Norte Tourism</title>
   <link rel="icon" type="image/png" href="img/newlogo.png">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="styles/homepage.css" />
@@ -149,7 +150,7 @@ try {
             <div><span>Office hours</span><strong>Monday&ndash;Friday, 8:00 AM&ndash;5:00 PM</strong></div>
             <div><span>Email</span><a href="mailto:tourism@mercedes.gov.ph">tourism@mercedes.gov.ph</a></div>
         </div>
-        <a class="about-button about-button--primary about-directions" href="https://maps.app.goo.gl/KbuTauSSe7rLZ2mX9" target="_blank" rel="noopener">Open directions <span aria-hidden="true">&nearr;</span></a>
+        <a class="about-button about-button--primary about-directions" href="https://maps.app.goo.gl/KbuTauSSe7rLZ2mX9" target="_blank" rel="noopener">Open Map <span aria-hidden="true">&nearr;</span></a>
     </div>
     <div class="map-container">
     <div class="about-map-label"><span>Municipal Tourism Office</span><strong>Mercedes, Camarines Norte</strong></div>
@@ -224,13 +225,13 @@ document.addEventListener("DOMContentLoaded", () => {
     swalScript.src = "https://cdn.jsdelivr.net/npm/sweetalert2@11";
     swalScript.onload = () => {
       // Now load logsign modal
-      fetch("logsign-modal.html?v=11")
+      fetch("logsign-modal.html?v=15")
         .then(res => res.text())
         .then(html => {
           document.getElementById("loginModal").innerHTML = html;
 
           const logsignScript = document.createElement("script");
-          logsignScript.src = "logsign.js?v=11";
+          logsignScript.src = "logsign.js?v=16";
           logsignScript.onload = () => {
             if (typeof initLogSignEvents === "function") initLogSignEvents();
           };

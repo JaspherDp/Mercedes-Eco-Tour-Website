@@ -5,6 +5,42 @@ Options -Indexes
 # Load the PHP homepage when visiting the root domain.
 DirectoryIndex index.php
 
+# Central response-header policy. HSTS is deliberately limited to HTTPS
+# requests; localhost development over HTTP is therefore unaffected.
+<IfModule mod_setenvif.c>
+    SetEnvIfExpr "%{HTTPS} == 'on'" ITOUR_HTTPS
+</IfModule>
+
+<IfModule mod_headers.c>
+    # Clear inherited/application copies before setting one canonical value.
+    Header unset Strict-Transport-Security
+    Header always unset Strict-Transport-Security
+    Header always set Strict-Transport-Security "max-age=31536000" env=ITOUR_HTTPS
+
+    Header unset X-Content-Type-Options
+    Header always unset X-Content-Type-Options
+    Header always set X-Content-Type-Options "nosniff"
+
+    # Same-origin framing is required by the site's internal document previews.
+    Header unset X-Frame-Options
+    Header always unset X-Frame-Options
+    Header always set X-Frame-Options "SAMEORIGIN"
+
+    Header unset Referrer-Policy
+    Header always unset Referrer-Policy
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+    Header unset Permissions-Policy
+    Header always unset Permissions-Policy
+    Header always set Permissions-Policy "accelerometer=(), ambient-light-sensor=(), autoplay=(self), camera=(), clipboard-read=(), clipboard-write=(self), display-capture=(), fullscreen=(self), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), picture-in-picture=(self), usb=()"
+
+    # Inline code remains allowed because existing pages depend on it. All
+    # network sources are restricted to services currently used by the site.
+    Header unset Content-Security-Policy
+    Header always unset Content-Security-Policy
+    Header always set Content-Security-Policy "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'self'; form-action 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com https://html2canvas.hertzen.com https://challenges.cloudflare.com https://www.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://unpkg.com; font-src 'self' https://fonts.gstatic.com https://cdnjs.cloudflare.com https://cdn.jsdelivr.net; img-src 'self' data: blob: https://unpkg.com https://images.unsplash.com https://profiles.google.com https://*.googleusercontent.com https://img.icons8.com https://*.tile.openstreetmap.org https://picsum.photos; media-src 'self' blob:; connect-src 'self' https://challenges.cloudflare.com https://*.googleapis.com; frame-src 'self' https://challenges.cloudflare.com https://www.google.com; worker-src 'self' blob:; manifest-src 'self'"
+</IfModule>
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
     # Temporary production HTTPS redirect. Local/private XAMPP hosts remain on

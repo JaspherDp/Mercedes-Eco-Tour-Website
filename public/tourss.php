@@ -1,5 +1,8 @@
 
 <?php
+header('Location: hotel_resorts.php?tab=tours&reset_search=1', true, 302);
+exit;
+
 chdir(__DIR__ . '/..');
 require_once __DIR__ . '/../php/session_security.php';
 AppSessionStart();
@@ -567,7 +570,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const modalContainer = document.getElementById("loginModal");
       if (!modalContainer) return console.error("loginModal container not found");
 
-      fetch("logsign-modal.html?v=11")
+      fetch("logsign-modal.html?v=14")
         .then(res => res.text())
         .then(modalHtml => {
           modalContainer.innerHTML = modalHtml;
@@ -584,7 +587,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
           function loadLogSign() {
             const logsignScript = document.createElement("script");
-            logsignScript.src = "logsign.js?v=11";
+            logsignScript.src = "logsign.js?v=15";
             logsignScript.onload = () => {
               if (typeof initLogSignEvents === "function") initLogSignEvents();
               else console.error("initLogSignEvents not found in logsign.js");
@@ -681,13 +684,13 @@ function initHomepageScrollEffect() {
 
 /* ------------------ LOGIN MODAL LOADING ------------------ */
 function loadLoginModal() {
-  fetch("logsign-modal.html?v=11")
+  fetch("logsign-modal.html?v=14")
     .then(res => res.text())
     .then(html => {
       document.getElementById("loginModal").innerHTML = html;
 
       const script = document.createElement("script");
-      script.src = "logsign.js?v=11";
+      script.src = "logsign.js?v=15";
       script.onload = () => {
         if (typeof initLogSignEvents === "function") initLogSignEvents();
       };

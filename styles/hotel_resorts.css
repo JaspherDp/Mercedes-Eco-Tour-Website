@@ -53,6 +53,11 @@ body {
 
 .hotel-hero--tours .hotel-hero-overlay h1 {
   margin-top: 0;
+  margin-bottom: 4px;
+}
+
+.hotel-hero--tours .hotel-hero-overlay p {
+  margin: 0;
 }
 
 .hotel-hero-kicker {
@@ -5684,6 +5689,22 @@ body.hotel-map-open {
 }
 
 @media (max-width: 768px) {
+  #searchSection.search-fixed[data-search-tab="hotels"] {
+    border-bottom: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .mobile-results-controls.is-stuck {
+    width: 100vw;
+    margin-right: calc(50% - 50vw);
+    margin-left: calc(50% - 50vw);
+    border-right: 0;
+    border-left: 0;
+    border-radius: 0;
+  }
+
   .hotel-main.search-active {
     width: calc(100% - 24px);
     min-height: 0;
@@ -6276,6 +6297,397 @@ body.hotel-map-open {
   }
 }
 
+/* Keep tour duration controls in the date field flow on every tour-service tab. */
+#searchSection .date-field-heading {
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+#searchSection .date-field-heading > label {
+  min-width: 0;
+  margin: 0;
+  color: #274c42;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+#searchSection .date-field-heading .tour-date-mode-toggle {
+  position: absolute;
+  z-index: 4;
+  top: -3px;
+  right: 0;
+  flex: 0 0 auto;
+  margin: 0 !important;
+}
+
+@media (max-width: 600px) {
+  #searchSection .search-mode-tab {
+    min-height: 42px;
+    font-size: .72rem;
+  }
+
+  #searchSection .search-mode-tab .tab-icon {
+    font-size: .84rem;
+  }
+
+  #searchSection .search-date-box {
+    gap: 5px;
+  }
+
+  #searchSection .date-field-heading {
+    min-height: 27px;
+  }
+
+  #searchSection .date-field-heading .tour-date-mode-toggle {
+    position: static;
+    z-index: auto;
+  }
+
+  #searchSection .date-field-heading > label {
+    font-size: .68rem;
+  }
+
+  #searchSection .date-field-heading .date-mode-btn {
+    min-height: 26px;
+    padding: 4px 10px;
+    font-size: .62rem;
+  }
+}
+
 .search-btn-update-label {
   display: none;
+}
+
+.hotel-results-heading {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  min-width: 0;
+}
+
+.hotel-results-heading-copy {
+  min-width: 0;
+}
+
+.hotel-results-back {
+  min-height: 38px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid #c9ddd6;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(21, 74, 57, .08);
+  color: #176b55;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  transition: border-color .16s ease, background-color .16s ease, transform .16s ease;
+}
+
+.hotel-results-back:hover {
+  border-color: #88b7a8;
+  background: #edf7f3;
+  transform: translateX(-2px);
+}
+
+.hotel-results-back:focus-visible {
+  outline: 3px solid rgba(23, 107, 85, .18);
+  outline-offset: 2px;
+}
+
+.mobile-hotel-results-heading {
+  display: none;
+}
+
+@media (max-width: 1040px) {
+  .hotel-results-back {
+    width: 38px;
+    padding: 0;
+  }
+
+  .hotel-results-back span {
+    display: none;
+  }
+}
+
+@media (max-width: 768px) {
+  #searchSection.search-fixed[data-search-tab="hotels"] .mobile-hotel-results-heading {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-sizing: border-box;
+  }
+
+  .mobile-hotel-results-back {
+    width: 34px;
+    height: 34px;
+    display: inline-flex;
+    flex: 0 0 34px;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #c9ddd6;
+    border-radius: 9px;
+    background: #fff;
+    box-shadow: 0 3px 10px rgba(21, 74, 57, .07);
+    color: #176b55;
+    text-decoration: none;
+  }
+
+  .mobile-hotel-results-heading > strong {
+    min-width: 0;
+    overflow: hidden;
+    color: #17362c;
+    font-size: clamp(10.5px, 3.2vw, 12px);
+    font-weight: 750;
+    line-height: 1.2;
+    letter-spacing: -.015em;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-hotel-results-heading > span {
+    flex: 0 0 auto;
+    margin-left: auto;
+    color: #687b74;
+    font-size: 9.5px;
+    font-weight: 600;
+    line-height: 1;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .hotel-main.search-active .hotel-results-toolbar {
+    display: none;
+  }
+}
+
+/* Mobile search: center the destination and date glyphs in one fixed column.
+   Font Awesome glyphs otherwise retain their inline baseline and appear at
+   slightly different heights even when their outer spans share coordinates. */
+#searchSection .search-control-icon > .search-field-icon {
+  display: block;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* On desktop the search tabs overlap roughly 100px of the tour hero. Reserve
+   that full area so the copy is centered in the visible hero above the tabs. */
+@media (min-width: 1041px) {
+  .hotel-hero--tours .hotel-hero-overlay {
+    box-sizing: border-box;
+    padding-top: 0;
+    padding-bottom: 100px;
+  }
+}
+
+@media (max-width: 768px) {
+  #searchSection .primary-location-wrap > .search-control-icon,
+  #searchSection .secondary-location-wrap > .search-control-icon,
+  #searchSection .date-input-wrap > .search-control-icon {
+    width: 22px;
+    height: 22px;
+    /* The native input text's visible glyph center is above its line-box
+       center. Lift these field icons to match that optical center. */
+    top: 22px;
+    left: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: translateY(-50%);
+  }
+
+  #searchSection .primary-location-wrap > .search-control-icon > i,
+  #searchSection .secondary-location-wrap > .search-control-icon > i,
+  #searchSection .date-input-wrap > .search-control-icon > i,
+  #searchSection .search-control-icon > .search-field-icon {
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
+    line-height: 1;
+  }
+
+  #searchSection .search-control-icon > .search-field-icon {
+    flex: 0 0 16px;
+    overflow: visible;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  #searchSection .primary-location-wrap > .search-control-icon > i::before,
+  #searchSection .secondary-location-wrap > .search-control-icon > i::before,
+  #searchSection .date-input-wrap > .search-control-icon > i::before {
+    display: block;
+    margin: 0;
+    line-height: 1;
+  }
+
+  #searchSection .primary-location-wrap > select,
+  #searchSection .secondary-location-wrap > select,
+  #searchSection .date-input-wrap > #dateRangePicker {
+    padding-left: 50px;
+  }
+
+  #searchSection.search-fixed .primary-location-wrap > .search-control-icon,
+  #searchSection.search-fixed .secondary-location-wrap > .search-control-icon,
+  #searchSection.search-fixed .date-input-wrap > .search-control-icon {
+    top: 20px;
+  }
+}
+
+/* Compact desktop hotel results while keeping tablet/mobile cards unchanged. */
+@media (min-width: 1041px) {
+  #searchSection.search-fixed[data-search-tab="hotels"] {
+    padding-bottom: 7px;
+  }
+
+  #searchSection.search-fixed[data-search-tab="hotels"] .field-error-slot:empty {
+    min-height: 0;
+    padding: 0;
+  }
+
+  .hotel-main.search-active .hotel-filter-rail {
+    position: relative;
+  }
+
+  .hotel-main.search-active .hotel-filter-column {
+    height: 100%;
+    max-height: none;
+    position: relative;
+    top: auto;
+    bottom: auto;
+    padding-right: 0;
+    overflow: visible;
+    overscroll-behavior: auto;
+    scrollbar-width: none;
+  }
+
+  .hotel-main.search-active .hotel-filter-column::-webkit-scrollbar {
+    display: none;
+  }
+
+  .hotel-main.search-active .hotel-map-preview {
+    flex: 0 0 158px;
+  }
+
+  .hotel-main.search-active .hotel-filter {
+    position: sticky;
+    top: 188px;
+  }
+
+  .hotel-main.search-active .hotel-result-card {
+    height: 220px;
+    min-height: 220px;
+    max-height: 220px;
+    margin-bottom: 12px;
+  }
+
+  .hotel-main.search-active .hotel-result-img {
+    width: clamp(230px, 19vw, 260px);
+    height: 220px;
+    min-height: 0;
+    max-height: 220px;
+  }
+
+  .hotel-main.search-active .hotel-result-info {
+    justify-content: flex-start;
+    gap: 7px;
+    padding: 14px 18px;
+  }
+
+  .hotel-main.search-active .hotel-result-badge {
+    margin-bottom: 0;
+    padding: 4px 8px;
+  }
+
+  .hotel-main.search-active .hotel-result-title {
+    font-size: 18px;
+    line-height: 1.2;
+  }
+
+  .hotel-main.search-active .hotel-result-amenities {
+    gap: 5px;
+    margin-top: 3px;
+  }
+
+  .hotel-main.search-active .hotel-result-amenity {
+    padding: 4px 8px;
+  }
+
+  .hotel-main.search-active .hotel-result-see-more {
+    margin-top: 3px;
+  }
+
+  .hotel-main.search-active .hotel-result-right {
+    width: 170px;
+    padding: 14px 16px;
+  }
+
+  .hotel-main.search-active .hotel-result-btn {
+    min-height: 38px;
+    padding: 0 13px;
+  }
+}
+
+/* Compact, consistent vertical rhythm for every mobile search tab. */
+@media (max-width: 600px) {
+  html.tours-page-root,
+  html.tours-page-root body {
+    width: 100%;
+    max-width: 100%;
+    min-height: 100%;
+    min-height: 100dvh;
+    margin: 0;
+    border-radius: 0;
+    overflow-x: hidden;
+  }
+
+  #searchSection .search-container,
+  #searchSection .search-container.double-location,
+  #searchSection.search-fixed .search-container {
+    margin-top: 4px;
+    row-gap: 14px;
+  }
+
+  #searchSection .search-box,
+  #searchSection.search-fixed .search-box {
+    gap: 5px;
+  }
+
+  #searchSection .field-error-slot:empty,
+  #searchSection.search-fixed .field-error-slot:empty {
+    min-height: 0;
+    height: 0;
+    margin: 0;
+    padding: 0;
+    display: none;
+  }
+
+  #searchSection .search-container.double-location .location-input-wrap {
+    gap: 8px;
+  }
+
+  #searchSection .search-submit-wrap,
+  #searchSection.search-fixed .search-submit-wrap {
+    padding-top: 0;
+  }
 }

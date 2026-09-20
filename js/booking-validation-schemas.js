@@ -136,7 +136,7 @@
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["agree_privacy"],
-          message: "Please agree to the Privacy Policy to continue."
+          message: "Please acknowledge the Privacy Policy and agree to the Terms & Conditions to continue."
         });
       }
 

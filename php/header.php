@@ -201,100 +201,182 @@ function headSubnavResolveImage(?string $rawPath, string $fallback = 'img/sample
     return $fallback;
 }
 
-$popularDestinations = [
-    [
-        'label' => 'Things to do in',
-        'title' => 'Apuao',
-        'url' => 'destination.php',
-        'image' => 'imagess/Apuao Pequena_header-img.png'
-    ],
-    [
-        'label' => 'Things to do in',
-        'title' => 'Malasugui',
-        'url' => 'destination.php',
-        'image' => 'imagess/Malasugui_header-img.png'
-    ],
-    [
-        'label' => 'Things to do in',
-        'title' => 'Quinapaguian',
-        'url' => 'destination.php',
-        'image' => 'imagess/Quinapaguian_header-img.png'
-    ],
-    [
-        'label' => 'Things to do in',
-        'title' => 'Cayucyucan',
-        'url' => 'destination.php',
-        'image' => 'imagess/Caringo_header-img.png'
-    ]
-];
+function headSubnavDestinationKey(string $value): string
+{
+    $value = html_entity_decode(trim($value), ENT_QUOTES, 'UTF-8');
+    $value = str_replace(['Ã±', 'ñ', 'Ñ'], 'n', $value);
+    $value = function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
+    $value = preg_replace('/\bisland\b/u', '', $value) ?? $value;
+    return preg_replace('/[^a-z0-9]+/', '', $value) ?? '';
+}
 
+function headSubnavAddBookingShares(array $rows): array
+{
+    $totalBookings = array_sum(array_map(
+        static fn(array $row): int => (int)($row['booking_count'] ?? 0),
+        $rows
+    ));
+
+    foreach ($rows as &$row) {
+        $row['share_percent'] = $totalBookings > 0
+            ? round(((int)($row['booking_count'] ?? 0) / $totalBookings) * 100, 1)
+            : 0;
+    }
+    unset($row);
+
+    return $rows;
+}
+
+function headSubnavFormatPercent(float $value): string
+{
+    return rtrim(rtrim(number_format($value, 1, '.', ''), '0'), '.');
+}
+
+$popularDestinations = [];
 $popularPackages = [];
 $popularHotels = [];
 
-if ($isHomepage && headSubnavTableExists($pdo, 'tour_packages')) {
-    if (headSubnavTableExists($pdo, 'operators')) {
-        $stmt = $pdo->prepare("
+if (
+    $isHomepage
+    && headSubnavTableExists($pdo, 'destinations')
+    && headSubnavTableExists($pdo, 'bookings')
+) {
+    try {
+        $stmt = $pdo->query("
             SELECT
-              p.package_id,
-              p.package_title,
-              p.package_image
-            FROM tour_packages p
-            INNER JOIN operators o ON o.operator_id = p.operator_id
-            WHERE o.status = 'active'
-            ORDER BY p.package_id DESC
-            LIMIT 4
+              destination_id,
+              slug,
+              title,
+              card_image,
+              sort_order
+            FROM destinations
+            WHERE status = 'published'
+            ORDER BY sort_order ASC, destination_id ASC
         ");
-        $stmt->execute();
-    } else {
-        $stmt = $pdo->prepare("
-            SELECT
-              p.package_id,
-              p.package_title,
-              p.package_image
-            FROM tour_packages p
-            ORDER BY p.package_id DESC
-            LIMIT 4
-        ");
-        $stmt->execute();
-    }
+        $destinationRows = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $destinationBookingCounts = [];
 
-    $popularPackages = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $locationStmt = $pdo->query("
+            SELECT location
+            FROM bookings
+            WHERE TRIM(COALESCE(location, '')) <> ''
+              AND LOWER(COALESCE(status, '')) NOT IN ('cancelled', 'declined', 'rejected')
+              AND LOWER(COALESCE(is_complete, '')) NOT IN ('cancelled', 'declined', 'rejected')
+        ");
+        foreach ($locationStmt->fetchAll(PDO::FETCH_COLUMN) ?: [] as $locationList) {
+            $bookingDestinations = [];
+            foreach (explode(',', (string)$locationList) as $location) {
+                $key = headSubnavDestinationKey($location);
+                if ($key !== '') {
+                    $bookingDestinations[$key] = true;
+                }
+            }
+            foreach (array_keys($bookingDestinations) as $key) {
+                $destinationBookingCounts[$key] = ($destinationBookingCounts[$key] ?? 0) + 1;
+            }
+        }
+
+        foreach ($destinationRows as $destination) {
+            $key = headSubnavDestinationKey((string)($destination['title'] ?? ''));
+            $bookingCount = (int)($destinationBookingCounts[$key] ?? 0);
+            if ($bookingCount > 0) {
+                $popularDestinations[] = [
+                    'label' => 'Things to do in',
+                    'title' => (string)($destination['title'] ?? 'Mercedes'),
+                    'url' => 'destination.php',
+                    'image' => (string)($destination['card_image'] ?? ''),
+                    'booking_count' => $bookingCount,
+                    'sort_order' => (int)($destination['sort_order'] ?? 0),
+                    'destination_id' => (int)($destination['destination_id'] ?? 0)
+                ];
+            }
+        }
+
+        usort($popularDestinations, static fn(array $left, array $right): int =>
+            $right['booking_count'] <=> $left['booking_count']
+            ?: $left['sort_order'] <=> $right['sort_order']
+            ?: $left['destination_id'] <=> $right['destination_id']
+        );
+        $popularDestinations = headSubnavAddBookingShares($popularDestinations);
+        $popularDestinations = array_slice($popularDestinations, 0, 4);
+    } catch (Throwable $error) {
+        $popularDestinations = [];
+    }
 }
 
-if ($isHomepage && headSubnavTableExists($pdo, 'hotel_resorts')) {
-    $stmt = $pdo->prepare("
-        SELECT
-          hotel_resort_id,
-          name,
-          image_path
-        FROM hotel_resorts
-        WHERE status = 'active' AND popular = 1
-        ORDER BY updated_at DESC, hotel_resort_id DESC
-        LIMIT 4
-    ");
-    $stmt->execute();
-    $popularHotels = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-
-    if (count($popularHotels) < 4) {
-        $excludedIds = array_map(static fn(array $row): int => (int)($row['hotel_resort_id'] ?? 0), $popularHotels);
-        $placeholders = implode(',', array_fill(0, count($excludedIds), '?'));
-        $sql = "
-            SELECT
-              hotel_resort_id,
-              name,
-              image_path
-            FROM hotel_resorts
-            WHERE status = 'active'
-        ";
-        if (!empty($excludedIds)) {
-            $sql .= " AND hotel_resort_id NOT IN ($placeholders)";
+if (
+    $isHomepage
+    && headSubnavTableExists($pdo, 'tour_packages')
+    && headSubnavTableExists($pdo, 'bookings')
+) {
+    try {
+        if (headSubnavTableExists($pdo, 'operators')) {
+            $stmt = $pdo->query("
+                SELECT
+                  p.package_id,
+                  p.package_title,
+                  p.package_image,
+                  COUNT(b.booking_id) AS booking_count
+                FROM tour_packages p
+                INNER JOIN operators o ON o.operator_id = p.operator_id AND o.status = 'active'
+                INNER JOIN bookings b
+                  ON b.operator_id = p.operator_id
+                 AND LOWER(TRIM(b.package_name)) = LOWER(TRIM(p.package_title))
+                 AND LOWER(COALESCE(b.booking_type, '')) = 'package'
+                 AND LOWER(COALESCE(b.status, '')) NOT IN ('cancelled', 'declined', 'rejected')
+                 AND LOWER(COALESCE(b.is_complete, '')) NOT IN ('cancelled', 'declined', 'rejected')
+                GROUP BY p.package_id, p.package_title, p.package_image
+                ORDER BY booking_count DESC, MAX(b.created_at) DESC, p.package_id DESC
+            ");
+        } else {
+            $stmt = $pdo->query("
+                SELECT
+                  p.package_id,
+                  p.package_title,
+                  p.package_image,
+                  COUNT(b.booking_id) AS booking_count
+                FROM tour_packages p
+                INNER JOIN bookings b
+                  ON b.operator_id = p.operator_id
+                 AND LOWER(TRIM(b.package_name)) = LOWER(TRIM(p.package_title))
+                 AND LOWER(COALESCE(b.booking_type, '')) = 'package'
+                 AND LOWER(COALESCE(b.status, '')) NOT IN ('cancelled', 'declined', 'rejected')
+                 AND LOWER(COALESCE(b.is_complete, '')) NOT IN ('cancelled', 'declined', 'rejected')
+                GROUP BY p.package_id, p.package_title, p.package_image
+                ORDER BY booking_count DESC, MAX(b.created_at) DESC, p.package_id DESC
+            ");
         }
-        $sql .= " ORDER BY updated_at DESC, hotel_resort_id DESC LIMIT " . (4 - count($popularHotels));
+        $popularPackages = headSubnavAddBookingShares($stmt->fetchAll(PDO::FETCH_ASSOC) ?: []);
+        $popularPackages = array_slice($popularPackages, 0, 4);
+    } catch (Throwable $error) {
+        $popularPackages = [];
+    }
+}
 
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($excludedIds);
-        $extraHotels = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
-        $popularHotels = array_merge($popularHotels, $extraHotels);
+if (
+    $isHomepage
+    && headSubnavTableExists($pdo, 'hotel_resorts')
+    && headSubnavTableExists($pdo, 'hotel_room_bookings')
+) {
+    try {
+        $stmt = $pdo->query("
+            SELECT
+              h.hotel_resort_id,
+              h.name,
+              h.image_path,
+              COUNT(b.hotel_booking_id) AS booking_count
+            FROM hotel_resorts h
+            INNER JOIN hotel_room_bookings b
+              ON b.hotel_resort_id = h.hotel_resort_id
+             AND LOWER(COALESCE(b.booking_status, '')) NOT IN ('cancelled', 'declined', 'rejected', 'no-show')
+            WHERE h.status = 'active'
+            GROUP BY h.hotel_resort_id, h.name, h.image_path
+            ORDER BY booking_count DESC, MAX(b.created_at) DESC, h.hotel_resort_id DESC
+        ");
+        $popularHotels = headSubnavAddBookingShares($stmt->fetchAll(PDO::FETCH_ASSOC) ?: []);
+        $popularHotels = array_slice($popularHotels, 0, 4);
+    } catch (Throwable $error) {
+        $popularHotels = [];
     }
 }
 
@@ -337,16 +419,16 @@ if ($isHomepage && headSubnavTableExists($pdo, 'hotel_resorts')) {
     </div>
   <?php endif; ?>
   <div class="head-nav-drawer-section-title">Navigation Links</div>
-  <a href="./" class="<?= $isHomepage ? 'active' : '' ?>"><svg class="head-nav-page-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8"/></svg><span>HOME</span><span class="head-nav-page-arrow" aria-hidden="true">›</span></a>
-  <a href="destination.php" class="<?= in_array($currentPage, ['destination.php', 'destination_results.php'], true) ? 'active' : '' ?>"><svg class="head-nav-page-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2"/></svg><span>DESTINATIONS</span><span class="head-nav-page-arrow" aria-hidden="true">›</span></a>
-  <a href="hotel_resorts.php?tab=tours" class="<?= $isHotelsActive ? 'active' : '' ?>"><svg class="head-nav-page-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="14" rx="3"/><path d="M8 7V3h8v4M8 7v14M16 7v14"/></svg><span>TOURS</span><span class="head-nav-page-arrow" aria-hidden="true">›</span></a>
-  <a href="about.php" class="<?= ($currentPage == 'about.php') ? 'active' : '' ?>"><svg class="head-nav-page-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v1"/></svg><span>ABOUT</span><span class="head-nav-page-arrow" aria-hidden="true">›</span></a>
+  <a href="./" class="<?= $isHomepage ? 'active' : '' ?>"><svg class="head-nav-page-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8"/></svg><span>HOME</span><svg class="head-nav-page-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></a>
+  <a href="destination.php" class="<?= in_array($currentPage, ['destination.php', 'destination_results.php'], true) ? 'active' : '' ?>"><svg class="head-nav-page-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2"/></svg><span>DESTINATIONS</span><svg class="head-nav-page-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></a>
+  <a href="hotel_resorts.php?tab=tours&amp;reset_search=1" class="<?= $isHotelsActive ? 'active' : '' ?>"><svg class="head-nav-page-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="14" rx="3"/><path d="M8 7V3h8v4M8 7v14M16 7v14"/></svg><span>TOURS</span><svg class="head-nav-page-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></a>
+  <a href="about.php" class="<?= ($currentPage == 'about.php') ? 'active' : '' ?>"><svg class="head-nav-page-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v1"/></svg><span>ABOUT</span><svg class="head-nav-page-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></a>
   <div class="head-nav-drawer-section-title head-nav-drawer-section-title--secondary">Trip Essentials</div>
-  <a href="hotel_resorts.php?tab=tours" class="head-nav-drawer-utility"><svg class="head-nav-page-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 0 6.5 10 2.5 2.5 0 0 0 4 12.5V17a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4.5a2.5 2.5 0 0 0 0-5V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v.5Z"/><path d="M14 9h3M14 13h3"/></svg><span>BOOK A TOUR</span><span class="head-nav-page-arrow" aria-hidden="true">›</span></a>
-  <a href="about.php#visitHeading" class="head-nav-drawer-utility"><svg class="head-nav-page-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H7l-3 3V5Z"/><path d="M8 9h8M8 13h5"/></svg><span>TOURISM OFFICE</span><span class="head-nav-page-arrow" aria-hidden="true">›</span></a>
+  <a href="hotel_resorts.php?tab=tours" class="head-nav-drawer-utility"><svg class="head-nav-page-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7.5A2.5 2.5 0 0 0 6.5 10 2.5 2.5 0 0 0 4 12.5V17a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4.5a2.5 2.5 0 0 0 0-5V7a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v.5Z"/><path d="M14 9h3M14 13h3"/></svg><span>BOOK A TOUR</span><svg class="head-nav-page-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></a>
+  <a href="about.php#visitHeading" class="head-nav-drawer-utility"><svg class="head-nav-page-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v12H7l-3 3V5Z"/><path d="M8 9h8M8 13h5"/></svg><span>TOURISM OFFICE</span><svg class="head-nav-page-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></a>
   <div class="head-nav-drawer-section-title head-nav-drawer-section-title--secondary">Information</div>
-  <a href="Termsconditions.php" class="head-nav-drawer-utility"><svg class="head-nav-page-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6V3Z"/><path d="M14 3v5h5M9 12h7M9 16h7"/></svg><span>TERMS &amp; CONDITIONS</span><span class="head-nav-page-arrow" aria-hidden="true">›</span></a>
-  <a href="privacypolicy.php" class="head-nav-drawer-utility"><svg class="head-nav-page-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.8 2.8 8.4 7 10 4.2-1.6 7-5.2 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-5"/></svg><span>PRIVACY POLICY</span><span class="head-nav-page-arrow" aria-hidden="true">›</span></a>
+  <a href="#legalPolicyModal" class="head-nav-drawer-utility" data-legal-policy="terms"><svg class="head-nav-page-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6V3Z"/><path d="M14 3v5h5M9 12h7M9 16h7"/></svg><span>TERMS &amp; CONDITIONS</span><svg class="head-nav-page-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></a>
+  <a href="#legalPolicyModal" class="head-nav-drawer-utility" data-legal-policy="privacy"><svg class="head-nav-page-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.8 2.8 8.4 7 10 4.2-1.6 7-5.2 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-5"/></svg><span>PRIVACY POLICY</span><svg class="head-nav-page-arrow" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 5 7 7-7 7"/></svg></a>
   <?php if ($user): ?>
     <button type="button" class="head-nav-drawer-logout" data-head-nav-logout>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5V3H5v18h9v-2M10 12h11M18 8l4 4-4 4"/></svg>
@@ -429,7 +511,7 @@ if ($isHomepage && headSubnavTableExists($pdo, 'hotel_resorts')) {
   <nav class="head-subnav-mobile-links" aria-label="Sticky mobile navigation">
     <a href="./" aria-current="page"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8"/></svg><span>Home</span></a>
     <a href="destination.php"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2"/></svg><span>Destinations</span></a>
-    <a href="hotel_resorts.php?tab=tours"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="14" rx="3"/><path d="M8 7V3h8v4M8 7v14M16 7v14"/></svg><span>Tours</span></a>
+    <a href="hotel_resorts.php?tab=tours&amp;reset_search=1"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="14" rx="3"/><path d="M8 7V3h8v4M8 7v14M16 7v14"/></svg><span>Tours</span></a>
     <a href="about.php"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7v1"/></svg><span>About</span></a>
   </nav>
   <div class="head-subnav-item head-subnav-item--destinations">
@@ -440,16 +522,20 @@ if ($isHomepage && headSubnavTableExists($pdo, 'hotel_resorts')) {
 
     <div class="head-subnav-popup" aria-label="Popular destinations">
       <h4 class="head-subnav-popup-title">Popular Destinations</h4>
-      <?php foreach ($popularDestinations as $destinationIndex => $destination): ?>
-        <a href="<?= htmlspecialchars($destination['url']) ?>" class="head-subnav-popup-item">
-          <img src="<?= htmlspecialchars(headSubnavResolveImage($destination['image'], 'img/sampleimage.png')) ?>" alt="<?= htmlspecialchars($destination['title']) ?>">
-          <div>
-            <span><?= htmlspecialchars($destination['label']) ?></span>
-            <strong><?= htmlspecialchars($destination['title']) ?></strong>
-          </div>
-          <span class="head-subnav-trend" aria-label="Popularity trend"><svg viewBox="0 0 42 24" aria-hidden="true"><polyline points="3,20 18,8 27,15 40,4"></polyline><path d="m34 4 6 0 0 6"></path></svg><b>+<?= max(8, 24 - ((int)$destinationIndex * 4)) ?>%</b></span>
-        </a>
-      <?php endforeach; ?>
+      <?php if (!empty($popularDestinations)): ?>
+        <?php foreach ($popularDestinations as $destination): ?>
+          <a href="<?= htmlspecialchars($destination['url']) ?>" class="head-subnav-popup-item">
+            <img src="<?= htmlspecialchars(headSubnavResolveImage($destination['image'], 'img/sampleimage.png')) ?>" alt="<?= htmlspecialchars($destination['title']) ?>">
+            <div>
+              <span><?= htmlspecialchars($destination['label']) ?></span>
+              <strong><?= htmlspecialchars($destination['title']) ?></strong>
+            </div>
+            <span class="head-subnav-trend" title="<?= number_format((int)$destination['booking_count']) ?> recorded booking<?= (int)$destination['booking_count'] === 1 ? '' : 's' ?>" aria-label="<?= number_format((int)$destination['booking_count']) ?> booking<?= (int)$destination['booking_count'] === 1 ? '' : 's' ?>, <?= headSubnavFormatPercent((float)$destination['share_percent']) ?> percent of destination bookings"><svg viewBox="0 0 42 24" aria-hidden="true"><polyline points="3,20 18,8 27,15 40,4"></polyline><path d="m34 4 6 0 0 6"></path></svg><b><?= headSubnavFormatPercent((float)$destination['share_percent']) ?>%</b></span>
+          </a>
+        <?php endforeach; ?>
+      <?php else: ?>
+        <p class="head-subnav-popup-empty">No destination booking data yet.</p>
+      <?php endif; ?>
     </div>
   </div>
 
@@ -462,25 +548,18 @@ if ($isHomepage && headSubnavTableExists($pdo, 'hotel_resorts')) {
     <div class="head-subnav-popup" aria-label="Popular packages">
       <h4 class="head-subnav-popup-title">Popular Packages</h4>
       <?php if (!empty($popularPackages)): ?>
-        <?php foreach ($popularPackages as $packageIndex => $package): ?>
+        <?php foreach ($popularPackages as $package): ?>
           <a href="package_details.php?package_id=<?= (int)$package['package_id'] ?>" class="head-subnav-popup-item">
             <img src="<?= htmlspecialchars(headSubnavResolveImage($package['package_image'] ?? '', 'img/packageshome.png')) ?>" alt="<?= htmlspecialchars((string)($package['package_title'] ?? 'Package')) ?>">
             <div>
               <span>Top package</span>
               <strong><?= htmlspecialchars((string)($package['package_title'] ?? 'Package')) ?></strong>
             </div>
-            <span class="head-subnav-trend" aria-label="Popularity trend"><svg viewBox="0 0 42 24" aria-hidden="true"><polyline points="3,20 18,8 27,15 40,4"></polyline><path d="m34 4 6 0 0 6"></path></svg><b>+<?= max(7, 21 - ((int)$packageIndex * 4)) ?>%</b></span>
+            <span class="head-subnav-trend" title="<?= number_format((int)$package['booking_count']) ?> recorded booking<?= (int)$package['booking_count'] === 1 ? '' : 's' ?>" aria-label="<?= number_format((int)$package['booking_count']) ?> booking<?= (int)$package['booking_count'] === 1 ? '' : 's' ?>, <?= headSubnavFormatPercent((float)$package['share_percent']) ?> percent of package bookings"><svg viewBox="0 0 42 24" aria-hidden="true"><polyline points="3,20 18,8 27,15 40,4"></polyline><path d="m34 4 6 0 0 6"></path></svg><b><?= headSubnavFormatPercent((float)$package['share_percent']) ?>%</b></span>
           </a>
         <?php endforeach; ?>
       <?php else: ?>
-        <a href="hotel_resorts.php?tab=tours" class="head-subnav-popup-item">
-          <img src="img/packageshome.png" alt="Packages">
-          <div>
-            <span>Top package</span>
-            <strong>Explore Packages</strong>
-          </div>
-          <span class="head-subnav-trend" aria-label="Popularity trend"><svg viewBox="0 0 42 24" aria-hidden="true"><polyline points="3,20 18,8 27,15 40,4"></polyline><path d="m34 4 6 0 0 6"></path></svg><b>+12%</b></span>
-        </a>
+        <p class="head-subnav-popup-empty">No package booking data yet.</p>
       <?php endif; ?>
     </div>
   </div>
@@ -494,25 +573,18 @@ if ($isHomepage && headSubnavTableExists($pdo, 'hotel_resorts')) {
     <div class="head-subnav-popup" aria-label="Popular hotels and resorts">
       <h4 class="head-subnav-popup-title">Hotel & Resorts</h4>
       <?php if (!empty($popularHotels)): ?>
-        <?php foreach ($popularHotels as $hotelIndex => $hotel): ?>
-          <a href="hotel_details.php?id=<?= (int)$hotel['hotel_resort_id'] ?>&amp;source=featured" class="head-subnav-popup-item">
+        <?php foreach ($popularHotels as $hotel): ?>
+          <a href="hotel_details.php?id=<?= (int)$hotel['hotel_resort_id'] ?>&amp;source=popular" class="head-subnav-popup-item">
             <img src="<?= htmlspecialchars(headSubnavResolveImage($hotel['image_path'] ?? '', 'img/hotelshome.png')) ?>" alt="<?= htmlspecialchars((string)($hotel['name'] ?? 'Hotel')) ?>">
             <div>
               <span>Top stays</span>
               <strong><?= htmlspecialchars((string)($hotel['name'] ?? 'Hotel & Resort')) ?></strong>
             </div>
-            <span class="head-subnav-trend" aria-label="Popularity trend"><svg viewBox="0 0 42 24" aria-hidden="true"><polyline points="3,20 18,8 27,15 40,4"></polyline><path d="m34 4 6 0 0 6"></path></svg><b>+<?= max(6, 18 - ((int)$hotelIndex * 3)) ?>%</b></span>
+            <span class="head-subnav-trend" title="<?= number_format((int)$hotel['booking_count']) ?> recorded booking<?= (int)$hotel['booking_count'] === 1 ? '' : 's' ?>" aria-label="<?= number_format((int)$hotel['booking_count']) ?> booking<?= (int)$hotel['booking_count'] === 1 ? '' : 's' ?>, <?= headSubnavFormatPercent((float)$hotel['share_percent']) ?> percent of hotel and resort bookings"><svg viewBox="0 0 42 24" aria-hidden="true"><polyline points="3,20 18,8 27,15 40,4"></polyline><path d="m34 4 6 0 0 6"></path></svg><b><?= headSubnavFormatPercent((float)$hotel['share_percent']) ?>%</b></span>
           </a>
         <?php endforeach; ?>
       <?php else: ?>
-        <a href="hotel_resorts.php" class="head-subnav-popup-item">
-          <img src="img/hotelshome.png" alt="Hotels and resorts">
-          <div>
-            <span>Top stays</span>
-            <strong>Explore Hotels & Resorts</strong>
-          </div>
-          <span class="head-subnav-trend" aria-label="Popularity trend"><svg viewBox="0 0 42 24" aria-hidden="true"><polyline points="3,20 18,8 27,15 40,4"></polyline><path d="m34 4 6 0 0 6"></path></svg><b>+10%</b></span>
-        </a>
+        <p class="head-subnav-popup-empty">No hotel or resort booking data yet.</p>
       <?php endif; ?>
     </div>
   </div>
@@ -1104,6 +1176,14 @@ body {
   line-height: 1.2;
 }
 
+.head-subnav-popup-empty {
+  margin: 4px 0 0;
+  padding: 13px 8px;
+  color: #6a7f85;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 /* separator */
 .head-subnav-separator {
   color: #999;
@@ -1223,7 +1303,7 @@ html {
   .head-nav-main-header .head-nav-mobile-toggle { height: 40px; border: 0; background: transparent; box-shadow: none; }
   .head-nav-menu-backdrop { display: block; position: fixed; inset: var(--main-nav) 0 0; background: #092b2366; opacity: 0; visibility: hidden; transition: opacity .28s ease, visibility .28s; z-index: 1; }
   .mobile-nav-open .head-nav-menu-backdrop { opacity: 1; visibility: visible; }
-  .head-nav-main-header .head-nav-center { display: flex !important; flex-direction: column; position: fixed !important; top: var(--main-nav); bottom: 0; left: 0; right: auto; width: min(310px, 86vw); max-height: none; overflow-y: auto; padding: 15px 14px 22px; gap: 3px !important; background: linear-gradient(180deg, #fff 0%, #f9fcfa 100%); border: 0; border-right: 1px solid #dbe9e3; border-radius: 0 18px 18px 0; box-shadow: 14px 0 36px rgba(10, 54, 42, .16); transform: translateX(-105%); visibility: hidden; transition: transform .28s cubic-bezier(.2,.7,.2,1), visibility .28s; z-index: 2; }
+  .head-nav-main-header .head-nav-center { display: flex !important; flex-direction: column; position: fixed !important; top: var(--main-nav); bottom: auto; left: 0; right: auto; width: min(310px, 86vw); height: calc(100vh - var(--main-nav)); height: calc(100dvh - var(--main-nav)); max-height: calc(100vh - var(--main-nav)); max-height: calc(100dvh - var(--main-nav)); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; touch-action: pan-y; scroll-padding-bottom: calc(58px + env(safe-area-inset-bottom)); padding: 15px 14px max(10px, env(safe-area-inset-bottom)); gap: 3px !important; background: linear-gradient(180deg, #fff 0%, #f9fcfa 100%); border: 0; border-right: 1px solid #dbe9e3; border-radius: 0 18px 18px 0; box-shadow: 14px 0 36px rgba(10, 54, 42, .16); transform: translateX(-105%); visibility: hidden; transition: transform .28s cubic-bezier(.2,.7,.2,1), visibility .28s; z-index: 2; }
   .head-nav-main-header .head-nav-center.is-open { display: flex !important; transform: translateX(0); visibility: visible; }
   .head-nav-drawer-guest { display: block; margin: 0 0 10px; padding: 2px 1px 13px; border-bottom: 1px solid #e0ebe6; }
   .head-nav-drawer-guest p { margin: 0 0 7px; color: #657970; font-size: 9.5px; line-height: 1.4; }
@@ -1238,8 +1318,8 @@ html {
   .head-nav-drawer-avatar > span[hidden] { display: none; }
   .head-nav-drawer-account-copy { min-width: 0; display: block; }
   .head-nav-drawer-account-copy strong, .head-nav-drawer-account-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .head-nav-drawer-account-copy strong { margin-bottom: 3px; color: #174b3c; font-size: 10.5px; line-height: 1.25; }
-  .head-nav-drawer-account-copy small { color: #6c8078; font-size: 8.5px; font-weight: 500; }
+  .head-nav-drawer-account-copy strong { margin-bottom: 3px; color: #174b3c; font-size: 12.5px; line-height: 1.25; }
+  .head-nav-drawer-account-copy small { color: #6c8078; font-size: 10px; font-weight: 500; line-height: 1.3; }
   .head-nav-drawer-account-chevron { width: 17px; height: 17px; fill: none; stroke: #4f8e79; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   .head-nav-drawer-section-title { display: flex; align-items: center; gap: 8px; margin: 3px 5px 4px; color: #678078; font-size: 8px; font-weight: 850; letter-spacing: .13em; line-height: 1.2; text-transform: uppercase; }
   .head-nav-drawer-section-title::after { content: ""; height: 1px; flex: 1; background: #e1ebe7; }
@@ -1248,11 +1328,12 @@ html {
   .head-nav-main-header .head-nav-center a:hover { color: #155a49; background: #f0f7f4; transform: translateX(2px); }
   .head-nav-main-header .head-nav-center a.head-nav-drawer-utility { display: flex; color: #49645b; }
   .head-nav-main-header .head-nav-drawer-utility .head-nav-page-icon { color: #337a65; }
-  .head-nav-drawer-logout { position: sticky; bottom: 0; align-self: stretch; width: calc(100% + 28px); min-height: 48px; display: inline-flex; align-items: center; justify-content: flex-end; gap: 7px; margin: auto -14px -22px; padding: 12px 18px; border: 0; border-top: 1px solid #edd8da; border-radius: 0 0 18px 0; color: #bd3542; background: rgba(255, 249, 249, .97); box-shadow: none; font-family: Arial, Helvetica, sans-serif !important; font-size: 10.5px !important; font-style: normal !important; font-weight: 750 !important; line-height: 1.2 !important; letter-spacing: 0 !important; text-transform: none !important; cursor: pointer; backdrop-filter: blur(8px); transition: color .2s ease, background .2s ease; }
+  .head-nav-drawer-logout { position: sticky; bottom: env(safe-area-inset-bottom); align-self: stretch; width: calc(100% + 28px); min-height: 48px; flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: flex-end; gap: 7px; margin: auto -14px 0; padding: 12px 18px; border: 0; border-top: 1px solid #edd8da; border-radius: 0 0 18px 0; color: #bd3542; background: rgba(255, 249, 249, .97); box-shadow: 0 -8px 18px rgba(70, 35, 38, .04); font-family: Arial, Helvetica, sans-serif !important; font-size: 10.5px !important; font-style: normal !important; font-weight: 750 !important; line-height: 1.2 !important; letter-spacing: 0 !important; text-transform: none !important; cursor: pointer; backdrop-filter: blur(8px); transition: color .2s ease, background .2s ease; }
   .head-nav-drawer-logout:hover { color: #a6202e; background: #fff0f1; }
   .head-nav-drawer-logout svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
   .head-nav-main-header .head-nav-page-icon { display: block; flex: 0 0 18px; width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; stroke-linecap: round; }
-  .head-nav-main-header .head-nav-page-arrow { display: block; margin-left: auto; font-size: 19px; font-weight: 400; color: #7d9a8b; }
+  .head-nav-main-header .head-nav-page-arrow { display: block; flex: 0 0 17px; width: 17px; height: 17px; margin-left: auto; fill: none; stroke: #4f8e79; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; transition: transform .2s ease, stroke .2s ease; }
+  .head-nav-main-header .head-nav-center a:hover .head-nav-page-arrow { stroke: #246f59; transform: translateX(2px); }
   .head-nav-main-header .head-nav-center a.active { border-color: #d3e8dc; }
   .head-nav-main-header .head-nav-center a.active { background: #eef7f2; color: #155a49; }
   .head-nav-main-header .head-nav-center a::after { display: none; }
@@ -1274,6 +1355,16 @@ html {
   body .head-subnav-link:active { background: #eef7f2; }
   body .head-subnav-dropdown-icon { width: 14px; height: 14px; margin: 0; }
   body .head-subnav-popup, body .head-subnav-separator { display: none !important; }
+}
+
+@media (max-width: 760px) and (max-height: 680px) {
+  .head-nav-main-header .head-nav-center { padding-top: 9px; gap: 1px !important; }
+  .head-nav-main-header .head-nav-center a.head-nav-drawer-account { min-height: 56px; grid-template-columns: 36px minmax(0, 1fr) 17px; gap: 8px; margin-bottom: 5px !important; padding: 7px 8px; }
+  .head-nav-drawer-avatar { width: 36px; height: 36px; }
+  .head-nav-drawer-section-title { margin-top: 2px; margin-bottom: 2px; }
+  .head-nav-drawer-section-title--secondary { margin-top: 5px; }
+  .head-nav-main-header .head-nav-center a { min-height: 39px; padding-block: 7px; }
+  .head-nav-drawer-logout { min-height: 44px; padding-block: 10px; }
 }
 
 /* Tablet/iPad header: retain the compact navigation shell without replacing
@@ -1307,7 +1398,9 @@ html {
   }
 
   .head-nav-main-header .head-nav-page-arrow {
-    font-size: 22px;
+    width: 18px;
+    height: 18px;
+    flex-basis: 18px;
   }
 
   .head-nav-drawer-account-copy strong {
@@ -1387,6 +1480,31 @@ html {
     margin-left: 0;
     padding-inline: 14px;
     font-size: 13px;
+  }
+}
+@media (max-width: 980px) {
+  body .head-subnav-item > .head-subnav-popup,
+  body .head-subnav-item:hover > .head-subnav-popup,
+  body .head-subnav-item:focus-within > .head-subnav-popup {
+    display: none !important;
+  }
+
+  body .head-subnav-item.is-touch-open > .head-subnav-popup {
+    display: block !important;
+  }
+
+  body .head-subnav-item:hover > .head-subnav-link .head-subnav-dropdown-icon,
+  body .head-subnav-item:focus-within > .head-subnav-link .head-subnav-dropdown-icon {
+    transform: none;
+  }
+
+  body .head-subnav-item.is-touch-open > .head-subnav-link .head-subnav-dropdown-icon {
+    transform: rotate(180deg);
+    opacity: 1;
+  }
+
+  body .head-subnav.has-touch-popup-open {
+    overflow: visible !important;
   }
 }
 @media (prefers-reduced-motion: reduce) {

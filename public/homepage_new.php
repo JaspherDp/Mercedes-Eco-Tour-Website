@@ -414,7 +414,7 @@ $activeTab = isset($SEARCH_TABS[$requestedTab]) ? $requestedTab : 'hotels';
   </script>
 
   <!-- Load header/footer and login modal -->
-  <script src="includes/header_loader.js"></script>
+  <script src="includes/header_loader.js?v=2"></script>
 
 </body>
 </html>

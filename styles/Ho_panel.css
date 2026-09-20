@@ -9119,3 +9119,208 @@ body.ho-billing-open { overflow: hidden; }
   opacity: 1;
 }
 
+/* Room management actions and editor */
+.ho-body button.ho-btn[data-open-room-modal],
+.ho-body button.ho-btn[data-open-lifecycle-modal^="roomDetailsModal"] {
+  border-color: #226c54;
+  background: #26775d;
+  color: #fff;
+  font-weight: 800;
+  box-shadow: 0 4px 11px rgba(31, 101, 79, .18);
+  transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+.ho-body button.ho-btn[data-open-room-modal]:hover,
+.ho-body button.ho-btn[data-open-lifecycle-modal^="roomDetailsModal"]:hover {
+  border-color: #164f3d;
+  background: #195f49;
+  box-shadow: 0 7px 16px rgba(23, 83, 64, .25);
+  transform: translateY(-1px);
+}
+
+.ho-body .ho-modal:has(.ho-room-modal-card) {
+  padding: 22px;
+  background: rgba(8, 31, 24, .66);
+  backdrop-filter: blur(7px);
+}
+.ho-body .ho-room-modal-card {
+  width: min(900px, calc(100vw - 36px));
+  max-height: min(90dvh, 840px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid #cddfd8;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 28px 80px rgba(6, 34, 25, .30);
+}
+.ho-body .ho-room-modal-card > .ho-modal-head,
+.ho-body .ho-room-image-upload-card > .ho-modal-head {
+  min-height: 74px;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 17px 20px 16px 22px;
+  border-bottom: 1px solid #e1ebe7;
+  box-sizing: border-box;
+  background: #fff;
+}
+.ho-body .ho-room-modal-card .ho-modal-head h3,
+.ho-body .ho-room-image-upload-card .ho-modal-head h3 { color: #173d32; font-size: 19px; }
+.ho-body .ho-room-modal-card .ho-modal-head p,
+.ho-body .ho-room-image-upload-card .ho-modal-head p { margin: 5px 0 0; color: #6a7b75; font-size: 11px; line-height: 1.4; }
+.ho-body .ho-room-modal-card .ho-close,
+.ho-body .ho-room-image-upload-card .ho-close {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: #f1f6f4;
+  color: #3e554d;
+  font-size: 23px;
+}
+.ho-body .ho-room-modal-card .ho-close:hover,
+.ho-body .ho-room-image-upload-card .ho-close:hover { background: #e4efeb; color: #174d3d; }
+.ho-body .ho-room-modal-card > .ho-room-form {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  gap: 15px;
+  padding: 20px 22px 0;
+  scrollbar-width: thin;
+  scrollbar-color: #278068 transparent;
+}
+.ho-body .ho-room-modal-card > .ho-room-form::-webkit-scrollbar { width: 6px; }
+.ho-body .ho-room-modal-card > .ho-room-form::-webkit-scrollbar-track { background: transparent; }
+.ho-body .ho-room-modal-card > .ho-room-form::-webkit-scrollbar-thumb { border-radius: 999px; background: #278068; }
+.ho-body .ho-room-modal-card > .ho-room-form::-webkit-scrollbar-thumb:hover { background: #145d4b; }
+.ho-body .ho-room-modal-card .ho-room-form label { gap: 7px; color: #294d41; font-size: 11px; font-weight: 800; }
+.ho-body .ho-room-modal-card .ho-room-form input,
+.ho-body .ho-room-modal-card .ho-room-form textarea {
+  min-height: 42px;
+  padding: 10px 12px;
+  border-color: #d3e1dc;
+  border-radius: 9px;
+  background: #fff;
+  color: #29483e;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 400;
+}
+.ho-body .ho-room-modal-card .ho-room-form input:focus,
+.ho-body .ho-room-modal-card .ho-room-form textarea:focus { border-color: #2b8063; box-shadow: 0 0 0 3px rgba(43, 128, 99, .12); }
+.ho-body .ho-room-modal-card .ho-image-editor-section { padding: 16px; border-color: #dce9e4; border-radius: 13px; background: #f8fbfa; }
+.ho-body .ho-room-modal-card .ho-image-editor-section h4 { color: #29483e; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+.ho-room-image-control { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; }
+.ho-room-image-control small { color: #788b84; font-size: 10px; }
+.ho-room-image-trigger,
+.ho-body .ho-gallery-upload-inline {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 13px;
+  border: 1px solid #26775d;
+  border-radius: 8px;
+  background: #26775d;
+  color: #fff !important;
+  font-family: inherit;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  cursor: pointer;
+}
+.ho-room-image-trigger:hover,
+.ho-body .ho-gallery-upload-inline:hover { border-color: #164f3d; background: #195f49; color: #fff !important; }
+.ho-body .ho-room-modal-card .ho-room-actions {
+  position: sticky;
+  z-index: 2;
+  bottom: 0;
+  margin: 3px -22px 0;
+  padding: 14px 22px;
+  border-top: 1px solid #e1ebe7;
+  background: rgba(255, 255, 255, .97);
+  backdrop-filter: blur(8px);
+}
+.ho-body .ho-room-modal-card .ho-room-actions .ho-btn { min-width: 108px; min-height: 39px; border-radius: 9px; font-size: 11px; font-weight: 800; }
+.ho-body .ho-room-modal-card .ho-room-actions .ho-btn.confirm { border-color: #226c54; background: #26775d; color: #fff; }
+.ho-body .ho-room-modal-card .ho-room-actions .ho-btn.cancel { border-color: #d4e0dc; background: #fff; color: #30473f; }
+.ho-body .ho-room-modal-card > .ho-room-archive-form { flex: 0 0 auto; margin: 0; padding: 10px 22px; border-top: 1px solid #e8f0ed; background: #fbfcfc; }
+
+/* Shared hotel-room drag image dialog */
+.ho-body #hoRoomImageUploadModal {
+  z-index: 1100;
+  padding: 24px;
+  background: rgba(8, 31, 24, .68);
+  backdrop-filter: blur(7px);
+}
+.ho-body .ho-room-image-upload-card {
+  width: min(650px, calc(100vw - 32px));
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid #d4e3dd;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 28px 70px rgba(7, 35, 27, .28);
+}
+.ho-room-image-upload-body { padding: 18px 22px; }
+.ho-room-image-dropzone {
+  width: min(550px, 100%);
+  height: 300px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin: 0 auto;
+  padding: 24px;
+  box-sizing: border-box;
+  border: 2px dashed #9fc6b8;
+  border-radius: 10px;
+  background: #f8fbfa;
+  color: #4b5563;
+  cursor: pointer;
+  transition: border-color .18s ease, background-color .18s ease;
+}
+.ho-room-image-dropzone:hover,
+.ho-room-image-dropzone.is-dragging { border-color: #278068; background: #edf7f3; }
+.ho-room-image-upload-icon svg { width: 80px; height: 80px; display: block; fill: #4b5563; }
+.ho-room-image-dropzone strong { font-size: 14px; font-weight: 500; }
+.ho-room-image-dropzone small { color: #7a8984; font-size: 11px; }
+.ho-room-image-dropzone[hidden],
+.ho-room-image-selected[hidden] { display: none; }
+.ho-room-image-selected {
+  min-height: 300px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+}
+.ho-room-image-selected img { grid-column: 1 / -1; width: 100%; height: 235px; display: block; object-fit: contain; border: 1px solid #dce8e3; border-radius: 10px; background: #f4f8f6; }
+.ho-room-image-selected div { min-width: 0; display: grid; gap: 3px; }
+.ho-room-image-selected strong { overflow: hidden; color: #29483e; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.ho-room-image-selected span { color: #788b84; font-size: 10px; }
+.ho-room-image-selected button { min-height: 34px; padding: 0 12px; border: 1px solid #cbded7; border-radius: 8px; background: #fff; color: #286651; font-family: inherit; font-size: 10px; font-weight: 800; cursor: pointer; }
+.ho-room-image-upload-actions { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 22px; border-top: 1px solid #e1ebe7; background: #fff; }
+.ho-room-image-upload-actions .ho-btn { min-width: 105px; min-height: 39px; font-weight: 800; }
+.ho-room-image-upload-actions .ho-btn.confirm { border-color: #226c54; background: #26775d; color: #fff; }
+.ho-room-image-upload-actions .ho-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+@media (max-width: 700px) {
+  .ho-body .ho-modal:has(.ho-room-modal-card),
+  .ho-body #hoRoomImageUploadModal { padding: 10px; }
+  .ho-body .ho-room-modal-card { width: calc(100vw - 20px); max-height: calc(100dvh - 20px); }
+  .ho-body .ho-room-modal-card > .ho-modal-head { min-height: 66px; padding: 13px 14px; }
+  .ho-body .ho-room-modal-card > .ho-room-form { padding: 14px 14px 0; }
+  .ho-body .ho-room-modal-card .ho-room-row,
+  .ho-body .ho-room-modal-card .ho-main-image-row,
+  .ho-body .ho-room-modal-card .ho-rich-forms-grid { grid-template-columns: 1fr; }
+  .ho-body .ho-room-modal-card .ho-room-actions { margin-inline: -14px; padding: 12px 14px; }
+  .ho-room-image-upload-body { padding: 14px; }
+  .ho-room-image-dropzone { height: 245px; }
+  .ho-room-image-selected { min-height: 245px; }
+  .ho-room-image-selected img { height: 185px; }
+}
+

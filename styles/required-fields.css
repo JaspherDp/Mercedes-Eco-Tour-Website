@@ -42,3 +42,29 @@
 [data-required-label] > .required-mark {
   margin-left: 3px;
 }
+
+/* Booking fields stack on phones, so validation text must reserve its own row
+   instead of being positioned over the field that follows it. */
+@media (max-width: 768px) {
+  .field-row:has(> label > .field-error.is-visible) {
+    margin-bottom: 0;
+  }
+
+  .field-row > label > .field-error {
+    position: static;
+    inset: auto;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .field-row > label > .field-error.is-visible {
+    margin-top: 0;
+    max-height: 4em;
+  }
+
+  .field-error > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}

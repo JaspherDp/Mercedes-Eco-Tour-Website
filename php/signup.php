@@ -28,6 +28,10 @@ try {
     $email    = trim($_POST['email'] ?? '');
     $password = $_POST['password'] ?? '';
     $confirm  = $_POST['confirm'] ?? '';
+    $legalConsent = ($_POST['legal_consent'] ?? '') === '1';
+    $privacyAcknowledged = ($_POST['privacy_acknowledged'] ?? '') === '1';
+    $termsAccepted = ($_POST['terms_accepted'] ?? '') === '1';
+    $granularLegalConsentProvided = array_key_exists('privacy_acknowledged', $_POST) || array_key_exists('terms_accepted', $_POST);
     $code     = $_POST['code'] ?? '';
     $phone    = trim($_POST['phone'] ?? '');
     $address  = trim($_POST['address'] ?? '');
@@ -355,6 +359,10 @@ if ($action === 'send_code') {
 
     // CREATE ACCOUNT AFTER THE VERIFIED EMAIL STEP
     if ($action === 'complete_signup') {
+        if (!$legalConsent || ($granularLegalConsentProvided && (!$privacyAcknowledged || !$termsAccepted))) {
+            echo json_encode(['status' => 'error', 'title' => 'Agreement Required', 'message' => 'Please review and accept the Terms & Conditions and acknowledge the Privacy Policy before creating your account.']);
+            exit;
+        }
         if (!$fname || !$lname || !$phone || !$address || !$password || !$confirm) {
             echo json_encode(['status' => 'error', 'title' => 'Incomplete Fields', 'message' => 'Your personal details, address, and password are required.']);
             exit;

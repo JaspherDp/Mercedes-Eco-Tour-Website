@@ -148,8 +148,8 @@ function getTouristFavorites(PDO $pdo, int $touristId): array
     $links = [
         'hotel' => '/hotel_details.php?id=',
         'package' => '/package_details.php?package_id=',
-        'guide' => '/tourss.php?tab=tour-guides&favorite_id=',
-        'boat' => '/tourss.php?tab=our-boats&favorite_id=',
+        'guide' => '/hotel_resorts.php?tab=tours&search_tab=guides&favorite_id=',
+        'boat' => '/hotel_resorts.php?tab=tours&search_tab=boats&favorite_id=',
     ];
 
     $items = [];

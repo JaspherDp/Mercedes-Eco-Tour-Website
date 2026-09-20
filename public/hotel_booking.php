@@ -342,7 +342,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
   <link rel="icon" type="image/png" href="img/newlogo.png" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
   <link rel="stylesheet" href="public/styles/hotel_booking.css?v=<?= (int)@filemtime(__DIR__ . '/styles/hotel_booking.css') ?>" />
-  <link rel="stylesheet" href="styles/required-fields.css" />
+  <link rel="stylesheet" href="styles/required-fields.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/required-fields.css') ?>" />
+  <link rel="stylesheet" href="styles/legal-policy-modal.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/legal-policy-modal.css') ?>" />
   <script src="js/required-fields.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/zod@3.23.8/lib/index.umd.min.js"></script>
@@ -510,6 +511,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
             <p><span>Remaining balance</span><strong id="remainingBalanceText">₱<?= number_format($remainingBalance, 2) ?></strong></p>
           </div>
 
+          <p class="booking-legal-note">By proceeding, you agree to the <a href="#legalPolicyModal" data-legal-policy="terms">Terms &amp; Conditions</a> and acknowledge the <a href="#legalPolicyModal" data-legal-policy="privacy">Privacy Policy</a>.</p>
           <button type="submit" class="submit-btn">Proceed to Payment</button>
           </section>
 
@@ -1201,6 +1203,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
       }
     })();
   </script>
+<?php require __DIR__ . '/../includes/components/legal-policy-modal.php'; ?>
+<script src="js/legal-policy-modal.js?v=<?= (int)@filemtime(__DIR__ . '/../js/legal-policy-modal.js') ?>"></script>
 <script src="js/mobile-scroll.js"></script>
 </body>
 </html>

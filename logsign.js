@@ -5,7 +5,7 @@ function getLogsignTurnstile() {
   if (!logsignTurnstilePromise) {
     logsignTurnstilePromise = new Promise((resolve, reject) => {
       const script = document.createElement('script');
-      script.src = new URL('js/turnstile.js', logsignScriptUrl).href;
+      script.src = new URL('js/turnstile.js?v=7', logsignScriptUrl).href;
       script.async = true;
       script.onload = () => window.ItourTurnstile ? resolve(window.ItourTurnstile) : reject(new Error('Security verification is unavailable.'));
       script.onerror = () => reject(new Error('Security verification is unavailable.'));
@@ -952,6 +952,11 @@ if (false) {
       Swal.fire({ icon: "warning", title: "Password Requirements", text: "Use at least 6 characters with at least one letter and one number, then confirm it correctly.", confirmButtonColor: "#2B7066" });
       return;
     }
+    const legalConsent = signupField("signupLegalConsent");
+    if (!legalConsent?.checked) {
+      legalConsent?.reportValidity();
+      return;
+    }
     const originalBtnText = signupBtn.textContent;
     signupBtn.disabled = true;
     signupBtn.textContent = "Creating account...";
@@ -966,6 +971,7 @@ if (false) {
       formData.append("email", signupField("signupEmail").value.trim());
       formData.append("password", signupPasswordInput.value);
       formData.append("confirm", signupConfirmInput.value);
+      formData.append("legal_consent", legalConsent.checked ? "1" : "0");
       await addLogsignTurnstileToken(formData, "modal-signup-complete");
       const response = await fetch("php/signup.php", { method: "POST", body: formData });
       const data = await response.json();

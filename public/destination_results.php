@@ -95,6 +95,7 @@ $tabs = [
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles/destination_results.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/destination_results.css') ?>">
+  <link rel="stylesheet" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>">
 </head>
 <body class="destination-results-page">
   <div id="header"></div>
@@ -212,5 +213,6 @@ $tabs = [
   <div id="footer"></div>
   <script src="includes/header_loader.js?v=<?= (int)@filemtime(__DIR__ . '/../includes/header_loader.js') ?>"></script>
   <script src="js/destination_results.js?v=<?= (int)@filemtime(__DIR__ . '/../js/destination_results.js') ?>"></script>
+  <script src="js/back-to-top.js?v=<?= (int)@filemtime(__DIR__ . '/../js/back-to-top.js') ?>"></script>
 </body>
 </html>

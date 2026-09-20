@@ -40,12 +40,12 @@
     const modalContainer = document.getElementById("loginModal");
     if (!modalContainer || document.getElementById("modalOverlay")) return;
 
-    const modalResponse = await fetch("logsign-modal.html?v=11", { credentials: "same-origin" });
+    const modalResponse = await fetch("logsign-modal.html?v=15", { credentials: "same-origin" });
     if (!modalResponse.ok) return;
     modalContainer.innerHTML = await modalResponse.text();
 
     await loadScriptOnce("https://cdn.jsdelivr.net/npm/sweetalert2@11", "sweetalert2", () => !!window.Swal);
-    await loadScriptOnce("logsign.js?v=11", "logsign", () => typeof window.initLogSignEvents === "function");
+    await loadScriptOnce("logsign.js?v=16", "logsign", () => typeof window.initLogSignEvents === "function");
     if (typeof window.initLogSignEvents === "function") {
       window.initLogSignEvents();
     }
@@ -53,7 +53,7 @@
 
   document.addEventListener("DOMContentLoaded", async () => {
     try {
-      await loadScriptOnce("js/header.js?v=mobile-sidebar-2", "site-header", () => typeof window.initHeader === "function");
+      await loadScriptOnce("js/header.js?v=mobile-sidebar-3", "site-header", () => typeof window.initHeader === "function");
       await injectHtml("header", "php/header.php");
       if (typeof window.initHeader === "function") {
         window.initHeader();
@@ -64,6 +64,14 @@
 
     try {
       await injectHtml("footer", "footer.php");
+      await loadScriptOnce(
+        "js/legal-policy-modal.js?v=1",
+        "legal-policy-modal",
+        () => typeof window.initLegalPolicyModal === "function"
+      );
+      if (typeof window.initLegalPolicyModal === "function") {
+        window.initLegalPolicyModal();
+      }
     } catch (error) {
       console.error(error);
     }

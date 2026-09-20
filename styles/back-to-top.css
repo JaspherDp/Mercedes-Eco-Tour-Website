@@ -3,7 +3,7 @@
   position: fixed;
   right: clamp(18px, 3vw, 36px);
   bottom: clamp(18px, 3vw, 34px);
-  z-index: 1200;
+  z-index: 10045;
   width: 54px;
   height: 54px;
   padding: 0;
@@ -38,10 +38,6 @@
   overflow: hidden;
   isolation: isolate;
   transition: background-color .2s ease, transform .2s ease, box-shadow .2s ease;
-}
-
-.back-to-top.is-visible .back-to-top__surface {
-  animation: backToTopBuoy 3.2s ease-in-out infinite;
 }
 
 .back-to-top__surface::before,
@@ -169,11 +165,6 @@
   to { stroke-dashoffset: -7.8; }
 }
 
-@keyframes backToTopBuoy {
-  0%, 100% { transform: translateY(0); box-shadow: 0 8px 20px rgba(7, 53, 41, .18), inset 0 0 0 1px rgba(255,255,255,.8); }
-  50% { transform: translateY(-1.5px); box-shadow: 0 11px 24px rgba(7, 53, 41, .22), inset 0 0 0 1px rgba(255,255,255,.9); }
-}
-
 @keyframes backToTopWater {
   to { transform: rotate(360deg); }
 }
@@ -198,4 +189,193 @@
   .back-to-top__surface::before,
   .back-to-top__surface::after,
   .back-to-top__track { animation: none !important; }
+}
+
+/* iTour AI tourism assistant */
+.itour-ai-sr-only {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.itour-ai-launcher {
+  position: fixed;
+  z-index: 10046;
+  right: clamp(18px, 3vw, 36px);
+  bottom: clamp(18px, 3vw, 34px);
+  min-width: 142px;
+  height: 50px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  padding: 0 15px 0 9px;
+  border: 1px solid rgba(255, 255, 255, .34);
+  border-radius: 999px;
+  background: #176f58;
+  color: #fff;
+  box-shadow: 0 10px 28px rgba(7, 53, 41, .25);
+  font-family: Inter, Roboto, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: right .24s ease, width .22s ease, min-width .22s ease, padding .22s ease, background-color .18s ease, box-shadow .18s ease, transform .18s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+body.back-to-top-visible .itour-ai-launcher { right: calc(clamp(18px, 3vw, 36px) + 58px); }
+.itour-ai-launcher:hover { background: #0f5c48; box-shadow: 0 13px 32px rgba(7, 53, 41, .31); transform: translateY(-2px); }
+.itour-ai-launcher:focus-visible { outline: 3px solid rgba(63, 175, 139, .34); outline-offset: 3px; }
+.itour-ai-launcher__assistant {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .14);
+}
+.itour-ai-launcher svg,
+.itour-ai-panel svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.itour-ai-launcher__assistant svg { width: 20px; height: 20px; }
+.itour-ai-launcher__close { display: none; }
+.itour-ai-launcher__close svg { width: 21px; height: 21px; }
+.itour-ai-launcher.is-open { min-width: 50px; width: 50px; padding: 0; background: #123f33; transform: none; }
+.itour-ai-launcher.is-open .itour-ai-launcher__assistant,
+.itour-ai-launcher.is-open .itour-ai-launcher__label { display: none; }
+.itour-ai-launcher.is-open .itour-ai-launcher__close { display: grid; place-items: center; }
+
+.itour-ai-panel[hidden] { display: none !important; }
+.itour-ai-panel {
+  position: fixed;
+  z-index: 10047;
+  right: clamp(18px, 3vw, 36px);
+  bottom: 88px;
+  width: min(410px, calc(100vw - 28px));
+  max-height: min(610px, calc(100dvh - 108px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(179, 211, 201, .72);
+  border-radius: 18px;
+  background: #fff;
+  color: #183e33;
+  box-shadow: 0 26px 70px rgba(5, 42, 32, .30);
+  font-family: Inter, Roboto, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  transform-origin: right bottom;
+  animation: itourAiPanelIn .22s cubic-bezier(.2, .75, .25, 1) both;
+}
+@keyframes itourAiPanelIn { from { opacity: 0; transform: translateY(12px) scale(.97); } }
+
+.itour-ai-panel__header {
+  min-height: 72px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 13px 15px;
+  background: #103f33;
+  color: #fff;
+}
+.itour-ai-panel__avatar { width: 42px; height: 42px; display: grid; place-items: center; border-radius: 12px; background: #1e8063; }
+.itour-ai-panel__avatar svg { width: 23px; height: 23px; }
+.itour-ai-panel__header h2 { margin: 0; color: #fff; font-size: 14px; font-weight: 800; line-height: 1.3; }
+.itour-ai-panel__header p { display: flex; align-items: center; gap: 6px; margin: 3px 0 0; color: #cae2da; font-size: 9px; }
+.itour-ai-panel__header p i { width: 7px; height: 7px; border-radius: 50%; background: #65d492; box-shadow: 0 0 0 3px rgba(101, 212, 146, .12); }
+.itour-ai-panel__powered { display: inline-flex; align-items: center; gap: 4px; padding: 5px 7px; border: 1px solid rgba(255, 255, 255, .17); border-radius: 999px; color: #d7e8e2; font-size: 7.5px; font-weight: 750; white-space: nowrap; }
+.itour-ai-panel .itour-ai-gemini-logo { width: 12px; height: 12px; flex: 0 0 12px; fill: url(#itourAiGeminiGradient); stroke: none; }
+
+.itour-ai-panel__messages {
+  flex: 1 1 auto;
+  min-height: 260px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 15px;
+  background: #f5f9f7;
+  scrollbar-width: thin;
+  scrollbar-color: #2a8067 transparent;
+}
+.itour-ai-panel__messages::-webkit-scrollbar { width: 5px; }
+.itour-ai-panel__messages::-webkit-scrollbar-track { background: transparent; }
+.itour-ai-panel__messages::-webkit-scrollbar-thumb { border-radius: 999px; background: #2a8067; }
+
+.itour-ai-welcome { padding: 14px; border: 1px solid #dce9e4; border-radius: 12px; background: #fff; box-shadow: 0 5px 15px rgba(20, 66, 52, .05); }
+.itour-ai-welcome strong { display: block; color: #174f3f; font-size: 12px; }
+.itour-ai-welcome p { margin: 7px 0 0; color: #4f6960; font-size: 11px; line-height: 1.6; }
+.itour-ai-suggestions { display: grid; gap: 7px; margin-top: 13px; }
+.itour-ai-suggestions > span { width: max-content; padding: 3px 6px; border-radius: 999px; background: #dfede8; color: #28644f; font-size: 7px; font-weight: 800; }
+.itour-ai-suggestions button { width: 100%; min-height: 36px; padding: 7px 10px; border: 1px solid #d8e6e1; border-radius: 9px; background: #fff; color: #29483e; font-family: inherit; font-size: 10.5px; font-weight: 650; line-height: 1.45; text-align: left; cursor: pointer; transition: border-color .16s ease, background-color .16s ease, transform .16s ease; }
+.itour-ai-suggestions button:hover { border-color: #74aa97; background: #edf6f2; transform: translateX(2px); }
+
+.itour-ai-message { display: flex; margin-top: 10px; }
+.itour-ai-message--user { justify-content: flex-end; }
+.itour-ai-message__bubble { max-width: 84%; padding: 10px 12px; border-radius: 12px 12px 12px 4px; background: #fff; color: #34554a; box-shadow: 0 3px 11px rgba(20, 66, 52, .07); font-size: 10.5px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.itour-ai-message--assistant:not(.is-pending) .itour-ai-message__bubble,
+.itour-ai-message--error .itour-ai-message__bubble { width: 84%; }
+.itour-ai-message__bubble.is-formatted { white-space: normal; }
+.itour-ai-message__bubble.is-formatted p { margin: 0; }
+.itour-ai-message__bubble.is-formatted p + p { margin-top: 7px; }
+.itour-ai-message__bubble.is-formatted ul { margin: 7px 0 0; padding-left: 17px; }
+.itour-ai-message__bubble.is-formatted li + li { margin-top: 4px; }
+.itour-ai-message__bubble.is-formatted strong { color: #174f3f; font-weight: 800; }
+.itour-ai-message--user .itour-ai-message__bubble { border-radius: 12px 12px 4px 12px; background: #176f58; color: #fff; }
+.itour-ai-message--error .itour-ai-message__bubble { border: 1px solid #eccfd2; background: #fff4f5; color: #923c46; }
+.itour-ai-message.is-pending .itour-ai-message__bubble { display: flex; gap: 4px; padding: 13px 14px; }
+.itour-ai-message.is-pending span { width: 6px; height: 6px; border-radius: 50%; background: #4d967f; animation: itourAiTyping .9s ease-in-out infinite; }
+.itour-ai-message.is-pending span:nth-child(2) { animation-delay: .12s; }
+.itour-ai-message.is-pending span:nth-child(3) { animation-delay: .24s; }
+@keyframes itourAiTyping { 0%, 60%, 100% { transform: translateY(0); opacity: .45; } 30% { transform: translateY(-3px); opacity: 1; } }
+
+.itour-ai-panel__form { flex: 0 0 auto; padding: 11px 13px 10px; border-top: 1px solid #dfeae6; background: #fff; }
+.itour-ai-panel__input-wrap { min-height: 43px; display: flex; align-items: center; gap: 7px; padding: 5px 5px 5px 12px; border: 1px solid #cdded8; border-radius: 11px; background: #fff; transition: border-color .16s ease, box-shadow .16s ease; }
+.itour-ai-panel__input-wrap:focus-within { border-color: #2b8063; box-shadow: 0 0 0 3px rgba(43, 128, 99, .11); }
+.itour-ai-panel__input-wrap textarea { box-sizing: border-box; flex: 1; min-width: 0; height: 34px; max-height: 104px; resize: none; overflow-y: auto; padding: 7px 0; border: 0; outline: 0; appearance: none; background: transparent; color: #29483e; font-family: inherit; font-size: 10.5px; font-weight: 500; line-height: 20px; scrollbar-width: none; }
+.itour-ai-panel__input-wrap textarea::-webkit-scrollbar { display: none; width: 0; height: 0; }
+.itour-ai-panel__input-wrap textarea::placeholder { color: #8a9b95; }
+.itour-ai-panel__input-wrap button { width: 34px; height: 34px; flex: 0 0 34px; align-self: flex-end; display: grid; place-items: center; border: 0; border-radius: 9px; background: #176f58; color: #fff; cursor: pointer; }
+.itour-ai-panel__input-wrap button:hover { background: #0f5c48; }
+.itour-ai-panel__input-wrap button:disabled { opacity: .55; cursor: wait; }
+.itour-ai-panel__input-wrap button svg { width: 17px; height: 17px; }
+.itour-ai-panel__form > small { display: block; margin-top: 6px; color: #80918b; font-size: 7.5px; line-height: 1.4; text-align: center; }
+
+@media (max-width: 600px) {
+  .itour-ai-launcher { right: 14px; bottom: 74px; min-width: 48px; width: 48px; height: 48px; padding: 0; font-size: 11px; }
+  body.back-to-top-visible .itour-ai-launcher { right: 14px; }
+  .itour-ai-launcher__assistant { width: 32px; height: 32px; flex-basis: 32px; }
+  .itour-ai-launcher__label { display: none; }
+  .itour-ai-launcher.is-open { width: 48px; min-width: 48px; }
+  .itour-ai-panel { right: 12px; bottom: 132px; width: calc(100vw - 24px); max-height: calc(100dvh - 150px); border-radius: 16px; }
+  .itour-ai-panel__header { min-height: 66px; padding: 11px 12px; }
+  .itour-ai-panel__messages { min-height: 225px; padding: 12px; }
+  body.itour-ai-chat-open .back-to-top,
+  body.itour-ai-chat-open .mobile-floating-book,
+  body.itour-ai-chat-open .about-mobile-floating-book,
+  body.itour-ai-chat-open .des_mobile-floating-book,
+  body.itour-ai-chat-open .mobile-floating-reserve {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
+  body.itour-ai-chat-open .itour-ai-launcher { right: 14px; bottom: 16px; }
+  body.itour-ai-chat-open .itour-ai-panel {
+    bottom: 76px;
+    max-height: calc(100dvh - 94px);
+  }
+}
+
+@media (max-width: 360px) {
+  .itour-ai-launcher { min-width: 48px; width: 48px; padding: 0; }
+  .itour-ai-launcher__label { display: none; }
+  .itour-ai-panel__powered { padding: 5px; }
+  .itour-ai-panel__powered span { display: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .itour-ai-panel { animation: none; }
+  .itour-ai-message.is-pending span { animation-duration: 1.8s; }
 }

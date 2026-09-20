@@ -1172,7 +1172,7 @@ $hoTopbarViewToggle = [
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Horooms | Hotel Owner Rooms</title>
   <link rel="icon" type="image/png" href="img/newlogo.png" />
-  <link rel="stylesheet" href="styles/Ho_panel.css?v=notifications-4" />
+  <link rel="stylesheet" href="styles/Ho_panel.css?v=<?= (int)@filemtime(__DIR__ . '/styles/Ho_panel.css') ?>" />
 </head>
 <body class="ho-body">
   <div class="ho-layout">
@@ -2021,7 +2021,7 @@ $hoTopbarViewToggle = [
     <div class="ho-modal" id="roomModal<?= (int)$room['id'] ?>" aria-hidden="true">
       <div class="ho-modal-card ho-room-modal-card">
         <div class="ho-modal-head">
-          <h3>Edit Room</h3>
+          <div><h3>Edit Room</h3><p>Update room details, capacity, pricing, and photos.</p></div>
           <button type="button" class="ho-close" data-close-modal>&times;</button>
         </div>
         <form method="post" class="ho-room-form" enctype="multipart/form-data">
@@ -2047,9 +2047,11 @@ $hoTopbarViewToggle = [
               </div>
               <div class="ho-main-image-fields">
                 <label>Main Image Path<input type="text" name="main_image_path" value="<?= htmlspecialchars((string)$room['main_image_path']) ?>" /></label>
-                <label>Upload New Main Image
-                  <input type="file" name="main_image_file" accept="image/*" />
-                </label>
+                <div class="ho-room-image-control">
+                  <input type="file" name="main_image_file" accept="image/*" data-room-image-input hidden />
+                  <button type="button" class="ho-room-image-trigger" data-room-image-trigger>Update main image</button>
+                  <small>JPG, PNG, or WebP up to 8 MB</small>
+                </div>
               </div>
             </div>
           </div>
@@ -2062,10 +2064,8 @@ $hoTopbarViewToggle = [
                   <img src="<?= htmlspecialchars((string)$galleryPath) ?>" alt="Gallery image preview" class="ho-gallery-thumb" />
                   <div class="ho-gallery-input-stack">
                     <input type="text" name="gallery_paths[]" value="<?= htmlspecialchars((string)$galleryPath) ?>" />
-                    <label class="ho-gallery-upload-inline">
-                      <span>Upload image</span>
-                      <input type="file" name="gallery_row_files[]" accept="image/*" />
-                    </label>
+                    <button type="button" class="ho-gallery-upload-inline" data-room-image-trigger>Update image</button>
+                    <input type="file" name="gallery_row_files[]" accept="image/*" data-room-image-input hidden />
                   </div>
                   <button type="button" class="ho-gallery-remove" data-remove-gallery-row aria-label="Remove image">&times;</button>
                 </div>
@@ -2128,7 +2128,7 @@ $hoTopbarViewToggle = [
   <div class="ho-modal" id="hoAddRoomModal" aria-hidden="true">
     <div class="ho-modal-card ho-room-modal-card">
       <div class="ho-modal-head">
-        <h3>Add New Room</h3>
+        <div><h3>Add New Room</h3><p>Create the room listing and add its photos.</p></div>
         <button type="button" class="ho-close" data-close-modal>&times;</button>
       </div>
       <form method="post" class="ho-room-form" enctype="multipart/form-data">
@@ -2148,9 +2148,11 @@ $hoTopbarViewToggle = [
             <div class="ho-main-image-preview is-empty">No image yet</div>
             <div class="ho-main-image-fields">
               <label>Main Image Path<input type="text" name="main_image_path" placeholder="img/sampleimage.png or image URL" /></label>
-              <label>Upload New Main Image
-                <input type="file" name="main_image_file" accept="image/*" />
-              </label>
+              <div class="ho-room-image-control">
+                <input type="file" name="main_image_file" accept="image/*" data-room-image-input hidden />
+                <button type="button" class="ho-room-image-trigger" data-room-image-trigger>Choose main image</button>
+                <small>JPG, PNG, or WebP up to 8 MB</small>
+              </div>
             </div>
           </div>
         </div>
@@ -2173,6 +2175,34 @@ $hoTopbarViewToggle = [
           <button type="submit" class="ho-btn confirm">Add Room</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <div class="ho-modal" id="hoRoomImageUploadModal" aria-hidden="true">
+    <div class="ho-modal-card ho-room-image-upload-card" role="dialog" aria-modal="true" aria-labelledby="hoRoomImageUploadTitle">
+      <div class="ho-modal-head">
+        <div><h3 id="hoRoomImageUploadTitle">Update room image</h3><p>Choose a high-quality image before applying it to the room.</p></div>
+        <button type="button" class="ho-close" id="hoRoomImageUploadClose" aria-label="Close image upload">&times;</button>
+      </div>
+      <div class="ho-room-image-upload-body">
+        <label class="ho-room-image-dropzone" for="hoRoomImagePicker" data-room-image-dropzone>
+          <span class="ho-room-image-upload-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M10 1a1 1 0 0 0-.71.29l-6 6A1 1 0 0 0 3 8v12a3 3 0 0 0 3 3h1a1 1 0 1 0 0-2H6a1 1 0 0 1-1-1V9h5a1 1 0 0 0 1-1V3h7a1 1 0 0 1 1 1v5a1 1 0 1 0 2 0V4a3 3 0 0 0-3-3h-8ZM9 7H6.41L9 4.41V7Zm7.5 4a4.5 4.5 0 0 0-4.48 4.12A4 4 0 0 0 13 23h7a4 4 0 0 0 .98-7.88A4.5 4.5 0 0 0 16.5 11Zm0 2a2.5 2.5 0 0 1 2.5 2.5V17h1a2 2 0 1 1 0 4h-7a2 2 0 1 1 0-4h1v-1.5a2.5 2.5 0 0 1 2.5-2.5Z"/></svg>
+          </span>
+          <strong>Click or drag an image here</strong>
+          <small>JPG, PNG, or WebP · maximum 8 MB</small>
+          <input type="file" id="hoRoomImagePicker" accept="image/jpeg,image/png,image/webp" hidden />
+        </label>
+        <div class="ho-room-image-selected" id="hoRoomImageSelected" hidden>
+          <img id="hoRoomImageSelectedPreview" alt="Selected room image preview" />
+          <div><strong id="hoRoomImageSelectedName"></strong><span>Ready to apply</span></div>
+          <button type="button" id="hoRoomImageChooseAgain">Choose another</button>
+        </div>
+      </div>
+      <div class="ho-room-image-upload-actions">
+        <button type="button" class="ho-btn" id="hoRoomImageUploadCancel">Cancel</button>
+        <button type="button" class="ho-btn confirm" id="hoRoomImageUploadApply" disabled>Apply image</button>
+      </div>
     </div>
   </div>
 
@@ -2340,10 +2370,8 @@ $hoTopbarViewToggle = [
           <img src="${value || 'img/sampleimage.png'}" alt="Gallery image preview" class="ho-gallery-thumb" />
           <div class="ho-gallery-input-stack">
             <input type="text" name="gallery_paths[]" value="${value}" />
-            <label class="ho-gallery-upload-inline">
-              <span>Upload image</span>
-              <input type="file" name="gallery_row_files[]" accept="image/*" />
-            </label>
+            <button type="button" class="ho-gallery-upload-inline" data-room-image-trigger>Choose image</button>
+            <input type="file" name="gallery_row_files[]" accept="image/*" data-room-image-input hidden />
           </div>
           <button type="button" class="ho-gallery-remove" data-remove-gallery-row aria-label="Remove image">&times;</button>
         `;
@@ -2394,6 +2422,109 @@ $hoTopbarViewToggle = [
             });
           }
         });
+      });
+
+      const roomImageModal = document.getElementById('hoRoomImageUploadModal');
+      const roomImagePicker = document.getElementById('hoRoomImagePicker');
+      const roomImageDropzone = roomImageModal?.querySelector('[data-room-image-dropzone]');
+      const roomImageSelected = document.getElementById('hoRoomImageSelected');
+      const roomImagePreview = document.getElementById('hoRoomImageSelectedPreview');
+      const roomImageName = document.getElementById('hoRoomImageSelectedName');
+      const roomImageApply = document.getElementById('hoRoomImageUploadApply');
+      const roomImageCancel = document.getElementById('hoRoomImageUploadCancel');
+      const roomImageClose = document.getElementById('hoRoomImageUploadClose');
+      const roomImageChooseAgain = document.getElementById('hoRoomImageChooseAgain');
+      let roomImageTargetInput = null;
+      let roomImagePendingFile = null;
+      let roomImagePreviewUrl = '';
+
+      const resetRoomImageUpload = () => {
+        roomImagePendingFile = null;
+        if (roomImagePicker) roomImagePicker.value = '';
+        if (roomImagePreviewUrl) URL.revokeObjectURL(roomImagePreviewUrl);
+        roomImagePreviewUrl = '';
+        if (roomImagePreview) roomImagePreview.removeAttribute('src');
+        if (roomImageName) roomImageName.textContent = '';
+        if (roomImageSelected) roomImageSelected.hidden = true;
+        if (roomImageDropzone) roomImageDropzone.hidden = false;
+        if (roomImageApply) roomImageApply.disabled = true;
+      };
+
+      const closeRoomImageUpload = () => {
+        roomImageModal?.classList.remove('open');
+        roomImageModal?.setAttribute('aria-hidden', 'true');
+        roomImageTargetInput = null;
+        resetRoomImageUpload();
+      };
+
+      const openRoomImageUpload = (targetInput) => {
+        if (!roomImageModal || !targetInput) return;
+        resetRoomImageUpload();
+        roomImageTargetInput = targetInput;
+        roomImageModal.classList.add('open');
+        roomImageModal.setAttribute('aria-hidden', 'false');
+      };
+
+      const selectRoomImage = (file) => {
+        if (!file) return;
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+        if (!allowedTypes.includes(file.type) || file.size > 8 * 1024 * 1024) {
+          Swal.fire({ icon: 'error', title: 'Invalid image', text: 'Choose a JPG, PNG, or WebP image no larger than 8 MB.' });
+          return;
+        }
+        if (roomImagePreviewUrl) URL.revokeObjectURL(roomImagePreviewUrl);
+        roomImagePendingFile = file;
+        roomImagePreviewUrl = URL.createObjectURL(file);
+        if (roomImagePreview) roomImagePreview.src = roomImagePreviewUrl;
+        if (roomImageName) roomImageName.textContent = file.name;
+        if (roomImageDropzone) roomImageDropzone.hidden = true;
+        if (roomImageSelected) roomImageSelected.hidden = false;
+        if (roomImageApply) roomImageApply.disabled = false;
+      };
+
+      document.addEventListener('click', (event) => {
+        const trigger = event.target instanceof Element ? event.target.closest('[data-room-image-trigger]') : null;
+        if (!trigger) return;
+        const scope = trigger.closest('.ho-main-image-fields, .ho-gallery-input-stack');
+        openRoomImageUpload(scope?.querySelector('[data-room-image-input]'));
+      });
+
+      roomImagePicker?.addEventListener('change', () => selectRoomImage(roomImagePicker.files?.[0]));
+      roomImageChooseAgain?.addEventListener('click', () => roomImagePicker?.click());
+      [roomImageCancel, roomImageClose].forEach(button => button?.addEventListener('click', closeRoomImageUpload));
+      roomImageModal?.addEventListener('click', event => {
+        if (event.target === roomImageModal) closeRoomImageUpload();
+      });
+      ['dragenter', 'dragover'].forEach(type => roomImageDropzone?.addEventListener(type, event => {
+        event.preventDefault();
+        roomImageDropzone.classList.add('is-dragging');
+      }));
+      ['dragleave', 'drop'].forEach(type => roomImageDropzone?.addEventListener(type, event => {
+        event.preventDefault();
+        roomImageDropzone.classList.remove('is-dragging');
+      }));
+      roomImageDropzone?.addEventListener('drop', event => selectRoomImage(event.dataTransfer?.files?.[0]));
+      roomImageApply?.addEventListener('click', () => {
+        if (!roomImageTargetInput || !roomImagePendingFile) return;
+        const transfer = new DataTransfer();
+        transfer.items.add(roomImagePendingFile);
+        roomImageTargetInput.files = transfer.files;
+        roomImageTargetInput.dispatchEvent(new Event('change', { bubbles: true }));
+
+        const mainFields = roomImageTargetInput.closest('.ho-main-image-fields');
+        const mainPreview = mainFields?.closest('.ho-main-image-row')?.querySelector('.ho-main-image-preview');
+        if (mainPreview) {
+          let image = mainPreview.querySelector('img');
+          if (!image) {
+            mainPreview.textContent = '';
+            image = document.createElement('img');
+            image.alt = 'Main image preview';
+            mainPreview.appendChild(image);
+          }
+          image.src = URL.createObjectURL(roomImagePendingFile);
+          mainPreview.classList.remove('is-empty');
+        }
+        closeRoomImageUpload();
       });
 
       document.addEventListener('click', (e) => {

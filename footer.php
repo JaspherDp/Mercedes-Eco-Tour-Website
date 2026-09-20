@@ -12,11 +12,12 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
 
 <head>
   <meta charset="UTF-8">
-  <title>Paradise Island Tours</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="styles/complaint-modal.css?v=<?= (int)@filemtime(__DIR__ . '/styles/complaint-modal.css') ?>">
+  <link rel="stylesheet" href="styles/legal-policy-modal.css?v=<?= (int)@filemtime(__DIR__ . '/styles/legal-policy-modal.css') ?>">
+  <link rel="stylesheet" href="styles/cookie-consent-banner.css?v=<?= (int)@filemtime(__DIR__ . '/styles/cookie-consent-banner.css') ?>">
 </head>
 
 <body>
@@ -52,8 +53,9 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
         <h3>Quick Links</h3>
         <ul>
           <li><a href="About.php">About Us</a></li>
-          <li><a href="Termsconditions.php">Terms &amp; Conditions</a></li>
-          <li><a href="privacypolicy.php">Privacy Policy</a></li>
+          <li><a href="#legalPolicyModal" data-legal-policy="terms">Terms &amp; Conditions</a></li>
+          <li><a href="#legalPolicyModal" data-legal-policy="privacy">Privacy Policy</a></li>
+          <li><a href="#legalPolicyModal" data-legal-policy="cookies">Cookie Notice</a></li>
           <li><a href="#complaintIncidentModal" id="openComplaintModal">Submit Complaint &amp; Incident</a></li>
           <li><a href="php/operator_login.php" target="_blank" rel="noopener noreferrer">Operator Login</a></li>
           <li><a href="php/admin_login.php" target="_blank" rel="noopener noreferrer">Admin Login</a></li>
@@ -100,6 +102,9 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
       <p>&copy; 2024 Municipal Tourism Office - Mercedes. All rights reserved.</p>
     </div>
   </footer>
+
+  <?php require __DIR__ . '/includes/components/legal-policy-modal.php'; ?>
+  <?php require __DIR__ . '/includes/components/cookie-consent-banner.php'; ?>
 
   <div class="complaint-modal" id="complaintIncidentModal" hidden aria-hidden="true">
     <div class="complaint-modal__backdrop" data-complaint-close></div>
@@ -293,6 +298,8 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
     };
   </script>
   <script src="js/complaint-modal.js?v=<?= (int)@filemtime(__DIR__ . '/js/complaint-modal.js') ?>"></script>
+  <script src="js/legal-policy-modal.js?v=<?= (int)@filemtime(__DIR__ . '/js/legal-policy-modal.js') ?>"></script>
+  <script src="js/cookie-consent-banner.js?v=<?= (int)@filemtime(__DIR__ . '/js/cookie-consent-banner.js') ?>"></script>
   <script>
     (() => {
       const trigger = document.getElementById('developersModalTrigger');

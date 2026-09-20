@@ -172,11 +172,13 @@
 /* Compact moving strip below the destination hero */
 .destination-page .hero-service-ribbon { height: 54px; }
 .destination-page .hero-ribbon-group {
-  min-width: 100vw;
-  justify-content: space-between;
-  padding-inline: 10px;
+  --hero-ribbon-item-gap: clamp(30px, 3vw, 52px);
+  min-width: 0;
+  justify-content: flex-start;
+  column-gap: var(--hero-ribbon-item-gap);
+  padding: 0 var(--hero-ribbon-item-gap) 0 0;
 }
-.destination-page .hero-ribbon-item { gap: 8px; padding-inline: 17px; font-size: .7rem; }
+.destination-page .hero-ribbon-item { gap: 9px; padding-inline: 0; font-size: .82rem; }
 .destination-page .hero-ribbon-icon { width: 29px; height: 29px; }
 .destination-page .hero-ribbon-icon img { width: 17px; height: 17px; }
 .destination-page .hero-ribbon-item i { width: 3px; height: 3px; margin-left: 9px; }
@@ -231,8 +233,12 @@
 
 .destination-page .des_place-page-header { position: relative; height: min(39vh, 360px); min-height: 270px; overflow: hidden; }
 .destination-page .des_place-page-header > img { width: 100%; height: 100%; display: block; object-fit: cover; opacity: 1; }
-.destination-page .des_place-page-header .des_close-btn { position: fixed; top: 20px; right: 24px; z-index: 12; width: 44px; height: 44px; display: grid; place-items: center; padding: 0 0 3px; border: 1px solid rgba(255,255,255,.42); border-radius: 50%; color: #fff; background: rgba(4,39,31,.7); box-shadow: 0 10px 25px rgba(0,0,0,.2); font-size: 1.55rem; line-height: 1; cursor: pointer; backdrop-filter: blur(9px); transition: transform .2s ease, background .2s ease; }
-.destination-page .des_place-page-header .des_close-btn:hover { transform: rotate(5deg) scale(1.05); background: var(--des-green-900); }
+.destination-page .des_place-page-header .des_close-btn { position: fixed; top: 12px; left: 20px; z-index: 12; width: auto !important; min-width: max-content; max-width: none; height: auto; min-height: 40px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 8px 14px 8px 11px; border: 1px solid #cfe0da; border-radius: 10px; color: var(--des-green-900); background: rgba(255,255,255,.96); box-shadow: 0 8px 22px rgba(7,48,38,.14); font-size: .7rem; font-weight: 800; line-height: 1; white-space: nowrap; cursor: pointer; backdrop-filter: blur(10px); transition: transform .18s ease, border-color .18s ease, background .18s ease, box-shadow .18s ease; }
+.destination-page .des_place-page-header .des_close-btn svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.destination-page .des_place-page-header .des_close-btn:hover { transform: translateY(-1px); border-color: #8ebcab; background: #f5faf8; box-shadow: 0 11px 27px rgba(7,48,38,.18); }
+.destination-page .des_place-page-header .des_close-btn:focus-visible { outline: 3px solid rgba(31,125,96,.25); outline-offset: 2px; }
+.destination-page .des_place-page.des-tabs-docked .des_close-btn,
+.destination-page .des_place-page.des-tabs-docked .des_close-btn:hover { border-color: transparent; background: transparent; box-shadow: none; backdrop-filter: none; transform: none; }
 
 .destination-page .des_place-navbar { position: sticky; top: 0; z-index: 10; padding: 0 24px; border-bottom: 1px solid #dbe7e2; background: #fff; box-shadow: 0 7px 20px rgba(9,52,41,.07); }
 .destination-page .des_place-navbar ul { width: min(1100px, calc(100vw - 40px)); display: flex; gap: 8px; margin: 0 auto; padding: 0; list-style: none; }
@@ -551,7 +557,8 @@
   .destination-page .des_intro-image--small { width: 96px; height: 104px; }
   .destination-page .des_intro-visual-note { left: 0; bottom: 22px; }
   .destination-page .hero-service-ribbon { height: 50px; }
-  .destination-page .hero-ribbon-item { gap: 7px; padding-inline: 14px; font-size: .64rem; }
+  .destination-page .hero-ribbon-group { --hero-ribbon-item-gap: 26px; }
+  .destination-page .hero-ribbon-item { gap: 8px; padding-inline: 0; font-size: .72rem; }
   .destination-page .hero-ribbon-icon { width: 27px; height: 27px; }
   .destination-page .hero-ribbon-icon img { width: 15px; height: 15px; }
   .destination-page .des_container { width: min(100% - 28px, 1180px); padding-top: 30px; }
@@ -562,9 +569,14 @@
   .destination-page .des_place-caption,
   .destination-page .des_place-subcaption { min-height: 0; }
   .destination-page .des_place-page-body { width: min(100% - 28px, 1100px); padding-top: 34px; }
-  .destination-page .des_place-page-header .des_close-btn { top: 13px; right: 13px; }
-  .destination-page .des_place-navbar { padding-inline: 10px; }
-  .destination-page .des_place-navbar li a { height: 52px; padding-inline: 12px; }
+  .destination-page .des_place-page-header .des_close-btn { top: 7px; left: 10px; width: 38px !important; min-width: 38px; height: 38px; min-height: 38px; padding: 0; border-radius: 10px; }
+  .destination-page .des_place-page-header .des_close-btn span { display: none; }
+  .destination-page .des_place-page-header .des_close-btn svg { width: 20px; height: 20px; }
+  .destination-page .des_place-navbar { min-height: 52px; padding: 0 52px; }
+  .destination-page .des_place-navbar ul { width: 100%; min-height: 52px; align-items: center; gap: 4px; }
+  .destination-page .des_place-navbar li { flex: 1 1 0; }
+  .destination-page .des_place-navbar li a { width: 100%; height: 52px; padding-inline: 8px; font-size: .68rem; }
+  .destination-page .des_place-navbar li a::after { left: 8px; right: 8px; }
   .destination-page .des_info-section,
   .destination-page .des_resort-card { padding: 19px; }
   .destination-page .des_image-gallery,

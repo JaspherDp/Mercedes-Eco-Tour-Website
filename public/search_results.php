@@ -639,6 +639,11 @@ $requestedTourType = normalizeTourTypeValue($tourType !== '' ? $tourType : $tour
 if ($requestedTourType === '') {
     $requestedTourType = inferTourTypeFromDuration($tourDuration);
 }
+if ($requestedTourType === '') {
+    $requestedTourType = $checkout !== '' && $selectedEndDate !== $selectedDate
+        ? 'overnight'
+        : 'same-day';
+}
 $pax = (int)($_GET['pax'] ?? 0);
 if ($pax <= 0) {
     $adults = (int)($_GET['adults'] ?? 1);
@@ -655,6 +660,39 @@ if (!isset($SEARCH_TABS[$tab])) {
 $tabConfig = $SEARCH_TABS[$tab];
 $resultType = $tabConfig['result_type'];
 $results = [];
+
+if ($resultType !== 'hotels' && $requestedTourType === 'same-day') {
+    $checkout = '';
+    $selectedEndDate = $selectedDate;
+}
+
+// Use one canonical set of tour dates for every result link. The search UI
+// historically used `date` for guides/boats and `checkin` for packages, which
+// made the booking prefill depend on the selected result type.
+$handoffStartDate = $resultType !== 'hotels' ? $selectedDate : $checkin;
+$handoffEndDate = $resultType !== 'hotels'
+    && $requestedTourType === 'overnight'
+    && $selectedEndDate > $selectedDate
+    ? $selectedEndDate
+    : ($resultType === 'hotels' ? $checkout : '');
+$handoffTourDuration = $tourDuration;
+if ($resultType !== 'hotels' && $handoffTourDuration === '' && $handoffStartDate !== '') {
+    if ($requestedTourType === 'same-day') {
+        $handoffTourDuration = '1 Day';
+    } elseif ($handoffEndDate !== '' && $handoffEndDate > $handoffStartDate) {
+        $durationStart = DateTimeImmutable::createFromFormat('!Y-m-d', $handoffStartDate);
+        $durationEnd = DateTimeImmutable::createFromFormat('!Y-m-d', $handoffEndDate);
+        if (!$durationStart || !$durationEnd) {
+            $durationStart = null;
+            $durationEnd = null;
+        }
+        if ($durationStart && $durationEnd) {
+            $durationNights = (int)$durationStart->diff($durationEnd)->days;
+            $handoffTourDuration = ($durationNights + 1) . ' Days ' . $durationNights
+                . ' Night' . ($durationNights === 1 ? '' : 's');
+        }
+    }
+}
 
 switch ($resultType) {
     case 'hotels':
@@ -679,17 +717,17 @@ $searchContext = array_filter([
     'destination' => $destination,
     'destination2' => $destination2,
     'destinations' => !empty($selectedDestinations) ? implode('|', $selectedDestinations) : '',
-    'checkin' => $checkin,
-    'checkout' => $checkout,
-    'date' => $date,
+    'checkin' => $handoffStartDate,
+    'checkout' => $handoffEndDate,
+    'date' => $resultType !== 'hotels' ? $handoffStartDate : $date,
     'adults' => (string)($_GET['adults'] ?? ''),
     'children' => (string)($_GET['children'] ?? ''),
     'child_ages' => $childAges,
     'pax' => $pax > 0 ? (string)$pax : '',
     'rooms' => (string)($_GET['rooms'] ?? ''),
-    'tour_date_mode' => $tourDateMode,
-    'tour_type' => $tourType,
-    'tour_duration' => $tourDuration
+    'tour_date_mode' => $resultType !== 'hotels' ? $requestedTourType : $tourDateMode,
+    'tour_type' => $resultType !== 'hotels' ? $requestedTourType : $tourType,
+    'tour_duration' => $resultType !== 'hotels' ? $handoffTourDuration : $tourDuration
 ], static fn($value) => $value !== null && $value !== '');
 
 $returnToResults = 'search_results.php';
@@ -746,6 +784,22 @@ $primaryDestination = $selectedDestinations[0] ?? $destination;
 $secondaryDestination = $selectedDestinations[1] ?? $destination2;
 $searchStartDate = $checkin !== '' ? $checkin : $date;
 $isSameDaySearch = $requestedTourType === 'same-day';
+$tourRangeLabel = '';
+$tourRangeDurationLabel = $isSameDaySearch ? 'Same day' : 'Select return';
+if ($resultType !== 'hotels' && $searchStartDate !== '') {
+    $rangeStart = DateTimeImmutable::createFromFormat('!Y-m-d', $searchStartDate);
+    if ($rangeStart instanceof DateTimeImmutable) {
+        $tourRangeLabel = $rangeStart->format('M j, Y');
+    }
+    if ($rangeStart instanceof DateTimeImmutable && !$isSameDaySearch && $checkout !== '') {
+        $rangeEnd = DateTimeImmutable::createFromFormat('!Y-m-d', $checkout);
+        if ($rangeEnd instanceof DateTimeImmutable && $rangeEnd > $rangeStart) {
+            $tourRangeLabel = $rangeStart->format('M j') . ' — ' . $rangeEnd->format('M j, Y');
+            $rangeNights = (int)$rangeStart->diff($rangeEnd)->days;
+            $tourRangeDurationLabel = ($rangeNights + 1) . ' days • ' . $rangeNights . ' night' . ($rangeNights === 1 ? '' : 's');
+        }
+    }
+}
 ?>
 
 <!DOCTYPE html>
@@ -756,6 +810,7 @@ $isSameDaySearch = $requestedTourType === 'same-day';
     <title><?= htmlspecialchars($tabConfig['label']) ?> - Search Results</title>
     <link rel="icon" type="image/png" href="img/newlogo.png" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
     <link rel="stylesheet" href="styles/unified_search.css?v=<?= (int) @filemtime(__DIR__ . '/../styles/unified_search.css') ?>" />
 </head>
 
@@ -766,11 +821,16 @@ $isSameDaySearch = $requestedTourType === 'same-day';
         <section class="results-intro" aria-labelledby="results-title">
             <div class="results-header">
                 <p class="results-eyebrow">Explore Mercedes</p>
-                <h1 id="results-title">
-                    <span class="results-desktop-title"><?= htmlspecialchars($tabConfig['label']) ?></span>
-                    <span class="results-mobile-title"><?= htmlspecialchars($tabConfig['label']) ?> available options</span>
-                </h1>
-                <span class="results-mobile-count"><?= $resultCount ?> result<?= $resultCount !== 1 ? 's' : '' ?></span>
+                <div class="results-title-row">
+                    <?php if ($resultType !== 'hotels'): ?>
+                    <a class="results-back-link" href="<?= htmlspecialchars($backUrl) ?>" aria-label="Back to tours">
+                        <i data-lucide="chevron-left" aria-hidden="true"></i>
+                        <span>Back to tours</span>
+                    </a>
+                    <?php endif; ?>
+                    <h1 id="results-title"><?= htmlspecialchars($tabConfig['label']) ?><?= $resultType !== 'hotels' ? ' available options' : '' ?></h1>
+                    <span class="results-mobile-count"><?= $resultCount ?> result<?= $resultCount !== 1 ? 's' : '' ?></span>
+                </div>
                 <p class="results-subtitle">
                     <?= $resultCount === 1 ? '1 option matches' : number_format($resultCount) . ' options match' ?> your search criteria
                 </p>
@@ -832,35 +892,43 @@ $isSameDaySearch = $requestedTourType === 'same-day';
                 </div>
                 <?php endif; ?>
 
-                <?php if ($resultType === 'tours'): ?>
-                <div class="results-search-field results-search-field--mode">
-                    <label for="resultsTourMode">Trip type</label>
-                    <div class="results-search-control">
-                        <i data-lucide="clock-3" aria-hidden="true"></i>
-                        <select id="resultsTourMode" name="tour_date_mode">
-                            <option value="overnight" <?= !$isSameDaySearch ? 'selected' : '' ?>>Overnight</option>
-                            <option value="same-day" <?= $isSameDaySearch ? 'selected' : '' ?>>Same day</option>
-                        </select>
-                    </div>
-                </div>
+                <?php if ($resultType !== 'hotels'): ?>
                 <input type="hidden" id="resultsTourType" name="tour_type" value="<?= $isSameDaySearch ? 'same-day' : 'overnight' ?>">
                 <input type="hidden" id="resultsTourDuration" name="tour_duration" value="<?= htmlspecialchars($tourDuration) ?>">
+                <input type="hidden" id="resultsTourMode" name="tour_date_mode" value="<?= $isSameDaySearch ? 'same-day' : 'overnight' ?>">
                 <?php endif; ?>
 
+                <?php if ($resultType !== 'hotels'): ?>
+                <div class="results-search-field results-search-field--tour-range">
+                    <div class="results-tour-range-heading">
+                        <label for="resultsTourRange">Tour range</label>
+                        <div class="results-date-mode-toggle" role="group" aria-label="Tour duration type">
+                            <button type="button" class="results-date-mode-button<?= !$isSameDaySearch ? ' is-active' : '' ?>" data-tour-mode="overnight" aria-pressed="<?= !$isSameDaySearch ? 'true' : 'false' ?>">Overnight</button>
+                            <button type="button" class="results-date-mode-button<?= $isSameDaySearch ? ' is-active' : '' ?>" data-tour-mode="same-day" aria-pressed="<?= $isSameDaySearch ? 'true' : 'false' ?>">Same Day</button>
+                        </div>
+                    </div>
+                    <div class="results-search-control results-tour-range-control">
+                        <i data-lucide="calendar-days" aria-hidden="true"></i>
+                        <input id="resultsTourRange" type="text" value="<?= htmlspecialchars($tourRangeLabel) ?>" placeholder="Select tour date<?= $isSameDaySearch ? '' : 's' ?>" autocomplete="off" readonly required>
+                        <span class="results-tour-range-duration" id="resultsTourRangeDuration"><?= htmlspecialchars($tourRangeDurationLabel) ?></span>
+                    </div>
+                    <input id="resultsStartDate" type="hidden" name="<?= in_array($resultType, ['guides', 'boats', 'bundle'], true) ? 'date' : 'checkin' ?>" value="<?= htmlspecialchars($searchStartDate) ?>">
+                    <input id="resultsEndDate" type="hidden" name="checkout" value="<?= htmlspecialchars($checkout) ?>" <?= $isSameDaySearch ? 'disabled' : '' ?>>
+                </div>
+                <?php else: ?>
                 <div class="results-search-field results-search-field--date">
-                    <label for="resultsStartDate"><?= $resultType === 'hotels' ? 'Check-in' : 'Travel date' ?></label>
+                    <label for="resultsStartDate">Check-in</label>
                     <div class="results-search-control">
                         <i data-lucide="calendar-days" aria-hidden="true"></i>
-                        <input id="resultsStartDate" type="date" name="<?= in_array($resultType, ['guides', 'boats', 'bundle'], true) ? 'date' : 'checkin' ?>" value="<?= htmlspecialchars($searchStartDate) ?>" required>
+                        <input id="resultsStartDate" type="date" name="checkin" value="<?= htmlspecialchars($searchStartDate) ?>" required>
                     </div>
                 </div>
 
-                <?php if (in_array($resultType, ['hotels', 'tours'], true)): ?>
-                <div class="results-search-field results-search-field--date" id="resultsEndDateField" <?= $resultType === 'tours' && $isSameDaySearch ? 'hidden' : '' ?>>
-                    <label for="resultsEndDate"><?= $resultType === 'hotels' ? 'Check-out' : 'Return date' ?></label>
+                <div class="results-search-field results-search-field--date" id="resultsEndDateField">
+                    <label for="resultsEndDate">Check-out</label>
                     <div class="results-search-control">
                         <i data-lucide="calendar-check" aria-hidden="true"></i>
-                        <input id="resultsEndDate" type="date" name="checkout" value="<?= htmlspecialchars($checkout) ?>" <?= $resultType === 'tours' && $isSameDaySearch ? 'disabled' : 'required' ?>>
+                        <input id="resultsEndDate" type="date" name="checkout" value="<?= htmlspecialchars($checkout) ?>" required>
                     </div>
                 </div>
                 <?php endif; ?>
@@ -911,6 +979,7 @@ $isSameDaySearch = $requestedTourType === 'same-day';
                 <a href="<?= htmlspecialchars($backUrl) ?>" class="result-card-button no-results-btn">Modify search</a>
             </div>
         <?php else: ?>
+            <?php if ($resultType === 'hotels'): ?>
             <div class="results-list-heading">
                 <div>
                     <h2>Available options</h2>
@@ -918,6 +987,7 @@ $isSameDaySearch = $requestedTourType === 'same-day';
                 </div>
                 <span class="results-count"><?= $resultCount ?> result<?= $resultCount !== 1 ? 's' : '' ?></span>
             </div>
+            <?php endif; ?>
             <div class="results-grid">
                 <?php foreach ($results as $resultIndex => $item): ?>
                     <article class="result-card<?= $resultType === 'tours' ? ' result-card--with-rating' : '' ?>"<?= empty($item['is_disabled']) ? ' data-result-url="' . htmlspecialchars($item['url'], ENT_QUOTES, 'UTF-8') . '"' : '' ?>>
@@ -999,6 +1069,7 @@ $isSameDaySearch = $requestedTourType === 'same-day';
 
     <div id="footer"></div>
 
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script>
         function removeFilter(filterType) {
             const params = new URLSearchParams(window.location.search);
@@ -1036,19 +1107,92 @@ $isSameDaySearch = $requestedTourType === 'same-day';
             const searchSummary = document.getElementById('resultsSearchSummary');
             const startDate = document.getElementById('resultsStartDate');
             const endDate = document.getElementById('resultsEndDate');
-            const endDateField = document.getElementById('resultsEndDateField');
             const tourMode = document.getElementById('resultsTourMode');
             const tourType = document.getElementById('resultsTourType');
             const tourDuration = document.getElementById('resultsTourDuration');
+            const tourRangeInput = document.getElementById('resultsTourRange');
+            const tourRangeDuration = document.getElementById('resultsTourRangeDuration');
+            const tourModeButtons = Array.from(document.querySelectorAll('[data-tour-mode]'));
             const primaryDestination = document.getElementById('resultsDestination');
             const secondaryDestination = document.getElementById('resultsDestination2');
             const paxInput = document.getElementById('resultsPax');
+            let tourRangePicker = null;
 
             const formatShortDate = (value) => {
                 if (!value) return '';
                 const parsed = new Date(`${value}T00:00:00`);
                 if (Number.isNaN(parsed.getTime())) return value;
                 return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+            };
+
+            const parseIsoDate = (value) => {
+                if (!value) return null;
+                const parsed = new Date(`${value}T00:00:00`);
+                return Number.isNaN(parsed.getTime()) ? null : parsed;
+            };
+
+            const updateTourRangeDuration = () => {
+                if (!tourMode || !tourRangeDuration) return;
+                const start = parseIsoDate(startDate?.value);
+                const end = parseIsoDate(endDate?.value);
+                if (tourMode.value === 'same-day') {
+                    tourRangeDuration.textContent = 'Same day';
+                    if (tourDuration) tourDuration.value = '1 Day';
+                    return;
+                }
+                if (!start || !end || end <= start) {
+                    tourRangeDuration.textContent = 'Select return';
+                    if (tourDuration) tourDuration.value = '';
+                    return;
+                }
+                const nights = Math.round((end - start) / 86400000);
+                tourRangeDuration.textContent = `${nights + 1} days • ${nights} night${nights === 1 ? '' : 's'}`;
+                if (tourDuration) tourDuration.value = `${nights + 1} Days ${nights} Night${nights === 1 ? '' : 's'}`;
+            };
+
+            const updateTourModeButtons = () => {
+                tourModeButtons.forEach((button) => {
+                    const active = button.dataset.tourMode === tourMode?.value;
+                    button.classList.toggle('is-active', active);
+                    button.setAttribute('aria-pressed', String(active));
+                });
+            };
+
+            const initialiseTourRangePicker = () => {
+                if (!tourRangeInput || !tourMode || typeof window.flatpickr !== 'function') return;
+                tourRangePicker?.destroy();
+                const isSameDay = tourMode.value === 'same-day';
+                const defaults = [startDate?.value, isSameDay ? '' : endDate?.value].filter(Boolean);
+                tourRangeInput.placeholder = isSameDay ? 'Select tour date' : 'Select tour dates';
+                tourRangePicker = window.flatpickr(tourRangeInput, {
+                    mode: isSameDay ? 'single' : 'range',
+                    dateFormat: 'M j',
+                    conjunction: ' — ',
+                    defaultDate: defaults,
+                    minDate: 'today',
+                    disableMobile: true,
+                    monthSelectorType: 'static',
+                    nextArrow: '&#8250;',
+                    prevArrow: '&#8249;',
+                    onChange(selectedDates) {
+                        tourRangeInput.setCustomValidity('');
+                        if (!selectedDates.length) {
+                            if (startDate) startDate.value = '';
+                            if (endDate) endDate.value = '';
+                        } else {
+                            if (startDate) startDate.value = window.flatpickr.formatDate(selectedDates[0], 'Y-m-d');
+                            if (isSameDay) {
+                                if (endDate) endDate.value = '';
+                            } else if (endDate) {
+                                endDate.value = selectedDates[1]
+                                    ? window.flatpickr.formatDate(selectedDates[1], 'Y-m-d')
+                                    : '';
+                            }
+                        }
+                        updateTourRangeDuration();
+                        syncSearchSummary();
+                    }
+                });
             };
 
             const syncSearchSummary = () => {
@@ -1071,18 +1215,33 @@ $isSameDaySearch = $requestedTourType === 'same-day';
             searchForm?.addEventListener('input', syncSearchSummary);
 
             const syncTourDates = () => {
-                if (!tourMode || !endDate || !endDateField) return;
+                if (!tourMode || !endDate) return;
                 const isSameDay = tourMode.value === 'same-day';
-                endDateField.hidden = isSameDay;
                 endDate.disabled = isSameDay;
-                endDate.required = !isSameDay;
+                if (isSameDay) endDate.value = '';
                 if (tourType) tourType.value = isSameDay ? 'same-day' : 'overnight';
+                updateTourModeButtons();
+                updateTourRangeDuration();
+                syncSearchSummary();
             };
 
-            tourMode?.addEventListener('change', syncTourDates);
-            endDate?.addEventListener('input', () => endDate.setCustomValidity(''));
+            tourModeButtons.forEach((button) => {
+                button.addEventListener('click', () => {
+                    if (!tourMode || button.dataset.tourMode === tourMode.value) return;
+                    tourMode.value = button.dataset.tourMode === 'same-day' ? 'same-day' : 'overnight';
+                    syncTourDates();
+                    initialiseTourRangePicker();
+                    tourRangePicker?.open();
+                });
+            });
+            startDate?.addEventListener('change', syncSearchSummary);
+            endDate?.addEventListener('input', () => {
+                endDate.setCustomValidity('');
+                updateTourRangeDuration();
+            });
             secondaryDestination?.addEventListener('change', () => secondaryDestination.setCustomValidity(''));
             syncTourDates();
+            initialiseTourRangePicker();
             syncSearchSummary();
 
             const mobileResults = window.matchMedia('(max-width: 700px)');
@@ -1121,32 +1280,37 @@ $isSameDaySearch = $requestedTourType === 'same-day';
                 }
                 secondaryDestination?.setCustomValidity('');
 
+                if (tourMode && tourRangeInput && (!startDate?.value || (tourMode.value === 'overnight' && !endDate?.value))) {
+                    event.preventDefault();
+                    tourRangeInput.setCustomValidity(tourMode.value === 'overnight' ? 'Please select the complete tour date range.' : 'Please select a tour date.');
+                    tourRangeInput.reportValidity();
+                    tourRangePicker?.open();
+                    return;
+                }
+
                 if (endDate && !endDate.disabled && startDate?.value && endDate.value) {
                     const start = new Date(`${startDate.value}T00:00:00`);
                     const end = new Date(`${endDate.value}T00:00:00`);
                     if (end <= start) {
                         event.preventDefault();
-                        endDate.setCustomValidity('The return date must be after the start date.');
-                        endDate.reportValidity();
+                        if (tourRangeInput) {
+                            tourRangeInput.setCustomValidity('The end date must be after the start date.');
+                            tourRangeInput.reportValidity();
+                            tourRangePicker?.open();
+                        } else {
+                            endDate.setCustomValidity('The return date must be after the start date.');
+                            endDate.reportValidity();
+                        }
                         return;
                     }
                     endDate.setCustomValidity('');
                 }
 
-                if (tourMode && tourDuration && startDate?.value) {
-                    if (tourMode.value === 'same-day') {
-                        tourDuration.value = '1 Day';
-                    } else if (endDate?.value) {
-                        const start = new Date(`${startDate.value}T00:00:00`);
-                        const end = new Date(`${endDate.value}T00:00:00`);
-                        const nights = Math.round((end - start) / 86400000);
-                        tourDuration.value = `${nights + 1} Days ${nights} Night${nights !== 1 ? 's' : ''}`;
-                    }
-                }
+                updateTourRangeDuration();
             });
         });
     </script>
     <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-    <script src="includes/header_loader.js"></script>
+    <script src="includes/header_loader.js?v=2"></script>
 </body>
 </html>

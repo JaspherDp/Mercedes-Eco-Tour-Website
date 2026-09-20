@@ -9,7 +9,7 @@ require_once 'php/favorites_helper.php';
 require_once 'php/hotel_reviews_helper.php';
 HoEnsureHotelResortContentColumns($pdo);
 
-$landingTab = strtolower(trim((string)($_GET['tab'] ?? 'tours')));
+$landingTab = strtolower(trim((string)($_GET['tab'] ?? 'hotels')));
 $isToursLanding = in_array($landingTab, [
   'tours',
   'tour-packages',
@@ -22,6 +22,17 @@ $isToursLanding = in_array($landingTab, [
   'tour-boat',
   'boat',
 ], true);
+
+$isSeoToursPage = isset($_GET['tab']) && $isToursLanding;
+$seoTitle = $isSeoToursPage
+  ? 'Island Hopping & Tour Packages in Mercedes, Camarines Norte | iTour Mercedes'
+  : 'Hotels & Resorts in Mercedes, Camarines Norte | iTour Mercedes';
+$seoDescription = $isSeoToursPage
+  ? 'Explore island hopping adventures, tour packages, local tour guides, and boat services in Mercedes, Camarines Norte.'
+  : 'Discover hotels and resorts in Mercedes, Camarines Norte. Explore available accommodations and plan your stay with iTour Mercedes.';
+$seoCanonical = $isSeoToursPage
+  ? 'https://itourmercedes.com/hotel_resorts.php?tab=tours'
+  : 'https://itourmercedes.com/hotel_resorts.php';
 
 $favoriteIds = favoriteIdsByType($pdo, (int)($_SESSION['tourist_id'] ?? 0));
 $favoritesCsrf = favoriteCsrfToken();
@@ -538,12 +549,14 @@ unset($hotel);
 <html lang="en" class="tours-page-root">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>iTour Mercedes</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="description" content="<?= htmlspecialchars($seoDescription, ENT_QUOTES, 'UTF-8') ?>" />
+  <link rel="canonical" href="<?= htmlspecialchars($seoCanonical, ENT_QUOTES, 'UTF-8') ?>" />
+  <title><?= htmlspecialchars($seoTitle, ENT_QUOTES, 'UTF-8') ?></title>
   <link rel="icon" type="image/png" href="img/newlogo.png" />
   <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous" />
   <link rel="stylesheet" href="styles/hotel_resorts.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/hotel_resorts.css') ?>" />
   <link rel="stylesheet" href="styles/favorites.css" />
   <link rel="stylesheet" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>" />
@@ -695,6 +708,13 @@ unset($hotel);
 
 <!-- SEARCH BAR -->
 <section class="hotel-search" id="searchSection">
+  <div class="mobile-hotel-results-heading" aria-label="Hotel search results">
+    <a class="mobile-hotel-results-back" href="hotel_resorts.php?tab=tours" aria-label="Back to tours">
+      <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+    </a>
+    <strong>Hotels &amp; Resorts available options</strong>
+    <span id="mobileHotelResultsCount">0 results</span>
+  </div>
   <div class="search-shell">
     <div class="search-mode-tabs" role="tablist" aria-label="Search categories">
 
@@ -734,7 +754,12 @@ unset($hotel);
       <label id="locationLabel">Where to go?</label>
       <div class="location-input-wrap">
         <div class="search-control-wrap primary-location-wrap">
-          <span class="search-control-icon" aria-hidden="true"><i class="fa-solid fa-location-dot"></i></span>
+          <span class="search-control-icon" aria-hidden="true">
+            <svg class="search-field-icon" width="16" height="16" viewBox="0 0 24 24" focusable="false">
+              <path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"></path>
+              <circle cx="12" cy="10" r="2.5"></circle>
+            </svg>
+          </span>
           <select id="island" aria-label="Primary destination">
             <option value="" selected disabled>Choose primary destination</option>
             <option value="Apuao">Apuao</option>
@@ -747,7 +772,13 @@ unset($hotel);
           <div class="field-error-slot" aria-live="polite"></div>
         </div>
         <div class="search-control-wrap secondary-location-wrap is-hidden">
-          <span class="search-control-icon" aria-hidden="true"><i class="fa-solid fa-location-crosshairs"></i></span>
+          <span class="search-control-icon" aria-hidden="true">
+            <svg class="search-field-icon" width="16" height="16" viewBox="0 0 24 24" focusable="false">
+              <circle cx="12" cy="12" r="6"></circle>
+              <circle cx="12" cy="12" r="2"></circle>
+              <path d="M12 2v4M12 18v4M2 12h4M18 12h4"></path>
+            </svg>
+          </span>
           <select id="islandSecondary" class="search-second-location is-hidden" aria-label="Optional second destination">
             <option value="" selected>Add another destination (optional)</option>
             <option value="Apuao">Apuao</option>
@@ -763,16 +794,22 @@ unset($hotel);
     </div>
 
     <!-- Date Range -->
-    <div class="search-box">
-      <label id="dateLabel">Check-in / Check-out</label>
-
-      <div id="tourDateModeToggle" class="tour-date-mode-toggle" style="display: none; margin-bottom: 8px;">
-        <button type="button" class="date-mode-btn active" data-mode="overnight" onclick="setTourDateMode('overnight')">Overnight</button>
-        <button type="button" class="date-mode-btn" data-mode="sameday" onclick="setTourDateMode('sameday')">Same Day</button>
+    <div class="search-box search-date-box">
+      <div class="date-field-heading">
+        <label id="dateLabel">Check-in / Check-out</label>
+        <div id="tourDateModeToggle" class="tour-date-mode-toggle" style="display: none;">
+          <button type="button" class="date-mode-btn active" data-mode="overnight" onclick="setTourDateMode('overnight')">Overnight</button>
+          <button type="button" class="date-mode-btn" data-mode="sameday" onclick="setTourDateMode('sameday')">Same Day</button>
+        </div>
       </div>
 
       <div class="search-control-wrap date-input-wrap">
-        <span class="search-control-icon" aria-hidden="true"><i class="fa-regular fa-calendar-days"></i></span>
+        <span class="search-control-icon" aria-hidden="true">
+          <svg class="search-field-icon" width="16" height="16" viewBox="0 0 24 24" focusable="false">
+            <rect x="3" y="5" width="18" height="16" rx="2"></rect>
+            <path d="M8 3v4M16 3v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01M16 18h.01"></path>
+          </svg>
+        </span>
         <input type="text" id="dateRangePicker" placeholder="Select stay dates" readonly inputmode="none" virtualkeyboardpolicy="manual" autocomplete="off" aria-haspopup="dialog">
         <span id="stayDurationBadge" class="stay-duration-badge" hidden></span>
         <div class="field-error-slot" aria-live="polite"></div>
@@ -1050,9 +1087,15 @@ unset($hotel);
 
   <div class="hotel-list-section">
     <div class="hotel-results-toolbar">
-      <div>
-        <h2 id="hotelResultsTitle">Available properties</h2>
-        <p id="hotelResultsCount" class="hotel-results-count"></p>
+      <div class="hotel-results-heading">
+        <a class="hotel-results-back" href="hotel_resorts.php?tab=tours" aria-label="Back to tours">
+          <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
+          <span>Back to tours</span>
+        </a>
+        <div class="hotel-results-heading-copy">
+          <h2 id="hotelResultsTitle">Available properties</h2>
+          <p id="hotelResultsCount" class="hotel-results-count"></p>
+        </div>
       </div>
       <div class="hotel-sort" aria-label="Sort hotel results">
         <button class="active" onclick="sortHotels('recommended', this)">
@@ -1116,7 +1159,7 @@ include 'footer.php';
 </script>
 <script src="js/favorites.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
 <script>
 
 
@@ -1212,6 +1255,7 @@ include 'footer.php';
     }
 
     if (normalizedType === "package") {
+      clearActiveSearchTabForExit();
       window.location.href = `package_details.php?package_id=${encodeURIComponent(normalizedId)}`;
     }
   }
@@ -1306,10 +1350,54 @@ include 'footer.php';
     return SEARCH_TAB_ALIASES[normalized] || normalized || "hotels";
   }
 
+  const ACTIVE_SEARCH_TAB_KEY = "hotelResortsActiveTab";
+  const IS_TOURS_PAGE_CONTEXT = <?= $isToursLanding ? 'true' : 'false' ?>;
+
+  function clearActiveSearchTabForExit() {
+    sessionStorage.removeItem(ACTIVE_SEARCH_TAB_KEY);
+  }
+
+  function syncSearchPageSeo(tab) {
+    const isToursPage = IS_TOURS_PAGE_CONTEXT || isTourSearchTab(tab);
+    const title = isToursPage
+      ? "Island Hopping & Tour Packages in Mercedes, Camarines Norte | iTour Mercedes"
+      : "Hotels & Resorts in Mercedes, Camarines Norte | iTour Mercedes";
+    const description = isToursPage
+      ? "Explore island hopping adventures, tour packages, local tour guides, and boat services in Mercedes, Camarines Norte."
+      : "Discover hotels and resorts in Mercedes, Camarines Norte. Explore available accommodations and plan your stay with iTour Mercedes.";
+    const canonicalUrl = isToursPage
+      ? "https://itourmercedes.com/hotel_resorts.php?tab=tours"
+      : "https://itourmercedes.com/hotel_resorts.php";
+
+    document.title = title;
+    document.querySelector('meta[name="description"]')?.setAttribute("content", description);
+    document.querySelector('link[rel="canonical"]')?.setAttribute("href", canonicalUrl);
+
+    const currentUrl = new URL(window.location.href);
+    currentUrl.searchParams.delete("reset_search");
+    if (isToursPage) {
+      currentUrl.searchParams.set("tab", "tours");
+      if (tab === "hotels") {
+        currentUrl.searchParams.delete("search_tab");
+      } else {
+        currentUrl.searchParams.set("search_tab", tab);
+      }
+    } else {
+      currentUrl.searchParams.delete("tab");
+      currentUrl.searchParams.delete("search_tab");
+    }
+    window.history.replaceState({
+      ...(window.history.state || {}),
+      itourSearchTab: tab
+    }, "", currentUrl);
+  }
+
   function setActiveSearchTab(tabId) {
     const normalizedTab = normalizeSearchTab(tabId);
     const allowedTabs = new Set(["hotels", "tours", "guides", "boats"]);
     activeSearchTab = allowedTabs.has(normalizedTab) ? normalizedTab : "hotels";
+    sessionStorage.setItem(ACTIVE_SEARCH_TAB_KEY, activeSearchTab);
+    syncSearchPageSeo(activeSearchTab);
 
     document.querySelectorAll(".search-mode-tab").forEach(btn => {
       const isActive = btn.dataset.searchTab === activeSearchTab;
@@ -1320,6 +1408,7 @@ include 'footer.php';
     const searchSection = document.getElementById("searchSection");
     const guestLabel = document.getElementById("guestLabel");
     const locationLabel = document.getElementById("locationLabel");
+    const dateLabel = document.getElementById("dateLabel");
     const roomsGuestRow = document.getElementById("roomsGuestRow");
     const tourDateModeToggle = document.getElementById("tourDateModeToggle");
     const islandSecondary = document.getElementById("islandSecondary");
@@ -1335,6 +1424,7 @@ include 'footer.php';
 
     searchSection.dataset.searchTab = activeSearchTab;
     locationLabel.textContent = isTourTab ? "Destinations (up to 2)" : "Where to go?";
+    dateLabel.textContent = isTourTab ? "Stay dates" : "Check-in / Check-out";
     guestLabel.textContent = isHotelTab ? "Guests & Rooms" : "Guests";
     roomsGuestRow.classList.toggle("is-hidden", !isHotelTab);
     tourDateModeToggle.style.display = isTourTab ? "flex" : "none";
@@ -1499,6 +1589,27 @@ include 'footer.php';
     }
   }
 
+  let mobileResultsStickyFrame = 0;
+  function syncMobileResultsStickyState() {
+    const controls = document.querySelector(".mobile-results-controls");
+    const hotelMain = document.querySelector(".hotel-main");
+    if (!controls) return;
+    if (!window.matchMedia("(max-width: 768px)").matches || !hotelMain?.classList.contains("search-active")) {
+      controls.classList.remove("is-stuck");
+      return;
+    }
+    const stickyTop = Number.parseFloat(window.getComputedStyle(controls).top) || 0;
+    controls.classList.toggle("is-stuck", controls.getBoundingClientRect().top <= stickyTop + 1);
+  }
+
+  function requestMobileResultsStickySync() {
+    if (mobileResultsStickyFrame) return;
+    mobileResultsStickyFrame = window.requestAnimationFrame(() => {
+      mobileResultsStickyFrame = 0;
+      syncMobileResultsStickyState();
+    });
+  }
+
   function syncMobileResultsLayout() {
     const sortControls = document.querySelector(".hotel-sort");
     const sortPanel = document.getElementById("mobileSortPanel");
@@ -1511,10 +1622,12 @@ include 'footer.php';
       closeMobileResultsPanels();
     }
     updateMobileHotelSearchSummary();
+    requestMobileResultsStickySync();
   }
 
   document.addEventListener("DOMContentLoaded", syncMobileResultsLayout);
   window.addEventListener("resize", syncMobileResultsLayout, { passive: true });
+  window.addEventListener("scroll", requestMobileResultsStickySync, { passive: true });
 
   function initFlatpickrDateRange() {
     const dateRangeInput = document.getElementById("dateRangePicker");
@@ -1802,6 +1915,7 @@ include 'footer.php';
       params.set("rooms", String(rooms));
     }
 
+    clearActiveSearchTabForExit();
     window.location.href = `search_results.php?${params.toString()}`;
   }
 
@@ -1820,19 +1934,33 @@ include 'footer.php';
       }
     });
     document.querySelector(".hotel-main").style.display = "none";
-    // The route can select the landing hero, but the search panel always
-    // starts with the Hotel/Resort form unless an actual search is restored.
+    // History state survives refreshes but is not inherited by a fresh visit.
     const landingNavigationType = performance.getEntriesByType("navigation")[0]?.type || "navigate";
-    const landingInitialTab = landingNavigationType === "reload"
-      ? (sessionStorage.getItem("hotelResortsActiveTab") || "hotels")
-      : "hotels";
-    setActiveSearchTab(landingInitialTab);
+    const landingParams = new URLSearchParams(window.location.search);
+    const shouldResetSearchTab = landingParams.get("reset_search") === "1";
+    if (shouldResetSearchTab) clearActiveSearchTabForExit();
+    const refreshedUrlTab = landingParams.get("search_tab");
+    const retainedTab = shouldResetSearchTab
+      ? "hotels"
+      : window.history.state?.itourSearchTab
+        || sessionStorage.getItem(ACTIVE_SEARCH_TAB_KEY)
+        || (landingNavigationType === "reload" ? refreshedUrlTab : "")
+        || "hotels";
+    setActiveSearchTab(normalizeSearchTab(retainedTab));
     document.querySelectorAll(".search-mode-tab").forEach(btn => {
       btn.addEventListener("click", () => {
         setActiveSearchTab(btn.dataset.searchTab);
-        sessionStorage.setItem("hotelResortsActiveTab", activeSearchTab);
       });
     });
+    document.addEventListener("click", event => {
+      const link = event.target.closest("a[href]");
+      if (!link || link.target === "_blank" || link.hasAttribute("download")) return;
+
+      const destination = new URL(link.href, window.location.href);
+      if (destination.origin !== window.location.origin || destination.pathname !== window.location.pathname) {
+        clearActiveSearchTabForExit();
+      }
+    }, true);
 
     // --- Load header dynamically ---
     fetch("php/header.php")
@@ -1989,9 +2117,14 @@ include 'footer.php';
         }
 
         const urlParams = new URLSearchParams(window.location.search);
-        const landingContextTab = <?= json_encode($isToursLanding ? 'tours' : 'hotels') ?>;
-        const tabFromUrl = normalizeSearchTab(urlParams.get("tab") || landingContextTab);
         const hasExternalSearchParams = urlParams.has("island") || urlParams.has("destination");
+        const tabFromUrl = normalizeSearchTab(
+          urlParams.get("search_tab")
+          || (hasExternalSearchParams ? urlParams.get("tab") : "")
+          || window.history.state?.itourSearchTab
+          || sessionStorage.getItem(ACTIVE_SEARCH_TAB_KEY)
+          || "hotels"
+        );
         if (hasExternalSearchParams) {
           savedData = {
             tab: tabFromUrl,
@@ -2033,12 +2166,9 @@ include 'footer.php';
           setTimeout(() => {
             applySearchWithoutValidation(savedData);
           }, 0);
-          const cleanUrl = new URL(window.location.origin + window.location.pathname);
-          cleanUrl.searchParams.set("tab", tabFromUrl);
-          window.history.replaceState({}, "", cleanUrl.toString());
         } else if (navType === "reload") {
-          if (savedMode === "true" && savedData) {
-            setActiveSearchTab(savedData.tab || tabFromUrl);
+          if (savedMode === "true" && savedData && normalizeSearchTab(savedData.tab) === tabFromUrl) {
+            setActiveSearchTab(tabFromUrl);
             document.getElementById("island").value = savedData.island || "";
             document.getElementById("islandSecondary").value = savedData.island2 || "";
             if (isTourSearchTab(savedData.tab || tabFromUrl) && savedData.tourDateMode) {
@@ -2061,19 +2191,22 @@ include 'footer.php';
               applySearchWithoutValidation(savedData);
             }, 0);
           } else {
-            setActiveSearchTab(sessionStorage.getItem("hotelResortsActiveTab") || "hotels");
+            setActiveSearchTab(tabFromUrl);
             showFeaturedMode();
           }
         } else {
-          setActiveSearchTab("hotels");
-          sessionStorage.removeItem("hotelResortsActiveTab");
+          setActiveSearchTab(normalizeSearchTab(
+            window.history.state?.itourSearchTab
+            || sessionStorage.getItem(ACTIVE_SEARCH_TAB_KEY)
+            || "hotels"
+          ));
           sessionStorage.removeItem("searchMode");
           sessionStorage.removeItem("searchData");
           showFeaturedMode();
         }
         updateIslandFieldState();
 
-        fetch("logsign-modal.html?v=11")
+        fetch("logsign-modal.html?v=15")
           .then(res => res.text())
           .then(html => {
             const modalContainer = document.getElementById("loginModal");
@@ -2084,7 +2217,7 @@ include 'footer.php';
             swalScript.src = "https://cdn.jsdelivr.net/npm/sweetalert2@11";
             swalScript.onload = () => {
               const logsignScript = document.createElement("script");
-              logsignScript.src = "logsign.js?v=11";
+              logsignScript.src = "logsign.js?v=16";
               logsignScript.onload = () => {
                 if (typeof initLogSignEvents === "function") initLogSignEvents();
                 else console.error("initLogSignEvents not found in logsign.js");
@@ -2327,9 +2460,13 @@ include 'footer.php';
     const container = document.getElementById("hotelList");
     visibleHotels = [...list];
     const resultCount = document.getElementById("hotelResultsCount");
+    const mobileResultCount = document.getElementById("mobileHotelResultsCount");
     const selectedIsland = document.getElementById("island")?.value;
     if (resultCount) {
       resultCount.textContent = `${list.length} ${list.length === 1 ? "property" : "properties"} found${selectedIsland ? ` in ${selectedIsland}` : ""}`;
+    }
+    if (mobileResultCount) {
+      mobileResultCount.textContent = `${list.length} result${list.length === 1 ? "" : "s"}`;
     }
     updatePreviewMap();
     if (hotelMap && document.getElementById("hotelMapModal")?.classList.contains("open")) {
@@ -2453,6 +2590,23 @@ include 'footer.php';
   rangeMin.addEventListener("change", applyCheckboxFilters);
   rangeMax.addEventListener("change", applyCheckboxFilters);
 
+  function persistHotelSearchUrl(data) {
+    if (!data || normalizeSearchTab(data.tab) !== "hotels") return;
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.searchParams.set("tab", "hotels");
+    if (data.island) url.searchParams.set("destination", data.island);
+    if (data.checkin) url.searchParams.set("checkin", data.checkin);
+    if (data.checkout) url.searchParams.set("checkout", data.checkout);
+    url.searchParams.set("adults", String(data.adults ?? 1));
+    url.searchParams.set("children", String(data.children ?? 0));
+    url.searchParams.set("rooms", String(data.rooms ?? 1));
+    if (Array.isArray(data.childAges) && data.childAges.length) {
+      url.searchParams.set("child_ages", data.childAges.join(","));
+    }
+    window.history.replaceState({ hotelSearch: true }, "", url.toString());
+  }
+
   function filterHotels() {
     let valid = true;
     const island = document.getElementById("island");
@@ -2530,9 +2684,8 @@ include 'footer.php';
       window.scrollTo({ top: 0, left: 0, behavior: "auto" });
     });
 
-    sessionStorage.setItem("searchMode", "true");
     const selectedLocations = getSelectedSearchLocations();
-    sessionStorage.setItem("searchData", JSON.stringify({
+    const currentSearchData = {
       tab: activeSearchTab,
       island: island.value,
       island2: islandSecondary.value,
@@ -2545,7 +2698,10 @@ include 'footer.php';
       tourDateMode: tourDateMode,
       tourDuration: buildTourDurationLabel(checkin.value, checkout.value, tourDateMode),
       destinations: selectedLocations
-    }));
+    };
+    sessionStorage.setItem("searchMode", "true");
+    sessionStorage.setItem("searchData", JSON.stringify(currentSearchData));
+    persistHotelSearchUrl(currentSearchData);
   }
 
 function applySearchWithoutValidation(data) {
@@ -2572,6 +2728,7 @@ function applySearchWithoutValidation(data) {
     return !data.island || h.island === data.island;
   });
 
+  persistHotelSearchUrl(data);
   applyCheckboxFilters();
   requestAnimationFrame(() => {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" });
@@ -3096,6 +3253,7 @@ function normalizeImagePath(rawPath, type = "generic") {
   }
 
   function openServiceDetails(type, itemId) {
+    clearActiveSearchTabForExit();
     window.location.href = `service_details.php?type=${encodeURIComponent(type)}&id=${encodeURIComponent(itemId)}`;
     return;
     const collection = type === "boat" ? tourBoats : tourGuides;

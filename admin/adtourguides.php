@@ -373,7 +373,7 @@ $catalogResourceSummary = catalogResourceSummary($pdo, 'tourguide', $guideTotal,
   transition: 0.2s;
 }
 </style>
-<link rel="stylesheet" href="styles/admin_catalog_pages.css?v=20260813-1" />
+<link rel="stylesheet" href="styles/admin_catalog_pages.css?v=20260920-1" />
 <link rel="stylesheet" href="styles/admin_resource_calendar.css?v=20260813-1" />
 </head>
 <body class="catalog-page">
@@ -550,7 +550,7 @@ try {
           </svg>
         </div>
         <div class="text">
-          <span>Click or Drag Image Here</span>
+          <span>Click to upload image</span>
         </div>
         <input type="file" id="jg_guide_upload_file_input" accept="image/*">
       </label>

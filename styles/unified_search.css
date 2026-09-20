@@ -812,6 +812,50 @@
   margin: 0;
 }
 
+.results-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.results-back-link {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid #c9ddd6;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(21, 74, 57, 0.08);
+  color: #176b55;
+  font-size: .75rem;
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  transition: border-color 160ms ease, background-color 160ms ease, transform 160ms ease;
+}
+
+.results-back-link svg {
+  width: 17px;
+  height: 17px;
+  stroke-width: 2.25;
+}
+
+.results-back-link:hover {
+  border-color: #88b7a8;
+  background: #edf7f3;
+  transform: translateX(-2px);
+}
+
+.results-back-link:focus-visible {
+  outline: 3px solid rgba(23, 107, 85, .18);
+  outline-offset: 2px;
+}
+
 .results-eyebrow {
   margin: 0 0 8px;
   color: var(--ui-color-accent);
@@ -918,6 +962,61 @@
   font-weight: 500;
 }
 
+.results-tour-range-heading {
+  min-height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 6px;
+}
+
+.results-tour-range-heading > label {
+  min-height: 0;
+  margin: 0;
+}
+
+.results-date-mode-toggle {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border: 1px solid #bdd8ce;
+  border-radius: 999px;
+  background: #f4f8f6;
+}
+
+.results-date-mode-button {
+  min-width: 66px;
+  height: 22px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 999px;
+  color: #45675d;
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.625rem;
+  font-weight: 750;
+  line-height: 1;
+  white-space: nowrap;
+  transition: color 160ms ease, background-color 160ms ease, box-shadow 160ms ease;
+}
+
+.results-date-mode-button.is-active {
+  background: var(--ui-color-accent);
+  box-shadow: 0 2px 6px rgba(23, 107, 85, 0.2);
+  color: #fff;
+}
+
+.results-date-mode-button:focus-visible {
+  outline: 2px solid rgba(23, 107, 85, 0.3);
+  outline-offset: 2px;
+}
+
+.results-search-field[hidden] {
+  display: none !important;
+}
+
 .results-search-control {
   position: relative;
 }
@@ -952,6 +1051,52 @@
   transition: border-color var(--ui-transition-fast), box-shadow var(--ui-transition-fast), background-color var(--ui-transition-fast);
 }
 
+.results-tour-range-control input {
+  padding-right: 126px;
+  cursor: pointer;
+  text-overflow: ellipsis;
+}
+
+.results-tour-range-duration {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  right: 9px;
+  max-width: 112px;
+  overflow: hidden;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: #eaf5f0;
+  color: #155e49;
+  font-size: 0.625rem;
+  font-weight: 750;
+  line-height: 1;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  transform: translateY(-50%);
+  white-space: nowrap;
+}
+
+.results-page:not(.results-type-hotels) .flatpickr-calendar {
+  border: 1px solid #d4e4de;
+  border-radius: 14px;
+  box-shadow: 0 16px 38px rgba(20, 67, 53, 0.18);
+  font-family: Inter, sans-serif;
+}
+
+.results-page:not(.results-type-hotels) .flatpickr-day.selected,
+.results-page:not(.results-type-hotels) .flatpickr-day.startRange,
+.results-page:not(.results-type-hotels) .flatpickr-day.endRange {
+  border-color: #1c7a60;
+  background: #1c7a60;
+}
+
+.results-page:not(.results-type-hotels) .flatpickr-day.inRange {
+  border-color: #e4f2ed;
+  background: #e4f2ed;
+  box-shadow: -5px 0 0 #e4f2ed, 5px 0 0 #e4f2ed;
+}
+
 .results-search-control select {
   cursor: pointer;
   overflow: hidden;
@@ -975,8 +1120,11 @@
     grid-column: 1 / -1;
   }
 
-  .results-page .results-header h1 {
+  .results-page .results-title-row {
     grid-column: 1;
+  }
+
+  .results-page .results-header h1 {
     white-space: nowrap;
   }
 
@@ -989,26 +1137,13 @@
 }
 
 @media (min-width: 1181px) {
-  .results-page.results-type-tours .results-search-form {
+  .results-page:not(.results-type-hotels) .results-search-form {
     grid-template-columns:
-      minmax(170px, 1.2fr)
-      minmax(170px, 1.2fr)
-      minmax(125px, 0.85fr)
-      minmax(155px, 1fr)
-      minmax(155px, 1fr)
-      minmax(110px, 0.75fr)
-      minmax(155px, 1.05fr);
-  }
-
-  .results-page.results-type-guides .results-search-form,
-  .results-page.results-type-boats .results-search-form,
-  .results-page.results-type-bundle .results-search-form {
-    grid-template-columns:
-      minmax(190px, 1.25fr)
-      minmax(190px, 1.25fr)
-      minmax(165px, 1fr)
-      minmax(120px, 0.75fr)
-      minmax(165px, 1fr);
+      minmax(175px, 1.1fr)
+      minmax(175px, 1.1fr)
+      minmax(280px, 1.55fr)
+      minmax(105px, 0.62fr)
+      minmax(155px, 0.92fr);
   }
 }
 
@@ -1566,6 +1701,11 @@
     padding-bottom: 2px;
   }
 
+  .results-page:not(.results-type-hotels) .results-header,
+  .results-page:not(.results-type-hotels) .results-title-row {
+    width: 100%;
+  }
+
   .results-page:not(.results-type-hotels) .results-eyebrow,
   .results-page:not(.results-type-hotels) .results-subtitle,
   .results-page:not(.results-type-hotels) .results-desktop-title {
@@ -1573,9 +1713,11 @@
   }
 
   .results-page:not(.results-type-hotels) .results-header h1 {
-    font-size: 1.28rem;
-    line-height: 1.25;
-    letter-spacing: -0.015em;
+    min-width: 0;
+    font-size: clamp(.9rem, 4.1vw, 1.05rem);
+    line-height: 1.2;
+    letter-spacing: -0.025em;
+    white-space: nowrap;
   }
 
   .results-page:not(.results-type-hotels) .results-mobile-title {
@@ -1584,11 +1726,14 @@
 
   .results-page:not(.results-type-hotels) .results-mobile-count {
     display: block;
-    margin-top: 3px;
+    flex: 0 0 auto;
+    margin: 0 0 0 auto;
     color: #687a73;
-    font-size: 0.7rem;
-    font-weight: 500;
-    line-height: 1.3;
+    font-size: 0.62rem;
+    font-weight: 600;
+    line-height: 1;
+    text-align: right;
+    white-space: nowrap;
   }
 
   .results-page:not(.results-type-hotels) .results-search-panel {
@@ -2032,26 +2177,13 @@
     align-items: end;
   }
 
-  .results-page.results-type-tours .results-search-form {
+  .results-page:not(.results-type-hotels) .results-search-form {
     grid-template-columns:
       minmax(0, 1.05fr)
       minmax(0, 1.05fr)
-      minmax(0, .82fr)
-      minmax(0, 1fr)
-      minmax(0, 1fr)
-      minmax(0, .62fr)
-      minmax(88px, .86fr);
-  }
-
-  .results-page.results-type-guides .results-search-form,
-  .results-page.results-type-boats .results-search-form,
-  .results-page.results-type-bundle .results-search-form {
-    grid-template-columns:
-      minmax(0, 1.18fr)
-      minmax(0, 1.18fr)
-      minmax(0, 1fr)
-      minmax(0, .7fr)
-      minmax(96px, .9fr);
+      minmax(220px, 1.45fr)
+      minmax(0, .55fr)
+      minmax(88px, .8fr);
   }
 
   .results-page:not(.results-type-hotels) .results-search-field,
@@ -2092,6 +2224,23 @@
     padding-left: 29px;
   }
 
+  .results-page:not(.results-type-hotels) .results-tour-range-control input {
+    padding-right: 112px;
+  }
+
+  .results-page:not(.results-type-hotels) .results-date-mode-button {
+    min-width: 55px;
+    padding: 0 6px;
+    font-size: .56rem;
+  }
+
+  .results-page:not(.results-type-hotels) .results-tour-range-duration {
+    right: 7px;
+    max-width: 102px;
+    padding-inline: 6px;
+    font-size: .56rem;
+  }
+
   .results-page:not(.results-type-hotels) .results-search-submit button {
     gap: 5px;
     padding: 0 8px;
@@ -2108,5 +2257,83 @@
 
   .results-page:not(.results-type-hotels) .results-update-label-tablet {
     display: inline;
+  }
+}
+
+@media (max-width: 700px) {
+  .results-page:not(.results-type-hotels) .results-title-row {
+    gap: 9px;
+  }
+
+  .results-page:not(.results-type-hotels) .results-back-link {
+    width: 34px;
+    min-height: 34px;
+  }
+
+  .results-page:not(.results-type-hotels) .results-tour-range-heading {
+    min-height: 25px;
+    margin-bottom: 7px;
+  }
+
+  .results-page:not(.results-type-hotels) .results-tour-range-heading > label {
+    margin: 0;
+  }
+
+  .results-page:not(.results-type-hotels) .results-date-mode-button {
+    min-width: 72px;
+    height: 24px;
+    padding: 0 10px;
+    font-size: .62rem;
+  }
+
+  .results-page:not(.results-type-hotels) .results-tour-range-control input {
+    padding-right: 120px;
+  }
+
+  .results-page:not(.results-type-hotels) .results-tour-range-duration {
+    max-width: 112px;
+  }
+
+  .results-page:not(.results-type-hotels) .flatpickr-calendar,
+  .results-page:not(.results-type-hotels) .flatpickr-calendar.open {
+    width: min(307.875px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+  }
+
+  .results-page:not(.results-type-hotels) .flatpickr-rContainer,
+  .results-page:not(.results-type-hotels) .flatpickr-days,
+  .results-page:not(.results-type-hotels) .dayContainer,
+  .results-page:not(.results-type-hotels) .flatpickr-weekdaycontainer {
+    width: 100%;
+    min-width: 100%;
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 1180px) {
+  .results-page:not(.results-type-hotels) .results-back-link {
+    width: 38px;
+    padding: 0;
+  }
+
+  .results-page:not(.results-type-hotels) .results-back-link span {
+    display: none;
+  }
+}
+
+@media (max-width: 380px) {
+  .results-page:not(.results-type-hotels) .results-date-mode-button {
+    min-width: 62px;
+    padding-inline: 7px;
+  }
+
+  .results-page:not(.results-type-hotels) .results-tour-range-control input {
+    padding-right: 101px;
+    font-size: .68rem;
+  }
+
+  .results-page:not(.results-type-hotels) .results-tour-range-duration {
+    max-width: 94px;
+    font-size: .55rem;
   }
 }

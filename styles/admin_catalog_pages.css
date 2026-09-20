@@ -198,6 +198,32 @@
 .catalog-page .boat-img-modal-content .catalog-modal-heading,
 .catalog-page .jg_guide_upload_modal_content .catalog-modal-heading { width: 100%; box-sizing: border-box; text-align: left; }
 .catalog-page .boat-upload-body { padding: 18px 22px 0; box-sizing: border-box; }
+.catalog-page #boat-upload-modal .boat-img-modal-content,
+.catalog-page .jg_guide_upload_modal_content { width: min(650px, calc(100vw - 32px)) !important; max-width: 650px; }
+.catalog-page .boat-custum-file-upload,
+.catalog-page .jg_guide_upload_custom_file {
+  width: min(550px, 100%);
+  max-width: 550px;
+  height: 300px;
+  min-height: 300px;
+  box-sizing: border-box;
+  gap: 20px;
+  padding: 24px;
+  border: 2px dashed #9fc6b8;
+  border-radius: 10px;
+  background: #f8fbfa;
+  box-shadow: none;
+}
+.catalog-page .boat-custum-file-upload:hover,
+.catalog-page .boat-custum-file-upload.drag-over,
+.catalog-page .jg_guide_upload_custom_file:hover,
+.catalog-page .jg_guide_upload_custom_file.drag-over { border-color: #78ad99; background: #f3f9f6; }
+.catalog-page .boat-custum-file-upload .icon,
+.catalog-page .jg_guide_upload_custom_file .icon { display: flex; align-items: center; justify-content: center; }
+.catalog-page .boat-custum-file-upload .icon svg,
+.catalog-page .jg_guide_upload_custom_file .icon svg { width: auto; height: 80px !important; fill: #4b5563 !important; stroke: none; }
+.catalog-page .boat-custum-file-upload .boat-text span,
+.catalog-page .jg_guide_upload_custom_file .text span { color: #4b5563; font-size: 14px; font-weight: 400; text-align: center; }
 .catalog-page .boat-upload-actions { margin: 18px 0 0; padding: 14px 22px; justify-content: flex-end; border-top: 1px solid #e1ebe7; background: #fff; box-sizing: border-box; }
 .catalog-modal-heading { flex: 0 0 auto; padding: 20px 64px 16px 22px; border-bottom: 1px solid #e1ebe7; margin: 0; background: #fff; }
 .catalog-modal-heading h3 { margin: 0; color: #173d32; font-size: 19px; }

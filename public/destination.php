@@ -36,7 +36,9 @@ foreach (destinationRows($pdo, true) as $destination) {
   <head>
     <meta charset="utf-8" />
     <meta content="width=device-width, initial-scale=1" name="viewport" />
-    <title>iTour Mercedes</title>
+    <meta name="description" content="Explore beautiful islands, beaches, and tourist destinations in Mercedes, Camarines Norte. Discover places to visit and plan your next adventure." />
+    <link rel="canonical" href="https://itourmercedes.com/destination.php" />
+    <title>Tourist Destinations in Mercedes, Camarines Norte | iTour Mercedes</title>
     <link rel="icon" type="image/png" href="img/newlogo.png" />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
@@ -44,7 +46,7 @@ foreach (destinationRows($pdo, true) as $destination) {
     />
     <link rel="stylesheet" href="styles/homepage.css" />
     <link rel="stylesheet" href="styles/style.css" />
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous" />
     <link rel="stylesheet" href="styles/destination.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/destination.css') ?>" />
     <link rel="stylesheet" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>" />
     <script>document.documentElement.classList.add('itour-page-loading');</script>
@@ -144,7 +146,10 @@ foreach (destinationRows($pdo, true) as $destination) {
     <!-- Header Image -->
     <div class="des_place-page-header" id="placeHeader">
       <img id="des_pageHeaderImg" src="" alt="" />
-      <button class="des_close-btn" type="button" aria-label="Close destination details" onclick="closePlacePage()">&times;</button>
+      <button class="des_close-btn" type="button" aria-label="Back to all destinations" onclick="closePlacePage()">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"></path></svg>
+        <span>Back to destinations</span>
+      </button>
     </div>
 
     <!-- Navbar under image -->
@@ -280,7 +285,7 @@ foreach (destinationRows($pdo, true) as $destination) {
 
 <?php include 'footer.php'; ?>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
 <script>window.destinationData = <?= json_encode($publicDestinations, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
 <script src="destination.js?v=<?= (int)@filemtime(__DIR__ . '/../destination.js') ?>"></script>
 <script src="js/header.js?v=<?= (int)@filemtime(__DIR__ . '/../js/header.js') ?>"></script>
@@ -334,13 +339,13 @@ fetch("php/header.php")
     swalScript.src = "https://cdn.jsdelivr.net/npm/sweetalert2@11";
     swalScript.onload = () => {
       // Now load logsign modal
-      fetch("logsign-modal.html?v=11")
+      fetch("logsign-modal.html?v=15")
         .then(res => res.text())
         .then(html => {
           document.getElementById("loginModal").innerHTML = html;
 
           const logsignScript = document.createElement("script");
-          logsignScript.src = "logsign.js?v=11";
+          logsignScript.src = "logsign.js?v=16";
           logsignScript.onload = () => {
             if (typeof initLogSignEvents === "function") initLogSignEvents();
           };

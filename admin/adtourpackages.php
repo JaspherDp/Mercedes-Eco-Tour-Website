@@ -688,7 +688,7 @@ body.modal-open { overflow: hidden; }
 
 </style>
 <link rel="stylesheet" href="styles/admin_panel_theme.css" />
-<link rel="stylesheet" href="styles/admin_catalog_pages.css?v=20260813-1" />
+<link rel="stylesheet" href="styles/admin_catalog_pages.css?v=20260920-1" />
 <style>
 /* Tour-package catalog workspace and operational summary. */
 .package-header-actions { display: inline-flex; align-items: center; gap: 9px; }

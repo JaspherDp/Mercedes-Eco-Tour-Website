@@ -62,7 +62,7 @@ function ensureGlobalAuthModal() {
       await loadScriptOnce("https://cdn.jsdelivr.net/npm/sweetalert2@11", "sweetalert2", () => !!window.Swal);
     }
 
-    const response = await fetch("logsign-modal.html?v=11");
+    const response = await fetch("logsign-modal.html?v=15");
     if (!response.ok) {
       throw new Error(`Failed to load auth modal markup (${response.status})`);
     }
@@ -75,7 +75,7 @@ function ensureGlobalAuthModal() {
       document.body.appendChild(portal);
     }
 
-    await loadScriptOnce("logsign.js?v=11", "logsign", () => typeof window.initLogSignEvents === "function");
+    await loadScriptOnce("logsign.js?v=16", "logsign", () => typeof window.initLogSignEvents === "function");
     if (typeof window.initLogSignEvents === "function") {
       window.initLogSignEvents();
     }
@@ -143,7 +143,61 @@ function headNavToggleNotif(evt) {
 window.headNavDismissQuick = headNavDismissQuick;
 window.headNavToggleNotif = headNavToggleNotif;
 
+function initHeadSubnavTouchMenus() {
+  const subnav = document.querySelector(".head-subnav");
+  if (!subnav || subnav.dataset.touchMenusBound === "1") return;
+
+  const tabletQuery = window.matchMedia("(max-width: 980px)");
+  const menuItems = Array.from(subnav.querySelectorAll(".head-subnav-item")).filter(item =>
+    item.querySelector(":scope > .head-subnav-link") && item.querySelector(":scope > .head-subnav-popup")
+  );
+  if (!menuItems.length) return;
+
+  const setMenuOpen = (item, open) => {
+    item.classList.toggle("is-touch-open", open);
+    item.querySelector(":scope > .head-subnav-link")?.setAttribute("aria-expanded", String(open));
+  };
+  const closeMenus = except => {
+    menuItems.forEach(item => {
+      if (item !== except) setMenuOpen(item, false);
+    });
+    subnav.classList.toggle("has-touch-popup-open", menuItems.some(item => item.classList.contains("is-touch-open")));
+  };
+
+  menuItems.forEach((item, index) => {
+    const trigger = item.querySelector(":scope > .head-subnav-link");
+    const popup = item.querySelector(":scope > .head-subnav-popup");
+    const popupId = popup.id || `headSubnavPopup${index + 1}`;
+    popup.id = popupId;
+    trigger.setAttribute("aria-controls", popupId);
+    trigger.setAttribute("aria-expanded", "false");
+    trigger.addEventListener("click", event => {
+      if (!tabletQuery.matches) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const willOpen = !item.classList.contains("is-touch-open");
+      closeMenus(item);
+      setMenuOpen(item, willOpen);
+      subnav.classList.toggle("has-touch-popup-open", willOpen);
+    });
+  });
+
+  document.addEventListener("click", event => {
+    if (tabletQuery.matches && !subnav.contains(event.target)) closeMenus();
+  });
+  document.addEventListener("keydown", event => {
+    if (event.key !== "Escape" || !tabletQuery.matches) return;
+    const openItem = menuItems.find(item => item.classList.contains("is-touch-open"));
+    if (!openItem) return;
+    closeMenus();
+    openItem.querySelector(":scope > .head-subnav-link")?.focus();
+  });
+  tabletQuery.addEventListener("change", () => closeMenus());
+  subnav.dataset.touchMenusBound = "1";
+}
+
 function initHeader() {
+  initHeadSubnavTouchMenus();
     const toggle = document.getElementById("headNavMobileToggle");
     const navLinks = document.getElementById("headNavPrimary");
     if (toggle && navLinks && !toggle.dataset.navBound) {

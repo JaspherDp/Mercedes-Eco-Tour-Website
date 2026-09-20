@@ -1,4 +1,7 @@
 <?php
+header('Location: hotel_resorts.php?tab=tours&reset_search=1', true, 302);
+exit;
+
 chdir(__DIR__ . '/..');
 require_once __DIR__ . '/../php/session_security.php';
 AppSessionStart();
@@ -425,7 +428,7 @@ $faqs = $stmt->fetchAll();
     });
 
     // Load modal after header exists
-    return fetch("logsign-modal.html?v=11");
+    return fetch("logsign-modal.html?v=14");
   })
   .then(res => res.text())
   .then(html => {
@@ -433,7 +436,7 @@ $faqs = $stmt->fetchAll();
 
     // Load logsign.js only after modal is added
     const script = document.createElement("script");
-    script.src = "logsign.js?v=11";
+    script.src = "logsign.js?v=15";
     script.onload = () => {
       if (typeof initLogSignEvents === "function") {
         initLogSignEvents();

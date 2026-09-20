@@ -228,6 +228,10 @@
           <span data-password-rule="match">Both passwords match</span>
         </div>
         <div class="itour-turnstile" data-itour-turnstile="modal-signup-complete"></div>
+        <div class="signup-legal-consent">
+          <input id="signupLegalConsent" type="checkbox" required aria-describedby="signupLegalConsentText">
+          <p id="signupLegalConsentText"><label for="signupLegalConsent">By creating an account, I confirm that I have read and agree to the</label> <a href="#legalPolicyModal" data-legal-policy="terms">Terms &amp; Conditions</a> and acknowledge the <a href="#legalPolicyModal" data-legal-policy="privacy">Privacy Policy</a>, including how my personal data is collected, used, and protected.</p>
+        </div>
         <div class="signup-step-actions">
           <button class="signup-secondary-btn" id="signupPasswordBackBtn" type="button">Back</button>
           <button id="signupBtn" type="button">Create Account</button>
@@ -252,11 +256,17 @@
 <style>
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap");
 
-.itour-turnstile { width: 100%; max-width: 100%; min-height: 65px; overflow: hidden; margin: 6px 0 10px; }
+.itour-turnstile { width: 100%; max-width: 100%; min-height: 65px; position: relative; overflow: hidden; margin: -8px 0; }
 .itour-turnstile iframe { max-width: 100% !important; }
+.itour-turnstile-loading { isolation: isolate; color: #60736c; font-size: 0.76rem; }
+.itour-turnstile-loading::before { width: 22px; height: 22px; position: absolute; z-index: 0; top: 8px; left: 50%; margin-left: -11px; content: ""; border: 3px solid #cfe0da; border-top-color: #2b7a66; border-radius: 50%; animation: itourTurnstileSpin .75s linear infinite; }
+.itour-turnstile-loading::after { position: absolute; z-index: 0; right: 0; bottom: 6px; left: 0; content: "Loading security check..."; text-align: center; }
+.itour-turnstile-loading > * { position: relative; z-index: 1; }
+@keyframes itourTurnstileSpin { to { transform: rotate(360deg); } }
 .itour-turnstile-development,
 .itour-turnstile-unavailable { min-height: 0; padding: 9px 11px; border: 1px solid #d7e5df; border-radius: 7px; background: #f5faf8; color: #60736c; font-size: 0.76rem; line-height: 1.35; }
 .itour-turnstile-unavailable { border-color: #e5c9cc; background: #fff7f7; color: #923d46; }
+@media (prefers-reduced-motion: reduce) { .itour-turnstile-loading::before { animation-duration: 1.5s; } }
 
 /* === Modal === */
 .logsign-modal-overlay { 
@@ -348,7 +358,7 @@
 .logsign-eye-icon:hover { opacity: 1; }
 
 /* Checkbox + Forgot */
-.logsign-checkbox-container { display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; }
+.logsign-checkbox-container { display: flex; justify-content: space-between; align-items: center; padding: 0 12px; font-size: 0.9rem; }
 .forgot-password { cursor: pointer; color: #3368A1; text-decoration: underline; transition: color 0.2s ease; }
 .forgot-password:hover { color: #2b7a66; }
 
@@ -1164,6 +1174,23 @@
 
 .signup-password-rules span.is-valid { color: #176b55; }
 .signup-password-rules span.is-valid::before { content: "\2713"; color: #176b55; font-size: 0.76rem; line-height: 1; }
+
+.signup-legal-consent {
+  display: grid;
+  grid-template-columns: 19px minmax(0, 1fr);
+  align-items: start;
+  gap: 9px;
+  margin: 1px 0 13px;
+  padding: 11px 12px;
+  border: 1px solid #d3e1dc;
+  border-radius: 9px;
+  background: #f7faf9;
+}
+.signup-legal-consent input { width: 18px; height: 18px; margin: 1px 0 0; accent-color: #176b55; cursor: pointer; }
+.signup-legal-consent p { margin: 0; color: #526a62; font-size: .68rem; line-height: 1.5; }
+.signup-legal-consent label { cursor: pointer; }
+.signup-legal-consent a { color: #0b6d55; font-weight: 800; text-decoration: underline; text-underline-offset: 2px; }
+.signup-legal-consent a:hover { color: #084d3d; }
 
 .logsign-icon-phone::before {
   -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 3h4l2 5-3 2a16 16 0 0 0 6 6l2-3 5 2v4a2 2 0 0 1-2 2C10 21 3 14 3 5a2 2 0 0 1 2-2Z' fill='none' stroke='black' stroke-width='2'/%3E%3C/svg%3E");

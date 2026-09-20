@@ -23,6 +23,7 @@ unset($_SESSION['request_rate_limit_notice']);
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles/signup-page.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/signup-page.css') ?>">
+  <link rel="stylesheet" href="styles/legal-policy-modal.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/legal-policy-modal.css') ?>">
 </head>
 <body class="tourist-auth-page">
   <main class="tourist-auth-main">
@@ -60,7 +61,7 @@ unset($_SESSION['request_rate_limit_notice']);
             <span class="tourist-auth-heading-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="4"/><path d="M2 21a7 7 0 0 1 14 0M19 8v6M16 11h6"/></svg></span>
             <span class="tourist-auth-kicker">Tourist registration</span>
             <h2 id="authPageTitle">Create your account</h2>
-            <p>Complete four quick steps to start planning your trip.</p>
+            <p>Complete five quick steps to start planning your trip.</p>
           </div>
 
           <div class="tourist-signup-progress" aria-label="Signup progress">
@@ -71,6 +72,8 @@ unset($_SESSION['request_rate_limit_notice']);
             <div class="tourist-step" data-step-indicator="3"><b>3</b><span>Verify email</span></div>
             <i></i>
             <div class="tourist-step" data-step-indicator="4"><b>4</b><span>Password</span></div>
+            <i></i>
+            <div class="tourist-step" data-step-indicator="5"><b>5</b><span>Privacy</span></div>
           </div>
 
           <form id="touristSignupForm">
@@ -124,8 +127,27 @@ unset($_SESSION['request_rate_limit_notice']);
               <label class="tourist-field tourist-password-field" data-icon="lock"><span>Create password</span><input id="pageSignupPassword" type="password" autocomplete="new-password" placeholder="Enter your password" required><button class="tourist-password-toggle" type="button" data-toggle-password="pageSignupPassword" aria-label="Show password" aria-pressed="false"><svg class="eye-open" viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg><svg class="eye-off" viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.2A10.7 10.7 0 0 1 12 6c6 0 9.5 6 9.5 6s-.8 1.4-2.3 2.9M6.1 6.1C3.8 7.8 2.5 12 2.5 12s3.5 6 9.5 6a10.7 10.7 0 0 0 3.4-.5M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg></button></label>
               <label class="tourist-field tourist-password-field" data-icon="lock"><span>Confirm password</span><input id="pageSignupConfirm" type="password" autocomplete="new-password" placeholder="Enter it again" required><button class="tourist-password-toggle" type="button" data-toggle-password="pageSignupConfirm" aria-label="Show password" aria-pressed="false"><svg class="eye-open" viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg><svg class="eye-off" viewBox="0 0 24 24"><path d="M3 3l18 18M10.6 6.2A10.7 10.7 0 0 1 12 6c6 0 9.5 6 9.5 6s-.8 1.4-2.3 2.9M6.1 6.1C3.8 7.8 2.5 12 2.5 12s3.5 6 9.5 6a10.7 10.7 0 0 0 3.4-.5M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg></button></label>
               <div class="tourist-password-rules" aria-live="polite"><strong>Password requirements</strong><span data-rule="length">At least 6 characters</span><span data-rule="letter">At least one letter</span><span data-rule="number">At least one number</span><span data-rule="match">Passwords match</span></div>
+              <div class="tourist-form-actions"><button class="tourist-secondary-button" data-go-step="3" type="button">Back</button><button class="tourist-primary-button" id="pagePasswordNext" type="button">Continue to privacy</button></div>
+            </section>
+
+            <section class="tourist-form-step" data-signup-step="5">
+              <div class="tourist-step-heading"><strong>Privacy and account terms</strong><span>Review these notices before creating your account.</span></div>
+              <div class="tourist-policy-introduction">
+                <strong>Your choices and acknowledgements</strong>
+                <p>Please review each document using the links below. These confirmations record that you understand the policies governing your account and are required before account creation.</p>
+              </div>
+              <div class="tourist-policy-checklist">
+                <label class="tourist-policy-choice" for="pageSignupPrivacyConsent">
+                  <input id="pageSignupPrivacyConsent" type="checkbox" required>
+                  <span>I acknowledge that I have read the <a href="#legalPolicyModal" data-legal-policy="privacy">Privacy Policy</a> and understand how my personal data is handled.</span>
+                </label>
+                <label class="tourist-policy-choice" for="pageSignupTermsConsent">
+                  <input id="pageSignupTermsConsent" type="checkbox" required>
+                  <span>I have read and agree to the <a href="#legalPolicyModal" data-legal-policy="terms">Terms &amp; Conditions</a> governing my account and use of iTour Mercedes.</span>
+                </label>
+              </div>
               <div class="itour-turnstile" data-itour-turnstile="page-signup-complete"></div>
-              <div class="tourist-form-actions"><button class="tourist-secondary-button" data-go-step="3" type="button">Back</button><button class="tourist-primary-button" id="pageCreateAccount" type="button">Create account</button></div>
+              <div class="tourist-form-actions"><button class="tourist-secondary-button" data-go-step="4" type="button">Back</button><button class="tourist-primary-button" id="pageCreateAccount" type="button">Create account</button></div>
             </section>
           </form>
 
@@ -198,6 +220,7 @@ unset($_SESSION['request_rate_limit_notice']);
     </section>
   </main>
 
+  <?php require __DIR__ . '/../includes/components/legal-policy-modal.php'; ?>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="js/mobile-scroll.js"></script>
   <script src="js/request-limit.js?v=<?= (int)@filemtime(__DIR__ . '/../js/request-limit.js') ?>"></script>
@@ -205,6 +228,7 @@ unset($_SESSION['request_rate_limit_notice']);
   <script>window.RequestLimitModal.show(<?= json_encode($initialRateLimitNotice, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) ?>);</script>
   <?php endif; ?>
   <script src="js/turnstile.js?v=<?= (int)@filemtime(__DIR__ . '/../js/turnstile.js') ?>"></script>
+  <script src="js/legal-policy-modal.js?v=<?= (int)@filemtime(__DIR__ . '/../js/legal-policy-modal.js') ?>"></script>
   <script src="js/signup-page.js?v=<?= (int)@filemtime(__DIR__ . '/../js/signup-page.js') ?>"></script>
 </body>
 </html>

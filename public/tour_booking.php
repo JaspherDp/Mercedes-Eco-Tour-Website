@@ -114,7 +114,9 @@ function sanitizeReturnUrl(?string $url): string {
     $clean = ltrim($url, '/\\');
     if ($clean === '') return 'hotel_resorts.php?tab=tours';
     if (preg_match('/[\r\n]/', $clean)) return 'hotel_resorts.php?tab=tours';
-    if (!preg_match('/^[A-Za-z0-9_\-\/\.?=&%]+$/', $clean)) return 'hotel_resorts.php?tab=tours';
+    // http_build_query() encodes spaces as "+". Keep that valid local-query
+    // character so filtered result pages are not replaced by the fallback.
+    if (!preg_match('/^[A-Za-z0-9_\-\/\.?=&%+]+$/', $clean)) return 'hotel_resorts.php?tab=tours';
 
     return $clean;
 }
@@ -267,8 +269,19 @@ foreach (['destination', 'destination2'] as $destinationKey) {
 }
 $prefillDestinations = array_slice($prefillDestinations, 0, 2);
 
-$prefillTourType = strtolower(trim((string)($_GET['tour_type'] ?? $_GET['tour_date_mode'] ?? '')));
-if (in_array($prefillTourType, ['sameday', 'same day', 'day', 'day tour'], true)) {
+$firstNonEmptyQueryValue = static function (array $keys): string {
+    foreach ($keys as $key) {
+        $value = trim((string)($_GET[$key] ?? ''));
+        if ($value !== '') {
+            return $value;
+        }
+    }
+    return '';
+};
+
+$prefillTourType = strtolower($firstNonEmptyQueryValue(['tour_type', 'tour_date_mode']));
+$prefillTourType = str_replace('_', '-', $prefillTourType);
+if (in_array($prefillTourType, ['same-day', 'sameday', 'same day', 'day', 'day-tour', 'day tour'], true)) {
     $prefillTourType = 'same-day';
 } elseif (in_array($prefillTourType, ['overnight', 'night', 'multi-day', 'multiday'], true)) {
     $prefillTourType = 'overnight';
@@ -281,16 +294,37 @@ if ($prefillTourDuration !== '') {
     $prefillTourDuration = substr($prefillTourDuration, 0, 120);
 }
 
-$prefillCheckin = trim((string)($_GET['checkin'] ?? $_GET['date'] ?? ''));
-$prefillCheckout = trim((string)($_GET['checkout'] ?? ''));
+$prefillCheckin = $firstNonEmptyQueryValue(['checkin', 'date', 'booking_date']);
+$prefillCheckout = $firstNonEmptyQueryValue(['checkout', 'booking_end_date']);
 $isValidDate = static function (string $value): bool {
-    return $value === '' || preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) === 1;
+    if ($value === '') {
+        return true;
+    }
+    $parsed = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+    return $parsed instanceof DateTimeImmutable && $parsed->format('Y-m-d') === $value;
 };
 if (!$isValidDate($prefillCheckin)) {
     $prefillCheckin = '';
 }
 if (!$isValidDate($prefillCheckout)) {
     $prefillCheckout = '';
+}
+if ($prefillTourType === '' && $prefillCheckin !== '') {
+    $prefillTourType = $prefillCheckout !== '' && $prefillCheckout > $prefillCheckin
+        ? 'overnight'
+        : 'same-day';
+}
+if ($prefillTourType === 'same-day') {
+    $prefillCheckout = '';
+    if ($prefillTourDuration === '') {
+        $prefillTourDuration = '1 Day';
+    }
+} elseif ($prefillTourType === 'overnight'
+    && $prefillTourDuration === ''
+    && $prefillCheckin !== ''
+    && $prefillCheckout > $prefillCheckin
+) {
+    $prefillTourDuration = $prefillCheckin . ' to ' . $prefillCheckout;
 }
 
 $prefillAdults = max(0, (int)($_GET['adults'] ?? 0));
@@ -319,13 +353,14 @@ $locations = [
   <link rel="icon" type="image/png" href="img/newlogo.png" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
   <link rel="stylesheet" href="public/styles/tour_booking.css?v=<?= (int)@filemtime(__DIR__ . '/styles/tour_booking.css') ?>" />
-  <link rel="stylesheet" href="styles/required-fields.css" />
+  <link rel="stylesheet" href="styles/required-fields.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/required-fields.css') ?>" />
+  <link rel="stylesheet" href="styles/legal-policy-modal.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/legal-policy-modal.css') ?>" />
   <script src="js/required-fields.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="js/request-limit.js?v=<?= (int)@filemtime(__DIR__ . '/../js/request-limit.js') ?>"></script>
   <script src="https://cdn.jsdelivr.net/npm/zod@3.23.8/lib/index.umd.min.js"></script>
-  <script src="js/booking-validation-schemas.js"></script>
+  <script src="js/booking-validation-schemas.js?v=<?= (int)@filemtime(__DIR__ . '/../js/booking-validation-schemas.js') ?>"></script>
 <style>
   .tour-range-calendar .flatpickr-day.flatpickr-disabled,
   .tour-range-calendar .flatpickr-day.flatpickr-disabled:hover,
@@ -604,11 +639,11 @@ $locations = [
           <div class="checkbox-box">
             <label data-required-label>
               <input type="checkbox" id="agreePrivacy" />
-              I agree to the <a href="privacy-policy.php" target="_blank" rel="noopener">Privacy Policy</a>.
+              <span class="required-label-text">I acknowledge the <a href="#legalPolicyModal" data-legal-policy="privacy">Privacy Policy</a> and agree to the <a href="#legalPolicyModal" data-legal-policy="terms">Terms &amp; Conditions</a>.<span class="required-mark" aria-hidden="true">*</span></span>
             </label>
             <label data-required-label>
               <input type="checkbox" id="agreeOtherFees" />
-              I acknowledge that additional fees may apply based on selected destinations and activities.
+              <span class="required-label-text">I acknowledge that additional fees may apply based on selected destinations and activities.<span class="required-mark" aria-hidden="true">*</span></span>
             </label>
           </div>
 
@@ -2424,6 +2459,8 @@ preferredSelect.addEventListener("change", function () {
       updatePreview();
     })();
   </script>
+<?php require __DIR__ . '/../includes/components/legal-policy-modal.php'; ?>
+<script src="js/legal-policy-modal.js?v=<?= (int)@filemtime(__DIR__ . '/../js/legal-policy-modal.js') ?>"></script>
 <script src="js/mobile-scroll.js"></script>
 </body>
 </html>

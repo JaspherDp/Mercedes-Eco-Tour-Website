@@ -249,7 +249,7 @@ body.tourist-auth-page {
 
 .tourist-signup-progress {
   display: grid;
-  grid-template-columns: auto 1fr auto 1fr auto 1fr auto;
+  grid-template-columns: auto 1fr auto 1fr auto 1fr auto 1fr auto;
   align-items: start;
   margin: 0 5px 31px;
   padding: 17px 4px 11px;
@@ -400,6 +400,42 @@ button, .tourist-google-button { font-family: inherit; }
 .tourist-password-rules span.is-valid { color: var(--auth-green); }
 .tourist-password-rules span.is-valid::before { content: "\2713"; color: var(--auth-green); font-weight: 900; }
 
+.tourist-legal-consent {
+  display: grid;
+  grid-template-columns: 19px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  margin: 2px 0 16px;
+  padding: 12px 13px;
+  border: 1px solid #d3e1dc;
+  border-radius: 10px;
+  background: #f7faf9;
+}
+.tourist-legal-consent input {
+  width: 18px;
+  height: 18px;
+  margin: 1px 0 0;
+  accent-color: var(--auth-green);
+  cursor: pointer;
+}
+.tourist-legal-consent p { margin: 0; color: #526a62; font-size: .7rem; line-height: 1.55; }
+.tourist-legal-consent label { cursor: pointer; }
+.tourist-legal-consent a { color: #0b6d55; font-weight: 800; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+.tourist-legal-consent a:hover { color: #084d3d; }
+.tourist-legal-consent:focus-within { border-color: #79aa99; box-shadow: 0 0 0 3px rgba(23,107,85,.09); }
+
+.tourist-policy-introduction { margin-bottom: 13px; padding: 13px 14px; border-left: 3px solid #248267; border-radius: 0 9px 9px 0; background: #eef7f4; }
+.tourist-policy-introduction strong { display: block; margin-bottom: 4px; color: #174d3e; font-size: .76rem; }
+.tourist-policy-introduction p { margin: 0; color: #5b726a; font-size: .68rem; line-height: 1.5; }
+.tourist-policy-checklist { display: grid; gap: 8px; margin-bottom: 16px; }
+.tourist-policy-choice { display: grid; grid-template-columns: 19px minmax(0, 1fr); align-items: start; gap: 10px; padding: 11px 12px; border: 1px solid #d5e3de; border-radius: 9px; background: #f9fbfa; cursor: pointer; transition: border-color .16s ease, background .16s ease, box-shadow .16s ease; }
+.tourist-policy-choice:hover { border-color: #9fc4b7; background: #f3f9f6; }
+.tourist-policy-choice:focus-within { border-color: #68a48f; box-shadow: 0 0 0 3px rgba(23,107,85,.09); }
+.tourist-policy-choice input { width: 18px; height: 18px; margin: 1px 0 0; accent-color: var(--auth-green); cursor: pointer; }
+.tourist-policy-choice input:disabled { cursor: not-allowed; opacity: .78; }
+.tourist-policy-choice span { color: #4e675f; font-size: .69rem; line-height: 1.5; }
+.tourist-policy-choice a { color: #0b6d55; font-weight: 800; text-decoration: underline; text-underline-offset: 2px; }
+
 .tourist-auth-divider { display: flex; align-items: center; gap: 11px; margin: 20px 0 13px; color: #899691; font-size: .66rem; font-weight: 650; }
 .tourist-auth-divider::before, .tourist-auth-divider::after { height: 1px; flex: 1; content: ""; background: #dce5e2; }
 .tourist-google-button { min-height: 46px; display: flex; align-items: center; justify-content: center; gap: 10px; color: #263d36; border: 1.5px solid #d1ddd9; border-radius: 10px; background: #fff; font-size: .78rem; font-weight: 700; text-decoration: none; transition: background .18s ease, border-color .18s ease, transform .18s ease; }
@@ -412,7 +448,7 @@ button, .tourist-google-button { font-family: inherit; }
 .tourist-login-form { margin-top: 0; }
 .tourist-remember { display: inline-flex; align-items: center; gap: 7px; margin: 0 0 17px; color: #526a62; font-size: .7rem; cursor: pointer; }
 .tourist-remember input { width: 16px; height: 16px; accent-color: var(--auth-green); }
-.tourist-login-options { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 1px 2px 19px; }
+.tourist-login-options { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 0 0 18px; padding: 0; }
 .tourist-login-options .tourist-remember { margin: 0; }
 .tourist-forgot-link { padding: 2px; color: var(--auth-green); border: 0; background: transparent; font-size: .7rem; font-weight: 800; cursor: pointer; }
 .tourist-forgot-link:hover { text-decoration: underline; }
@@ -479,7 +515,9 @@ button, .tourist-google-button { font-family: inherit; }
   .tourist-send-button { width: 100%; }
   .tourist-code-boxes { gap: 5px; }
   .tourist-code-boxes input { height: 46px; }
-  .tourist-step { min-width: 55px; }
+  .tourist-step { min-width: 42px; font-size: .56rem; }
+  .tourist-step b { width: 31px; height: 31px; }
+  .tourist-signup-progress > i { margin-inline: 5px; }
 }
 
 @media (min-width: 781px) and (max-height: 760px) {
@@ -497,8 +535,15 @@ button, .tourist-google-button { font-family: inherit; }
   .tourist-form-step { animation: none; }
   .tourist-primary-button, .tourist-secondary-button, .tourist-send-button, .tourist-google-button { transition: none; }
 }
-.itour-turnstile { width: 100%; max-width: 100%; min-height: 65px; overflow: hidden; margin: 8px 0 12px; }
+.itour-turnstile { width: 100%; max-width: 100%; min-height: 65px; position: relative; overflow: hidden; margin: 4px 0 6px; }
 .itour-turnstile iframe { max-width: 100% !important; }
+.itour-turnstile-loading { isolation: isolate; color: #60736c; font-size: .72rem; }
+.itour-turnstile-loading::before { width: 22px; height: 22px; position: absolute; z-index: 0; top: 8px; left: 50%; margin-left: -11px; content: ""; border: 3px solid #cfe0da; border-top-color: var(--auth-green); border-radius: 50%; animation: itourTurnstileSpin .75s linear infinite; }
+.itour-turnstile-loading::after { position: absolute; z-index: 0; right: 0; bottom: 6px; left: 0; content: "Loading security check..."; text-align: center; }
+.itour-turnstile-loading > * { position: relative; z-index: 1; }
+@keyframes itourTurnstileSpin { to { transform: rotate(360deg); } }
 .itour-turnstile-development,
 .itour-turnstile-unavailable { min-height: 0; padding: 10px 12px; border: 1px solid #d7e5df; border-radius: 8px; background: #f5faf8; color: #60736c; font-size: .78rem; line-height: 1.35; }
 .itour-turnstile-unavailable { border-color: #e5c9cc; background: #fff7f7; color: #923d46; }
+.tourist-login-card .itour-turnstile { margin: 0 0 10px; }
+@media (prefers-reduced-motion: reduce) { .itour-turnstile-loading::before { animation-duration: 1.5s; } }

@@ -8,6 +8,12 @@
   const signupForm = byId("touristSignupForm");
   if (!signupPanel || !loginPanel || !forgotPanel || !signupForm) return;
 
+  let signupProgressDirty = false;
+  let allowSignupPageExit = false;
+  let signupExitPromptOpen = false;
+  let signupHistoryGuarded = Boolean(history.state?.itourSignupGuard);
+  const signupProgressKey = "itourSignupProgressV1";
+
   const showAlert = (icon, title, text) => window.Swal
     ? Swal.fire({ icon, title, text, confirmButtonColor: "#176b55" })
     : Promise.resolve(window.alert(text));
@@ -57,6 +63,60 @@
   const indicators = Array.from(document.querySelectorAll("[data-step-indicator]"));
   let currentStep = 1;
 
+  const savedSignupFieldIds = [
+    "pageSignupFirstName", "pageSignupLastName", "pageSignupPhone",
+    "pageSignupCountry", "pageSignupRegion", "pageSignupProvince",
+    "pageSignupCity", "pageSignupBarangay", "pageSignupPostal",
+    "pageSignupStreet", "pageSignupEmail", "pageSignupPrivacyConsent",
+    "pageSignupTermsConsent"
+  ];
+
+  function readSignupProgress() {
+    try {
+      return JSON.parse(sessionStorage.getItem(signupProgressKey) || "null");
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function saveSignupProgress() {
+    const fields = {};
+    savedSignupFieldIds.forEach(id => {
+      const field = byId(id);
+      if (!field) return;
+      fields[id] = field.type === "checkbox" ? field.checked : field.value;
+    });
+    try {
+      sessionStorage.setItem(signupProgressKey, JSON.stringify({ step: currentStep, fields }));
+    } catch (_) {}
+  }
+
+  function clearSignupProgress() {
+    try { sessionStorage.removeItem(signupProgressKey); } catch (_) {}
+  }
+
+  function ensureSignupHistoryGuard() {
+    if ("navigation" in window || signupHistoryGuarded) return;
+    history.replaceState({ ...(history.state || {}), itourSignupBase: true }, "", window.location.href);
+    history.pushState({ ...(history.state || {}), itourSignupGuard: true }, "", window.location.href);
+    signupHistoryGuarded = true;
+  }
+
+  async function confirmSignupExit() {
+    if (!signupProgressDirty || allowSignupPageExit) return true;
+    if (!window.Swal) return window.confirm("Leave signup? Your signup progress will not be saved.");
+    const result = await Swal.fire({
+      icon: "warning",
+      title: "Leave signup?",
+      text: "Your signup progress will not be saved if you leave this page.",
+      showCancelButton: true,
+      confirmButtonText: "Leave page",
+      cancelButtonText: "Stay here",
+      confirmButtonColor: "#176b55"
+    });
+    return result.isConfirmed;
+  }
+
   function goToStep(step) {
     currentStep = step;
     signupPanel.dataset.currentStep = String(step);
@@ -69,12 +129,71 @@
       if (badge) badge.textContent = number < step ? "✓" : String(number);
     });
     if (step === 3) window.ItourTurnstile.render("page-signup-send").catch(() => {});
-    if (step === 4) window.ItourTurnstile.render("page-signup-complete").catch(() => {});
+    if (step === 5) window.ItourTurnstile.render("page-signup-complete").catch(() => {});
+    saveSignupProgress();
+  }
+
+  const markSignupProgress = event => {
+    if (!event.target.matches("input:not([type='hidden']):not([type='password']), select, textarea")) return;
+    signupProgressDirty = true;
+    saveSignupProgress();
+    ensureSignupHistoryGuard();
+  };
+  signupForm.addEventListener("input", markSignupProgress);
+  signupForm.addEventListener("change", markSignupProgress);
+
+  if ("navigation" in window) {
+    window.navigation.addEventListener("navigate", event => {
+      if (!signupProgressDirty || allowSignupPageExit || event.navigationType === "reload" || !event.cancelable) return;
+      const destination = new URL(event.destination.url);
+      const current = new URL(window.location.href);
+      if (destination.origin === current.origin && destination.pathname === current.pathname && destination.search === current.search && destination.hash !== current.hash) return;
+      event.preventDefault();
+      confirmSignupExit().then(confirmed => {
+        if (!confirmed) return;
+        allowSignupPageExit = true;
+        clearSignupProgress();
+        window.location.href = destination.href;
+      });
+    });
+  } else {
+    document.addEventListener("click", event => {
+      const link = event.target.closest("a[href]");
+      if (!link || !signupProgressDirty || allowSignupPageExit) return;
+      const destination = new URL(link.href, window.location.href);
+      const current = new URL(window.location.href);
+      if (destination.origin === current.origin && destination.pathname === current.pathname && destination.search === current.search && destination.hash !== current.hash) return;
+      event.preventDefault();
+      confirmSignupExit().then(confirmed => {
+        if (!confirmed) return;
+        allowSignupPageExit = true;
+        clearSignupProgress();
+        window.location.href = destination.href;
+      });
+    });
+    window.addEventListener("popstate", event => {
+      if (!signupProgressDirty || allowSignupPageExit || event.state?.itourSignupGuard || signupExitPromptOpen) return;
+      signupExitPromptOpen = true;
+      confirmSignupExit().then(confirmed => {
+        signupExitPromptOpen = false;
+        if (confirmed) {
+          allowSignupPageExit = true;
+          clearSignupProgress();
+          history.back();
+        } else {
+          history.forward();
+        }
+      });
+    });
   }
 
   document.querySelectorAll("[data-go-step]").forEach(button => button.addEventListener("click", () => goToStep(Number(button.dataset.goStep))));
 
-  byId("showPageLogin").addEventListener("click", () => {
+  byId("showPageLogin").addEventListener("click", async () => {
+    if (!await confirmSignupExit()) return;
+    allowSignupPageExit = true;
+    signupProgressDirty = false;
+    clearSignupProgress();
     signupPanel.hidden = true;
     forgotPanel.hidden = true;
     loginPanel.hidden = false;
@@ -83,6 +202,7 @@
     byId("pageLoginEmail").focus();
   });
   byId("showPageSignup").addEventListener("click", () => {
+    allowSignupPageExit = false;
     loginPanel.hidden = true;
     forgotPanel.hidden = true;
     signupPanel.hidden = false;
@@ -321,20 +441,34 @@
   byId("pageSignupPassword").addEventListener("input", passwordChecks);
   byId("pageSignupConfirm").addEventListener("input", passwordChecks);
 
-  byId("pageCreateAccount").addEventListener("click", async () => {
+  byId("pagePasswordNext").addEventListener("click", () => {
     if (reportFirstInvalid([byId("pageSignupPassword"), byId("pageSignupConfirm")])) return;
+    if (!passwordChecks()) {
+      showAlert("warning", "Check your password", "Use at least 6 characters with a letter and number, then confirm it correctly.");
+      return;
+    }
+    goToStep(5);
+  });
+
+  byId("pageCreateAccount").addEventListener("click", async () => {
+    const privacyConsent = byId("pageSignupPrivacyConsent");
+    const termsConsent = byId("pageSignupTermsConsent");
+    if (reportFirstInvalid([privacyConsent, termsConsent])) return;
     if (!passwordChecks()) { showAlert("warning", "Check your password", "Use at least 6 characters with a letter and number, then confirm it correctly."); return; }
     const button = byId("pageCreateAccount"); button.disabled = true; button.textContent = "Creating account...";
     let rateLimited = false;
     try {
       const body = new FormData();
-      body.append("action", "complete_signup"); body.append("fname", byId("pageSignupFirstName").value.trim()); body.append("lname", byId("pageSignupLastName").value.trim()); body.append("phone", byId("pageSignupPhone").value.trim()); body.append("address", addressLine()); body.append("email", byId("pageSignupEmail").value.trim()); body.append("password", byId("pageSignupPassword").value); body.append("confirm", byId("pageSignupConfirm").value);
+      body.append("action", "complete_signup"); body.append("fname", byId("pageSignupFirstName").value.trim()); body.append("lname", byId("pageSignupLastName").value.trim()); body.append("phone", byId("pageSignupPhone").value.trim()); body.append("address", addressLine()); body.append("email", byId("pageSignupEmail").value.trim()); body.append("password", byId("pageSignupPassword").value); body.append("confirm", byId("pageSignupConfirm").value); body.append("privacy_acknowledged", privacyConsent.checked ? "1" : "0"); body.append("terms_accepted", termsConsent.checked ? "1" : "0"); body.append("legal_consent", privacyConsent.checked && termsConsent.checked ? "1" : "0");
       await addTurnstileToken(body, "page-signup-complete");
       const response = await fetch("php/signup.php", { method: "POST", body });
       const result = await response.json();
       rateLimited = handleRateLimit(response, result, button, "Create account");
       if (rateLimited) return;
       if (!response.ok || result.status !== "success") throw new Error(result.message || "Your account could not be created.");
+      allowSignupPageExit = true;
+      signupProgressDirty = false;
+      clearSignupProgress();
       await showAlert("success", "Account created", "Welcome to iTour Mercedes!");
       window.location.href = result.redirect_url || "./";
     } catch (error) { showAlert("error", "Signup failed", error.message); }
@@ -460,6 +594,7 @@
       }
       try { localStorage.removeItem(touristLoginStateKey); } catch (_) {}
       if (rememberMe.checked) saveRememberedCredentials(email, password); else clearRememberedCredentials();
+      allowSignupPageExit = true;
       await showAlert("success", "Login successful", "Welcome back! Redirecting to your account.");
       window.location.href = result.redirect_url || "./";
     } catch (error) { showPageLoginError(error.message); }
@@ -700,5 +835,42 @@
     }
   });
 
-  initializeCountries();
+  async function restoreSignupProgress() {
+    const saved = readSignupProgress();
+    await initializeCountries();
+    if (!saved || !saved.fields) return;
+
+    const restoreValue = id => {
+      const field = byId(id);
+      if (!field || saved.fields[id] === undefined) return;
+      if (field.type === "checkbox") field.checked = Boolean(saved.fields[id]);
+      else field.value = saved.fields[id];
+    };
+
+    ["pageSignupFirstName", "pageSignupLastName", "pageSignupPhone", "pageSignupStreet", "pageSignupEmail", "pageSignupPrivacyConsent", "pageSignupTermsConsent"].forEach(restoreValue);
+
+    const country = byId("pageSignupCountry");
+    if (saved.fields.pageSignupCountry && country.querySelector(`option[value="${CSS.escape(String(saved.fields.pageSignupCountry))}"]`)) {
+      country.value = saved.fields.pageSignupCountry;
+      try {
+        await loadChildren("pageSignupCountry", "pageSignupRegion", "Select a region or state", ["ADM1"]);
+        restoreValue("pageSignupRegion");
+        await loadChildren("pageSignupRegion", "pageSignupProvince", "Select a province", ["ADM2"]);
+        restoreValue("pageSignupProvince");
+        await loadChildren("pageSignupProvince", "pageSignupCity", "Select a city or municipality", ["ADM3"]);
+        restoreValue("pageSignupCity");
+        await loadChildren("pageSignupCity", "pageSignupBarangay", "Select a barangay", ["ADM4", "PPL", "PPLX"]);
+        restoreValue("pageSignupBarangay");
+      } catch (_) {}
+    }
+    restoreValue("pageSignupPostal");
+
+    const restoredStep = Math.min(5, Math.max(1, Number(saved.step) || 1));
+    signupProgressDirty = true;
+    ensureSignupHistoryGuard();
+    goToStep(restoredStep);
+    if (restoredStep >= 4) byId("pageVerifiedEmail").textContent = byId("pageSignupEmail").value.trim();
+  }
+
+  restoreSignupProgress();
 })();

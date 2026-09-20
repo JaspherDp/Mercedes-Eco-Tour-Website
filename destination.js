@@ -867,11 +867,38 @@ place.activities.forEach(a => {
       .replace(/\b\w/g, (char) => char.toUpperCase());
   }
 
+  function updateDestinationUrlV2(placeId) {
+    const url = new URL(window.location.href);
+    url.searchParams.set('destination', placeId);
+    history.replaceState({ ...(history.state || {}), destination: placeId }, '', url);
+  }
+
+  function clearDestinationUrlV2() {
+    const url = new URL(window.location.href);
+    url.searchParams.delete('destination');
+    const nextState = { ...(history.state || {}) };
+    delete nextState.destination;
+    history.replaceState(nextState, '', url);
+  }
+
   function normalizePlaceImageSources() {
     Object.values(placesData).forEach((place) => {
       place.heroImage = place.heroImage || place.image || '';
       place.cardImage = place.cardImage || place.heroImage || (Array.isArray(place.gallery) && place.gallery[0]) || '';
     });
+  }
+
+  function destinationHeroSourceV2(place) {
+    if (!place) return '';
+    return window.matchMedia('(max-width: 640px)').matches
+      ? (place.cardImage || place.heroImage || place.image || '')
+      : (place.heroImage || place.cardImage || place.image || '');
+  }
+
+  function syncResponsiveDestinationHeroV2() {
+    if (!currentPlaceIdLocal || !placesData[currentPlaceIdLocal]) return;
+    const heroImg = document.getElementById('des_pageHeaderImg');
+    if (heroImg) heroImg.src = destinationHeroSourceV2(placesData[currentPlaceIdLocal]);
   }
 
   function destinationThumbnailV2(src) {
@@ -1493,7 +1520,7 @@ place.activities.forEach(a => {
     });
   }
 
-  function openPlacePageV2(placeId) {
+  function openPlacePageV2(placeId, options = {}) {
     const place = placesData[placeId];
     if (!place) return;
     const placeLabel = placeLabelFromId(placeId);
@@ -1519,7 +1546,7 @@ place.activities.forEach(a => {
 
     if (pageTitle) pageTitle.textContent = place.title || placeLabel;
     if (heroImg) {
-      heroImg.src = place.heroImage || place.image;
+      heroImg.src = destinationHeroSourceV2(place);
       heroImg.alt = placeLabel;
     }
     if (description) description.innerHTML = toParagraphs(place.description);
@@ -1560,7 +1587,9 @@ place.activities.forEach(a => {
       page.classList.add('open');
       page.setAttribute('aria-hidden', 'false');
       page.scrollTop = 0;
+      page.classList.remove('des-tabs-docked');
     }
+    if (options.updateUrl !== false) updateDestinationUrlV2(placeId);
     requestAnimationFrame(() => {
       setTimeout(initDestinationPreviewMapV2, 60);
     });
@@ -1577,7 +1606,20 @@ place.activities.forEach(a => {
       page.classList.remove('open');
       page.setAttribute('aria-hidden', 'true');
     }
+    currentPlaceIdLocal = null;
+    clearDestinationUrlV2();
     document.body.style.overflow = '';
+  }
+
+  function syncDestinationTabsDockedState() {
+    const page = document.getElementById('des_placePage');
+    const navbar = page?.querySelector('.des_place-navbar');
+    if (!page || !navbar) return;
+
+    const pageTop = page.getBoundingClientRect().top;
+    const navbarTop = navbar.getBoundingClientRect().top;
+    const isDocked = page.scrollTop > 0 && navbarTop <= pageTop + 1;
+    page.classList.toggle('des-tabs-docked', isDocked);
   }
 
   function openImageModalV2(index) {
@@ -1696,6 +1738,9 @@ place.activities.forEach(a => {
   document.getElementById('destinationMapModal')?.addEventListener('click', (event) => {
     if (event.target.id === 'destinationMapModal') closeDestinationMapV2();
   });
+  document.getElementById('des_placePage')?.addEventListener('scroll', syncDestinationTabsDockedState, { passive: true });
+  window.addEventListener('resize', syncDestinationTabsDockedState);
+  window.addEventListener('resize', syncResponsiveDestinationHeroV2);
 
   window.loadPlaces = loadPlacesV2;
   window.openPlacePage = openPlacePageV2;
@@ -1719,5 +1764,11 @@ place.activities.forEach(a => {
   window.onload = () => {
     loadPlacesV2();
     initDestinationSearchV2();
+    const requestedDestination = new URLSearchParams(window.location.search).get('destination');
+    if (requestedDestination && placesData[requestedDestination]) {
+      openPlacePageV2(requestedDestination, { updateUrl: false });
+    } else if (requestedDestination) {
+      clearDestinationUrlV2();
+    }
   };
 })();
