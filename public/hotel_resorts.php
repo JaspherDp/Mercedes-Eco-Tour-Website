@@ -584,7 +584,7 @@ unset($hotel);
 <?php include __DIR__ . '/../includes/page_loader.php'; ?>
 
 <!-- Header -->
-<div id="header"></div>
+<div id="header"><?php include __DIR__ . '/../php/header.php'; ?></div>
 
 <!-- TOUR GUIDE / BOAT DETAILS DRAWER -->
 <div class="service-drawer-overlay" id="serviceDrawerOverlay" aria-hidden="true"></div>
@@ -1965,11 +1965,17 @@ include 'footer.php';
       }
     }, true);
 
-    // --- Load header dynamically ---
-    fetch("php/header.php")
-      .then(res => res.text())
-      .then(html => {
-        document.getElementById("header").innerHTML = html;
+    // The navigation is server-rendered for immediate display. Keep the fetch
+    // fallback for deployments that still serve an empty header host.
+    const sharedHeaderHost = document.getElementById("header");
+    const sharedHeaderReady = sharedHeaderHost?.firstElementChild
+      ? Promise.resolve()
+      : fetch("php/header.php")
+          .then(res => res.text())
+          .then(html => { sharedHeaderHost.innerHTML = html; });
+
+    sharedHeaderReady
+      .then(() => {
         if (typeof initHeader === "function") initHeader();
 
         // Scroll to Top Button

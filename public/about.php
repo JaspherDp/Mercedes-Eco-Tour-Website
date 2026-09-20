@@ -36,7 +36,7 @@ try {
 <body class="about-page">
 <?php include __DIR__ . '/../includes/page_loader.php'; ?>
 <!-- Header -->
-<div id="header"></div>
+<div id="header"><?php include __DIR__ . '/../php/header.php'; ?></div>
 <!-- Placeholder for Login/Signup Modal -->
 <div id="loginModal"></div>
 

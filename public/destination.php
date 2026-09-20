@@ -74,7 +74,7 @@ foreach (destinationRows($pdo, true) as $destination) {
 <?php include __DIR__ . '/../includes/page_loader.php'; ?>
 
 <!-- Header -->
-  <div id="header"></div>
+  <div id="header"><?php include __DIR__ . '/../php/header.php'; ?></div>
 
   <!-- Login/Signup Modal -->
   <div id="loginModal"></div>
@@ -306,10 +306,15 @@ foreach (destinationRows($pdo, true) as $destination) {
 <script defer src="destination.js?v=<?= (int)@filemtime(__DIR__ . '/../destination.js') ?>"></script>
 <script src="js/header.js?v=<?= (int)@filemtime(__DIR__ . '/../js/header.js') ?>"></script>
 <script>
-fetch("php/header.php")
-  .then(res => res.text())
-  .then(html => {
-    document.getElementById("header").innerHTML = html;
+const destinationHeaderHost = document.getElementById("header");
+const destinationHeaderReady = destinationHeaderHost?.firstElementChild
+  ? Promise.resolve()
+  : fetch("php/header.php")
+      .then(res => res.text())
+      .then(html => { destinationHeaderHost.innerHTML = html; });
+
+destinationHeaderReady
+  .then(() => {
     if (typeof initHeader === "function") initHeader();
 
     // Highlight current nav link

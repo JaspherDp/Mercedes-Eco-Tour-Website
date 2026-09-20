@@ -51,6 +51,17 @@
     const target = document.getElementById("header");
     if (!target) return;
 
+    const finishHeaderSetup = () => {
+      if (typeof window.initHeader === "function") window.initHeader();
+      initMobileNavDocking();
+      loadLoginModal();
+    };
+
+    if (target.firstElementChild) {
+      finishHeaderSetup();
+      return;
+    }
+
     fetch("php/header.php")
       .then((response) => {
         if (!response.ok) throw new Error("Unable to load the site navigation.");
@@ -58,9 +69,7 @@
       })
       .then((html) => {
         target.innerHTML = html;
-        if (typeof window.initHeader === "function") window.initHeader();
-        initMobileNavDocking();
-        loadLoginModal();
+        finishHeaderSetup();
       })
       .catch((error) => console.error(error));
   }

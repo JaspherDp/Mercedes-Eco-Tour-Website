@@ -137,7 +137,7 @@ try {
 </head>
 <body class="homepage">
   <?php include __DIR__ . '/../includes/page_loader.php'; ?>
-  <div id="header"></div>
+  <div id="header"><?php include __DIR__ . '/../php/header.php'; ?></div>
 
   <main>
     <section class="home-hero" aria-labelledby="heroTitle">

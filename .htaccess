@@ -6,9 +6,18 @@ Options -Indexes
 DirectoryIndex index.php
 
 # Central response-header policy. HSTS is deliberately limited to HTTPS
-# requests; localhost development over HTTP is therefore unaffected.
+# requests. Hostinger CDN terminates TLS before forwarding some requests, so
+# accept its HTTPS forwarding marker as well as Apache's direct HTTPS state.
 <IfModule mod_setenvif.c>
     SetEnvIfExpr "%{HTTPS} == 'on'" ITOUR_HTTPS
+    SetEnvIf X-Forwarded-Proto "^https$" ITOUR_HTTPS
+</IfModule>
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteCond %{HTTPS} =on [OR]
+    RewriteCond %{HTTP:X-Forwarded-Proto} ^https$ [NC]
+    RewriteRule ^ - [E=ITOUR_HTTPS:1]
 </IfModule>
 
 <IfModule mod_headers.c>
@@ -49,6 +58,7 @@ DirectoryIndex index.php
     # Temporary production HTTPS redirect. Local/private XAMPP hosts remain on
     # HTTP. Change R=302 to R=308 only after the deployed SSL flows are verified.
     RewriteCond %{HTTPS} !=on
+    RewriteCond %{HTTP:X-Forwarded-Proto} !^https$ [NC]
     RewriteCond %{HTTP_HOST} !^(?:localhost|127\.0\.0\.1|\[?::1\]?)(?::[0-9]+)?$ [NC]
     RewriteCond %{HTTP_HOST} !^(?:10\.|192\.168\.|172\.(?:1[6-9]|2[0-9]|3[01])\.) [NC]
     RewriteCond %{HTTP_HOST} ^([A-Z0-9.-]+)(?::[0-9]+)?$ [NC]

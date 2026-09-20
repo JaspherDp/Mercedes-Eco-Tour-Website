@@ -6,10 +6,12 @@ if (session_status() === PHP_SESSION_NONE) {
 
 require_once 'db_connection.php';
 
+$headerRequestFile = realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? ''));
+$headerIsStandaloneRequest = $headerRequestFile !== false && $headerRequestFile === realpath(__FILE__);
 $user = null;
 
 if (isset($_SESSION['tourist_id'])) {
-    $stmt = $pdo->prepare("SELECT * FROM tourist WHERE tourist_id = ?");
+    $stmt = $pdo->prepare("SELECT tourist_id, full_name, email, phone, profile_picture, google_id FROM tourist WHERE tourist_id = ? LIMIT 1");
     $stmt->execute([$_SESSION['tourist_id']]);
     $tourist = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -31,7 +33,8 @@ if (isset($_SESSION['tourist_id'])) {
 }
 
 $refererUrl = (string)($_SERVER['HTTP_REFERER'] ?? '');
-$currentUrl = $refererUrl !== '' ? $refererUrl : (string)($_SERVER['REQUEST_URI'] ?? '');
+$requestUrl = (string)($_SERVER['REQUEST_URI'] ?? '');
+$currentUrl = $headerIsStandaloneRequest && $refererUrl !== '' ? $refererUrl : $requestUrl;
 $currentPath = rawurldecode((string)(parse_url($currentUrl, PHP_URL_PATH) ?? ''));
 $currentPage = basename(rtrim($currentPath, '/'));
 $headerScriptPath = rawurldecode(str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? '/php/header.php')));
@@ -155,15 +158,20 @@ if ($profileName === '') {
 }
 $profileInitial = strtoupper(function_exists('mb_substr') ? mb_substr(($profileName !== '' ? $profileName : 'U'), 0, 1) : substr(($profileName !== '' ? $profileName : 'U'), 0, 1));
 
+// The standalone AJAX endpoint only reads session data. Release its file lock
+// before running navigation queries so it cannot hold up another page request.
+if ($headerIsStandaloneRequest && session_status() === PHP_SESSION_ACTIVE) {
+    session_write_close();
+}
+
 function headSubnavTableExists(PDO $pdo, string $tableName): bool
 {
-    $stmt = $pdo->prepare("
-        SELECT COUNT(*)
-        FROM information_schema.tables
-        WHERE table_schema = DATABASE() AND table_name = ?
-    ");
-    $stmt->execute([$tableName]);
-    return ((int)$stmt->fetchColumn()) > 0;
+    static $tables = null;
+    if ($tables === null) {
+        $names = $pdo->query('SHOW TABLES')->fetchAll(PDO::FETCH_COLUMN);
+        $tables = array_fill_keys(array_map('strtolower', $names ?: []), true);
+    }
+    return isset($tables[strtolower($tableName)]);
 }
 
 function headSubnavResolveImage(?string $rawPath, string $fallback = 'img/sampleimage.png'): string
@@ -1548,6 +1556,4 @@ html {
   .head-nav-main-header .head-nav-center, .head-nav-menu-backdrop, .head-nav-mobile-toggle span { transition: none; }
 }
 </style>
-
-<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 

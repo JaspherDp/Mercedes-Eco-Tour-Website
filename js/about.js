@@ -27,11 +27,9 @@ document.addEventListener('DOMContentLoaded', () => {
     revealElements.forEach((element) => element.classList.add('about-revealed'));
   }
 
-  fetch('php/header.php')
-    .then((response) => response.text())
-    .then((html) => {
+  const initializeHeader = (html = '') => {
       if (!headerHost) return;
-      headerHost.innerHTML = html;
+      if (html) headerHost.innerHTML = html;
       if (typeof initHeader === 'function') initHeader();
 
       const currentPage = location.pathname.split('/').pop().toLowerCase();
@@ -43,8 +41,16 @@ document.addEventListener('DOMContentLoaded', () => {
       const toggle = headerHost.querySelector('.menu-toggle');
       const navLinks = headerHost.querySelector('nav ul');
       toggle?.addEventListener('click', () => navLinks?.classList.toggle('show'));
-    })
-    .catch((error) => console.error('Header load error:', error));
+  };
+
+  if (headerHost?.firstElementChild) {
+    initializeHeader();
+  } else {
+    fetch('php/header.php')
+      .then((response) => response.text())
+      .then(initializeHeader)
+      .catch((error) => console.error('Header load error:', error));
+  }
 
   const loadLoginModal = () => {
     if (!loginHost) return;
