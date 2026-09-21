@@ -277,6 +277,23 @@ img { max-width: 100%; }
 
 .hero-search input::placeholder { color: #7b8c87; }
 
+@media (min-width: 761px) {
+  .homepage .hero-search-field {
+    min-height: 42px;
+  }
+
+  .homepage .hero-search-field > svg {
+    display: block;
+    transform: translateY(1px);
+  }
+
+  .homepage .hero-search input {
+    height: 42px;
+    padding-block: 0;
+    line-height: 42px;
+  }
+}
+
 .hero-search > button {
   display: inline-flex;
   align-items: center;

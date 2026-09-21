@@ -1943,9 +1943,13 @@ include 'footer.php';
     const shouldResetSearchTab = landingParams.get("reset_search") === "1";
     if (shouldResetSearchTab) clearActiveSearchTabForExit();
     const refreshedUrlTab = landingParams.get("search_tab");
+    const explicitlyRequestedTab = refreshedUrlTab
+      ? normalizeSearchTab(refreshedUrlTab)
+      : "";
     const retainedTab = shouldResetSearchTab
-      ? "hotels"
-      : window.history.state?.itourSearchTab
+      ? (explicitlyRequestedTab || "hotels")
+      : explicitlyRequestedTab
+        || window.history.state?.itourSearchTab
         || sessionStorage.getItem(ACTIVE_SEARCH_TAB_KEY)
         || (landingNavigationType === "reload" ? refreshedUrlTab : "")
         || "hotels";

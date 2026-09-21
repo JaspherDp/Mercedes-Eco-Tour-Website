@@ -343,6 +343,9 @@ body.back-to-top-visible .itour-ai-launcher { right: calc(clamp(18px, 3vw, 36px)
 .itour-ai-message__bubble.is-formatted ul { margin: 7px 0 0; padding-left: 17px; }
 .itour-ai-message__bubble.is-formatted li + li { margin-top: 4px; }
 .itour-ai-message__bubble.is-formatted strong { color: #174f3f; font-weight: 800; }
+.itour-ai-message__link { color: #12684f; font-weight: 800; text-decoration: underline; text-decoration-thickness: 1.5px; text-underline-offset: 2px; cursor: pointer; }
+.itour-ai-message__link:hover { color: #0a4d3a; }
+.itour-ai-message__link:focus-visible { border-radius: 3px; outline: 2px solid #2b8063; outline-offset: 2px; }
 .itour-ai-message--user .itour-ai-message__bubble { border-radius: 12px 12px 4px 12px; background: #176f58; color: #fff; }
 .itour-ai-message--error .itour-ai-message__bubble { border: 1px solid #eccfd2; background: #fff4f5; color: #923c46; }
 .itour-ai-message.is-pending .itour-ai-message__bubble { display: flex; gap: 4px; padding: 13px 14px; }

@@ -138,6 +138,8 @@
 
   const scriptUrl = document.currentScript?.src || document.baseURI;
   const endpoint = new URL('../php/itour_ai_chat.php', scriptUrl).href;
+  const siteRoot = new URL('../', scriptUrl);
+  const minimumTypingDuration = 650;
   const launcher = document.createElement('button');
   launcher.type = 'button';
   launcher.className = 'itour-ai-launcher';
@@ -238,16 +240,68 @@
     let match;
 
     while ((match = pattern.exec(text)) !== null) {
-      if (match.index > cursor) container.append(document.createTextNode(text.slice(cursor, match.index)));
+      if (match.index > cursor) appendNavigationText(container, text.slice(cursor, match.index));
       const token = match[0];
-      const element = document.createElement(token.startsWith('**') || token.startsWith('__') ? 'strong' : 'em');
       const trimBy = token.startsWith('**') || token.startsWith('__') ? 2 : 1;
-      element.textContent = token.slice(trimBy, -trimBy);
+      const label = token.slice(trimBy, -trimBy);
+      const navigationTarget = getNavigationTarget(label);
+      const element = document.createElement(navigationTarget
+        ? 'a'
+        : (trimBy === 2 ? 'strong' : 'em'));
+      element.textContent = label;
+      if (navigationTarget) {
+        element.className = 'itour-ai-message__link';
+        element.href = new URL(navigationTarget, siteRoot).href;
+      }
       container.append(element);
       cursor = match.index + token.length;
     }
 
+    if (cursor < text.length) appendNavigationText(container, text.slice(cursor));
+  }
+
+  function appendNavigationText(container, value) {
+    const text = String(value || '');
+    const pattern = /\bTours(?:\s*(?:→|➜|->)\s*(?:Hotel\/Resort|Tour Packages?|Tour Guides?|Tour Boats?))?/gi;
+    let cursor = 0;
+    let match;
+
+    while ((match = pattern.exec(text)) !== null) {
+      if (match.index > cursor) container.append(document.createTextNode(text.slice(cursor, match.index)));
+      const link = document.createElement('a');
+      link.className = 'itour-ai-message__link';
+      link.href = new URL(getNavigationTarget(match[0]), siteRoot).href;
+      link.textContent = match[0];
+      container.append(link);
+      cursor = match.index + match[0].length;
+    }
+
     if (cursor < text.length) container.append(document.createTextNode(text.slice(cursor)));
+  }
+
+  function getNavigationTarget(label) {
+    const normalized = String(label || '')
+      .replace(/\s*(?:→|➜|->)\s*/g, ' → ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+
+    if (/^tours → hotel\/resort\b/.test(normalized)) {
+      return 'hotel_resorts.php?tab=tours&reset_search=1&search_tab=hotels';
+    }
+    if (/^tours → tour packages?\b/.test(normalized)) {
+      return 'hotel_resorts.php?tab=tours&reset_search=1&search_tab=tours';
+    }
+    if (/^tours → tour guides?\b/.test(normalized)) {
+      return 'hotel_resorts.php?tab=tours&reset_search=1&search_tab=guides';
+    }
+    if (/^tours → tour boats?\b/.test(normalized)) {
+      return 'hotel_resorts.php?tab=tours&reset_search=1&search_tab=boats';
+    }
+    if (normalized === 'tours') return 'hotel_resorts.php?tab=tours&reset_search=1';
+    if (normalized === 'destinations') return 'destination.php';
+    if (normalized === 'about') return 'about.php';
+    return '';
   }
 
   function appendFormattedAnswer(container, value) {
@@ -279,7 +333,9 @@
     const bubble = document.createElement('div');
     bubble.className = 'itour-ai-message__bubble';
     if (pending) {
-      bubble.innerHTML = '<span></span><span></span><span></span>';
+      bubble.setAttribute('role', 'status');
+      bubble.setAttribute('aria-label', 'iTour AI is typing');
+      bubble.innerHTML = '<span aria-hidden="true"></span><span aria-hidden="true"></span><span aria-hidden="true"></span>';
     } else if (role === 'assistant') {
       bubble.classList.add('is-formatted');
       appendFormattedAnswer(bubble, text);
@@ -290,6 +346,13 @@
     messagesElement.appendChild(message);
     messagesElement.scrollTop = messagesElement.scrollHeight;
     return message;
+  }
+
+  function waitForTypingIndicator(startedAt) {
+    const remainingTime = minimumTypingDuration - (window.performance.now() - startedAt);
+    return remainingTime > 0
+      ? new Promise(resolve => window.setTimeout(resolve, remainingTime))
+      : Promise.resolve();
   }
 
   async function ask(question) {
@@ -304,7 +367,13 @@
     input.style.height = '';
     sendButton.disabled = true;
     const pending = addMessage('assistant', '', true);
+    const typingStartedAt = window.performance.now();
     requestController = new AbortController();
+    let timedOut = false;
+    const timeoutId = window.setTimeout(() => {
+      timedOut = true;
+      requestController?.abort();
+    }, 16000);
 
     try {
       const response = await fetch(endpoint, {
@@ -321,15 +390,20 @@
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok || !data.ok || !data.answer) throw new Error(data.message || 'iTour AI could not answer right now.');
+      await waitForTypingIndicator(typingStartedAt);
       pending.remove();
       conversation.push({ role: 'assistant', text: data.answer });
       addMessage('assistant', data.answer);
     } catch (error) {
+      await waitForTypingIndicator(typingStartedAt);
       pending.remove();
-      if (error.name !== 'AbortError') {
+      if (timedOut) {
+        addMessage('error', 'The AI service took too long to respond. Please try a website question such as “What is the most popular destination?”');
+      } else if (error.name !== 'AbortError') {
         addMessage('error', error.message || 'iTour AI could not answer right now. Please try again.');
       }
     } finally {
+      window.clearTimeout(timeoutId);
       requestController = null;
       sendButton.disabled = false;
       if (!panel.hidden) input.focus();

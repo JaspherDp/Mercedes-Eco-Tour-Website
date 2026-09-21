@@ -11,7 +11,7 @@ $headerIsStandaloneRequest = $headerRequestFile !== false && $headerRequestFile 
 $user = null;
 
 if (isset($_SESSION['tourist_id'])) {
-    $stmt = $pdo->prepare("SELECT tourist_id, full_name, email, phone, profile_picture, google_id FROM tourist WHERE tourist_id = ? LIMIT 1");
+    $stmt = $pdo->prepare("SELECT tourist_id, full_name, email, phone_number AS phone, profile_picture, google_id FROM tourist WHERE tourist_id = ? LIMIT 1");
     $stmt->execute([$_SESSION['tourist_id']]);
     $tourist = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -42,8 +42,14 @@ $applicationRootPath = rtrim(str_replace('\\', '/', dirname(dirname($headerScrip
 if ($applicationRootPath === '.' || $applicationRootPath === '/') {
     $applicationRootPath = '';
 }
+$requestScriptPage = strtolower(basename($headerScriptPath));
+$requestScriptDirectory = rtrim(dirname($headerScriptPath), '/');
+if ($requestScriptDirectory === '.' || $requestScriptDirectory === '/') {
+    $requestScriptDirectory = '';
+}
 $isHomepage = rtrim($currentPath, '/') === $applicationRootPath
-    || in_array(strtolower($currentPage), ['index.php', 'homepage.php'], true);
+    || in_array(strtolower($currentPage), ['index.php', 'homepage.php'], true)
+    || ($requestScriptPage === 'index.php' && rtrim($currentPath, '/') === $requestScriptDirectory);
 $refererQuery = [];
 parse_str((string)parse_url($refererUrl, PHP_URL_QUERY), $refererQuery);
 $currentTabRaw = strtolower(trim((string)($refererQuery['tab'] ?? ($_GET['tab'] ?? ''))));
