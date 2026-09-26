@@ -12,8 +12,8 @@
     const style = document.createElement('style');
     style.id = 'itour-image-button-styles';
     style.textContent = `
-      .itour-image-button-busy{display:inline-flex!important;align-items:center;justify-content:center;gap:8px;cursor:wait!important}
-      .itour-image-button-spinner{width:15px;height:15px;flex:0 0 15px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:itourImageButtonSpin .7s linear infinite}
+      .itour-image-button-busy{display:inline-flex!important;align-items:center!important;justify-content:center!important;gap:8px!important;cursor:wait!important}
+      button.itour-image-button-busy>.itour-image-button-spinner{display:inline-block!important;visibility:visible!important;opacity:1!important;box-sizing:border-box!important;width:16px!important;min-width:16px!important;height:16px!important;flex:0 0 16px!important;border:2px solid rgba(255,255,255,.45)!important;border-top-color:#fff!important;border-radius:50%!important;animation:itourImageButtonSpin .7s linear infinite!important}
       @keyframes itourImageButtonSpin{to{transform:rotate(360deg)}}
       @media (prefers-reduced-motion:reduce){.itour-image-button-spinner{animation-duration:1.4s}}
     `;
@@ -40,6 +40,27 @@
     const spinner = document.createElement('span');
     spinner.className = 'itour-image-button-spinner';
     spinner.setAttribute('aria-hidden', 'true');
+    Object.assign(spinner.style, {
+      display: 'inline-block',
+      visibility: 'visible',
+      opacity: '1',
+      boxSizing: 'border-box',
+      width: '16px',
+      minWidth: '16px',
+      height: '16px',
+      flex: '0 0 16px',
+      border: '2px solid rgba(255, 255, 255, 0.45)',
+      borderTopColor: '#fff',
+      borderRadius: '50%',
+      verticalAlign: 'middle',
+      animation: 'itourImageButtonSpin .7s linear infinite'
+    });
+    if (typeof spinner.animate === 'function') {
+      spinner.animate(
+        [{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }],
+        { duration: 700, iterations: Infinity, easing: 'linear' }
+      );
+    }
     const text = document.createElement('span');
     text.textContent = label;
     button.append(spinner, text);

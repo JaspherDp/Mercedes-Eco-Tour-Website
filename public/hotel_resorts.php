@@ -369,7 +369,7 @@ LEFT JOIN feedback f
 
 GROUP BY b.`{$idCol}`
 
-ORDER BY b.`{$idCol}` DESC
+ORDER BY CASE WHEN b.`{$idCol}` = 1 THEN 0 ELSE 1 END, b.`{$idCol}` DESC
 LIMIT 20
 ";
       $stmtBoats = $pdo->query($sqlBoats);
