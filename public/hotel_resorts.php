@@ -311,7 +311,7 @@ foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
 // Fetch tour boats
 $boatsFromDb = [];
 try {
-  $boatTable = hoLandingTableExists($pdo, 'tour_boats') ? 'tour_boats' : (hoLandingTableExists($pdo, 'boats') ? 'boats' : null);
+  $boatTable = hoLandingTableExists($pdo, 'boats') ? 'boats' : (hoLandingTableExists($pdo, 'tour_boats') ? 'tour_boats' : null);
   if ($boatTable) {
     $idCol = hoLandingPickColumn($pdo, $boatTable, ['tour_boat_id', 'boat_id', 'id']);
     $nameCol = hoLandingPickColumn($pdo, $boatTable, ['boat_name', 'name']);

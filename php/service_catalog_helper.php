@@ -54,7 +54,7 @@ function serviceCatalogFetch(PDO $pdo, string $type): array
     $prices = serviceCatalogPrices($pdo);
     $table = $type === 'guide'
         ? 'tour_guides'
-        : (serviceCatalogTableExists($pdo, 'tour_boats') ? 'tour_boats' : 'boats');
+        : (serviceCatalogTableExists($pdo, 'boats') ? 'boats' : 'tour_boats');
     if (!serviceCatalogTableExists($pdo, $table)) {
         return [];
     }
