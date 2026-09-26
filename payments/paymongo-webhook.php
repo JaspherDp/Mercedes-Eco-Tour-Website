@@ -45,7 +45,7 @@ $attributes = is_array($event['attributes'] ?? null) ? $event['attributes'] : []
 // resource in attributes.type/attributes.data. Accept the current direct
 // type/data form as well so the handler remains compatible with V2 Checkout.
 $eventType = trim((string)($attributes['type'] ?? $event['type'] ?? ''));
-$allowedEvents = ['checkout_session.payment.paid', 'payment.failed', 'payment.refund.updated', 'payment.refunded'];
+$allowedEvents = ['checkout_session.payment.paid', 'payment.failed', 'refund.succeeded', 'payment.refund.updated', 'payment.refunded'];
 
 if (!in_array($eventType, $allowedEvents, true)) {
     paymongo_json_response(200, ['received' => true, 'ignored' => true]);
@@ -55,7 +55,7 @@ $resource = is_array($attributes['data'] ?? null)
     : (is_array($event['data'] ?? null) ? $event['data'] : []);
 $resourceAttributes = is_array($resource['attributes'] ?? null) ? $resource['attributes'] : [];
 $livemode = $attributes['livemode'] ?? $event['livemode'] ?? $resourceAttributes['livemode'] ?? false;
-if ($livemode === true) {
+if ($livemode === true || ($resourceAttributes['livemode'] ?? false) === true) {
     paymongo_json_response(400, ['received' => false, 'error' => 'live_event_rejected']);
 }
 
@@ -84,9 +84,21 @@ if ($eventType === 'checkout_session.payment.paid') {
     ]);
 }
 
-if (in_array($eventType, ['payment.refund.updated', 'payment.refunded'], true)) {
+if (RefundWebhookReconciler::supportsEventType($eventType)) {
     try {
         ensureBookingRefundsTable($pdo);
+        $eventId = trim((string)($event['id'] ?? ''));
+        if (!preg_match('/^evt_[A-Za-z0-9]+$/', $eventId)) {
+            throw new UnexpectedValueException('PayMongo refund event ID is invalid.');
+        }
+        if ($eventId !== '' && bookingRefundWebhookEventProcessed($pdo, $eventId)) {
+            paymongo_json_response(200, [
+                'received' => true,
+                'event_id' => $eventId,
+                'event_type' => $eventType,
+                'idempotent' => true,
+            ]);
+        }
         $resourceId = trim((string)($resource['id'] ?? ''));
         if (str_starts_with($resourceId, 'pay_')
             && RefundWebhookReconciler::refundResources($resource) === []) {
@@ -98,7 +110,7 @@ if (in_array($eventType, ['payment.refund.updated', 'payment.refunded'], true)) 
             $resource = $retrievedResource;
         }
 
-        $refunds = RefundWebhookReconciler::refundResources($resource);
+        $refunds = RefundWebhookReconciler::refundResourcesForEvent($eventType, $resource);
         $matched = false;
         $updated = false;
         foreach ($refunds as $providerRefund) {
@@ -106,8 +118,10 @@ if (in_array($eventType, ['payment.refund.updated', 'payment.refunded'], true)) 
             $matched = $matched || $result['matched'];
             $updated = $updated || $result['updated'];
         }
+        if ($eventId !== '') bookingRefundRecordWebhookEvent($pdo, $eventId, $eventType, $rawBody);
         paymongo_json_response(200, [
             'received' => true,
+            'event_id' => $eventId,
             'event_type' => $eventType,
             'matched' => $matched,
             'updated' => $updated,

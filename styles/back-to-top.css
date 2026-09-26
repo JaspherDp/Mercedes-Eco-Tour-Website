@@ -175,7 +175,7 @@
 }
 
 @media (max-width: 600px) {
-  .back-to-top { width: 50px; height: 50px; right: 14px; bottom: 16px; }
+  .back-to-top { width: 50px; height: 50px; right: 14px; bottom: 74px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -367,12 +367,12 @@ body.back-to-top-visible .itour-ai-launcher { right: calc(clamp(18px, 3vw, 36px)
 .itour-ai-panel__form > small { display: block; margin-top: 6px; color: #80918b; font-size: 7.5px; line-height: 1.4; text-align: center; }
 
 @media (max-width: 600px) {
-  .itour-ai-launcher { right: 14px; bottom: 74px; min-width: 48px; width: 48px; height: 48px; padding: 0; font-size: 11px; }
+  .itour-ai-launcher { right: 14px; bottom: 16px; min-width: 48px; width: 48px; height: 48px; padding: 0; font-size: 11px; }
   body.back-to-top-visible .itour-ai-launcher { right: 14px; }
   .itour-ai-launcher__assistant { width: 32px; height: 32px; flex-basis: 32px; }
   .itour-ai-launcher__label { display: none; }
   .itour-ai-launcher.is-open { width: 48px; min-width: 48px; }
-  .itour-ai-panel { right: 12px; bottom: 132px; width: calc(100vw - 24px); max-height: calc(100dvh - 150px); border-radius: 16px; }
+  .itour-ai-panel { right: 12px; bottom: 76px; width: calc(100vw - 24px); max-height: calc(100dvh - 94px); border-radius: 16px; }
   .itour-ai-panel__header { min-height: 66px; padding: 11px 12px; }
   .itour-ai-panel__messages { min-height: 225px; padding: 12px; }
   body.itour-ai-chat-open .back-to-top,

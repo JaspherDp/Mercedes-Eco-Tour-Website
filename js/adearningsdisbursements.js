@@ -202,44 +202,46 @@
     const reference=button.dataset.copyReference||'';try{await navigator.clipboard.writeText(reference);if(window.Swal)Swal.fire({icon:'success',title:'Reference copied',text:reference,timer:1300,showConfirmButton:false});}catch(_error){window.prompt('Copy booking reference:',reference);}closeActionMenus();
   }));
 
-  const settlementModal=document.getElementById('settlementModal');
-  document.querySelectorAll('[data-settle]').forEach(button=>button.addEventListener('click',()=>{
-    let details={};try{details=JSON.parse(button.dataset.settle||'{}');}catch(_error){return;}
-    const continueToDetails=()=>{
-      document.getElementById('settlementPayoutId').value=details.id||'';
-      document.getElementById('settlementBooking').textContent=details.reference||'—';
-      document.getElementById('settlementProvider').textContent=details.provider||'—';
-      document.getElementById('settlementAmount').textContent=details.amount||'—';
-      openModal(settlementModal);
-    };
-    if(!window.Swal){if(window.confirm(`Do you want to settle ${details.amount||'this payout'} for ${details.provider||'this provider'}?`))continueToDetails();return;}
-    Swal.fire({
-      icon:'warning',title:'Approve payout for settlement?',
-      text:`Confirm ${details.amount||'this payout'} for ${details.provider||'the provider'}. You will enter the transfer reference before it is recorded as settled.`,
-      showCancelButton:true,confirmButtonText:'Approve payout',cancelButtonText:'Cancel',confirmButtonColor:'#1d6851',cancelButtonColor:'#6f7f79',reverseButtons:true,focusCancel:true
-    }).then(result=>{if(result.isConfirmed)continueToDetails();});
-  }));
-
-  const settlementForm=document.getElementById('settlementForm');
-  if(settlementForm)settlementForm.addEventListener('submit',event=>{
-    if(settlementForm.dataset.confirmed==='true')return;
-    event.preventDefault();
-    if(!settlementForm.reportValidity())return;
-    const amount=document.getElementById('settlementAmount')?.textContent||'this payout';
-    const provider=document.getElementById('settlementProvider')?.textContent||'the provider';
-    const submit=()=>{settlementForm.dataset.confirmed='true';settlementForm.requestSubmit();};
-    if(!window.Swal){if(window.confirm(`Approve and settle ${amount} to ${provider}?`))submit();return;}
-    Swal.fire({
-      icon:'warning',title:'Approve and settle payout?',
-      html:`Confirm that <strong>${escapeHtml(amount)}</strong> will be recorded as paid to <strong>${escapeHtml(provider)}</strong>. This action changes the payout to settled.`,
-      showCancelButton:true,confirmButtonText:'Approve & settle',cancelButtonText:'Cancel',confirmButtonColor:'#1d6851',cancelButtonColor:'#6f7f79',reverseButtons:true,focusCancel:true
-    }).then(result=>{if(result.isConfirmed)submit();});
+  const settlementModal=document.getElementById('settlementModal'),settlementForm=document.getElementById('settlementForm'),settlementMethod=document.getElementById('settlementMethod');
+  const electronicDestination=document.getElementById('electronicDestination'),cashDestination=document.getElementById('cashDestination'),otherDestinationSection=document.getElementById('otherDestinationSection');
+  const savedDestinationPanel=document.getElementById('savedDestinationPanel'),walletInstitution=document.getElementById('walletInstitution'),settlementInstitution=document.getElementById('settlementInstitution');
+  const settlementAccountName=document.getElementById('settlementAccountName'),settlementAccountIdentifier=document.getElementById('settlementAccountIdentifier'),savedDestinationId=document.getElementById('savedDestinationId');
+  let savedDestinations=[],applyingDestination=false;
+  const requireField=(field,on)=>{if(field){field.required=on;field.disabled=!on;}};
+  function showSaved(destination){savedDestinationPanel.hidden=!destination;if(!destination)return;savedDestinationPanel.dataset.destinationId=destination.id;document.getElementById('savedDestinationTitle').textContent=`${destination.institution} · ${destination.account_name}`;document.getElementById('savedDestinationSummary').textContent=destination.masked_identifier;}
+  function clearElectronic(clear=true){savedDestinationId.value='';if(clear){settlementInstitution.value='';walletInstitution.value='';settlementAccountName.value='';settlementAccountIdentifier.value='';}document.getElementById('rememberDestination').checked=false;}
+  function configureMethod(autoSaved=true){
+    const method=settlementMethod.value,wallet=method==='e_wallet',electronic=['bank_transfer','e_wallet'].includes(method);
+    electronicDestination.hidden=!electronic;cashDestination.hidden=method!=='cash';otherDestinationSection.hidden=method!=='other';walletInstitution.hidden=!wallet;settlementInstitution.hidden=wallet;
+    requireField(walletInstitution,wallet);requireField(settlementInstitution,method==='bank_transfer');requireField(settlementAccountName,electronic);requireField(settlementAccountIdentifier,electronic);
+    requireField(document.getElementById('cashReceivedBy'),method==='cash');requireField(document.getElementById('otherChannelName'),method==='other');requireField(document.getElementById('otherDestination'),method==='other');
+    document.getElementById('destinationHeading').textContent=wallet?'E-wallet recipient details':'Bank recipient details';document.getElementById('institutionLabel').textContent=wallet?'E-wallet provider':'Bank / Financial Institution';document.getElementById('accountIdentifierLabel').textContent=wallet?'Mobile / account number':'Account number';document.getElementById('settlementReference').placeholder=method==='cash'?'e.g. Receipt / acknowledgment no.':'e.g. 123456789012';
+    if(autoSaved){const saved=savedDestinations.find(item=>item.method===method&&item.is_default)||savedDestinations.find(item=>item.method===method);saved?applySaved(saved):clearElectronic(false);}
+  }
+  function applySaved(destination){if(!destination)return;applyingDestination=true;settlementMethod.value=destination.method;configureMethod(false);walletInstitution.value=['GCash','Maya','Other'].includes(destination.institution)?destination.institution:'Other';settlementInstitution.value=destination.institution;settlementAccountName.value=destination.account_name;settlementAccountIdentifier.value=destination.account_identifier;savedDestinationId.value=destination.id;showSaved(destination);applyingDestination=false;}
+  settlementMethod?.addEventListener('change',()=>configureMethod(true));walletInstitution?.addEventListener('change',()=>{settlementInstitution.value=walletInstitution.value;if(!applyingDestination)savedDestinationId.value='';});
+  [settlementInstitution,settlementAccountName,settlementAccountIdentifier].forEach(field=>field?.addEventListener('input',()=>{if(!applyingDestination)savedDestinationId.value='';}));
+  document.getElementById('useSavedDestination')?.addEventListener('click',()=>applySaved(savedDestinations.find(item=>item.id===Number(savedDestinationPanel.dataset.destinationId))));
+  document.getElementById('enterDifferentDestination')?.addEventListener('click',()=>{clearElectronic(true);savedDestinationPanel.hidden=true;settlementAccountName.focus();});
+  document.getElementById('toggleAccountIdentifier')?.addEventListener('click',event=>{const show=settlementAccountIdentifier.type==='password';settlementAccountIdentifier.type=show?'text':'password';event.currentTarget.textContent=show?'Hide':'Show';});
+  async function openSettlement(details){
+    settlementForm.reset();settlementForm.dataset.confirmed='false';savedDestinations=[];showSaved(null);document.getElementById('settlementPayoutId').value=details.id||'';document.getElementById('settlementContext').value=details.context||'';document.getElementById('settlementBooking').textContent=details.reference||'—';document.getElementById('settlementProvider').textContent=details.provider||'—';document.getElementById('settlementAmount').textContent=details.amount||'—';
+    try{const csrf=settlementForm.elements.csrf_token.value,response=await fetch(`adearningsdisbursements.php?destination_for=${encodeURIComponent(details.id)}`,{headers:{Accept:'application/json','X-Requested-With':'XMLHttpRequest','X-CSRF-Token':csrf},credentials:'same-origin',cache:'no-store'}),result=await response.json();if(!response.ok||!result.success)throw new Error(result.message||'Payout details could not be loaded.');savedDestinations=Array.isArray(result.destinations)?result.destinations:[];const preferred=savedDestinations.find(item=>item.is_default)||savedDestinations[0];preferred?applySaved(preferred):configureMethod(false);openModal(settlementModal);}catch(error){window.Swal?Swal.fire({icon:'error',title:'Unable to open payout',text:error.message,confirmButtonColor:'#1d6851'}):window.alert(error.message);}
+  }
+  document.querySelectorAll('[data-settle]').forEach(button=>button.addEventListener('click',()=>{let details={};try{details=JSON.parse(button.dataset.settle||'{}');}catch(_error){return;}closeActionMenus();const proceed=()=>openSettlement(details);if(!window.Swal){if(window.confirm(`Review the manual settlement for ${details.amount||'this payout'} to ${details.provider||'this provider'}?`))proceed();return;}Swal.fire({icon:'warning',title:'Review provider payout',text:`Confirm ${details.amount||'this payout'} for ${details.provider||'the provider'}. iTour will record—but will not send—the money.`,showCancelButton:true,confirmButtonText:'Continue',cancelButtonText:'Cancel',confirmButtonColor:'#1d6851',cancelButtonColor:'#6f7f79',reverseButtons:true,focusCancel:true}).then(result=>{if(result.isConfirmed)proceed();});}));
+  settlementForm?.addEventListener('submit',event=>{
+    if(settlementForm.dataset.confirmed==='true')return;event.preventDefault();if(!settlementForm.reportValidity())return;
+    const amount=document.getElementById('settlementAmount').textContent,provider=document.getElementById('settlementProvider').textContent,method=settlementMethod.value,institution=method==='e_wallet'?walletInstitution.value:settlementInstitution.value;
+    const methodLabel=method==='cash'?'Cash':method==='other'?document.getElementById('otherChannelName').value:(institution||settlementMethod.options[settlementMethod.selectedIndex].text),rawDestination=method==='cash'?document.getElementById('cashReceivedBy').value:method==='other'?document.getElementById('otherDestination').value:settlementAccountIdentifier.value,destination=['bank_transfer','e_wallet'].includes(method)?`•••• ${rawDestination.replace(/\s+/g,'').slice(-4)}`:rawDestination,reference=document.getElementById('settlementReference').value.trim();
+    const submit=()=>{settlementForm.dataset.confirmed='true';const button=settlementForm.querySelector('[type="submit"]');button.disabled=true;button.textContent='Recording…';settlementForm.requestSubmit();};
+    if(!window.Swal){if(window.confirm(`Provider: ${provider}\nAmount: ${amount}\nMethod: ${methodLabel}\nDestination: ${destination}\nReference: ${reference}\n\nRecord this payout as settled? Only continue if the manual transfer has already been completed.`))submit();return;}
+    Swal.fire({icon:'warning',title:'Record this payout as settled?',html:`<div class="settlement-confirm"><span>Provider</span><strong>${escapeHtml(provider)}</strong><span>Amount</span><strong>${escapeHtml(amount)}</strong><span>Method</span><strong>${escapeHtml(methodLabel)}</strong><span>Destination</span><strong>${escapeHtml(destination)}</strong><span>Reference</span><strong>${escapeHtml(reference)}</strong></div><p class="settlement-confirm-warning">Only continue if the manual transfer has already been completed.</p>`,showCancelButton:true,confirmButtonText:'Record as settled',cancelButtonText:'Cancel',confirmButtonColor:'#1d6851',cancelButtonColor:'#6f7f79',reverseButtons:true,focusCancel:true}).then(result=>{if(result.isConfirmed)submit();});
   });
 
   const receiptDrawer=document.getElementById('settlementRecordDrawer');
   document.querySelectorAll('[data-receipt]').forEach(button=>button.addEventListener('click',()=>{
     let record={};try{record=JSON.parse(button.dataset.receipt||'{}');}catch(_error){return;}
-    const rows=[['Booking',record.booking],['Recipient',record.provider],['Amount',record.amount],['Method',record.method],['Reference',record.reference],['Settled on',record.settled],['Internal note',record.note||'—']];
+    const rows=[['Settlement type','Manual settlement'],['Booking',record.booking],['Provider',record.provider],['Amount settled',record.amount],['Settlement method',record.method],['Bank / e-wallet / channel',record.institution||record.method],['Account holder / recipient',record.account_name||'—'],['Masked destination',record.destination||'—'],['Transaction / acknowledgment reference',record.reference],['Settlement date',record.settled],['Settled by',record.settled_by||'Administrator'],['Internal note',record.note||'—']];
     document.getElementById('receiptBody').innerHTML='<div class="receipt-grid">'+rows.map(([label,value])=>`<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('')+'</div>';
     closeActionMenus();openDrawer(receiptDrawer);
   }));

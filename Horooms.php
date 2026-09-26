@@ -65,55 +65,10 @@ function HoEnsureRoomUploadDirectory(): array
 function HoSaveUploadedRoomImage(?array $file, string $absoluteDir, string $relativeDir): ?string
 {
     if (!$file || (int)($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) return null;
-    $validated = ItourSecureValidateUploadedImage($file, 8 * 1024 * 1024);
-    $bytes = @file_get_contents((string)$validated['temporary_path']);
-    if (!is_string($bytes)) throw new RuntimeException('The room image could not be read.');
-    $image = ItourSecureDecodeImage($bytes);
-
-    $width = imagesx($image);
-    $height = imagesy($image);
-
-    // Maximum width
-    $maxWidth = 1600;
-
-    if ($width > $maxWidth) {
-
-        $newWidth = $maxWidth;
-        $newHeight = intval(($height / $width) * $newWidth);
-
-        $newImage = imagecreatetruecolor($newWidth, $newHeight);
-
-        imagealphablending($newImage, false);
-        imagesavealpha($newImage, true);
-
-        imagecopyresampled(
-            $newImage,
-            $image,
-            0,
-            0,
-            0,
-            0,
-            $newWidth,
-            $newHeight,
-            $width,
-            $height
-        );
-
-        imagedestroy($image);
-        $image = $newImage;
-    }
-
+    $validated = ItourSecureValidateUploadedImage($file, 40 * 1024 * 1024, 40000000, 12000, 12000);
     $filename = 'room_' . date('YmdHis') . '_' . bin2hex(random_bytes(6)) . '.webp';
-
     $targetAbs = $absoluteDir . DIRECTORY_SEPARATOR . $filename;
-
-    if (!imagewebp($image, $targetAbs, 80)) {
-        imagedestroy($image);
-        throw new RuntimeException('The room image could not be saved.');
-    }
-
-    imagedestroy($image);
-
+    ItourSecureOptimizeUploadedImage($validated, $targetAbs, 1600, 'image/webp');
     return $relativeDir . '/' . $filename;
 }
 
@@ -2207,6 +2162,7 @@ $hoTopbarViewToggle = [
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="js/image-upload-optimizer.js?v=1"></script>
   <script>
     (function () {
       const flashMessage = <?= json_encode($flash, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
@@ -2465,21 +2421,24 @@ $hoTopbarViewToggle = [
         roomImageModal.setAttribute('aria-hidden', 'false');
       };
 
-      const selectRoomImage = (file) => {
+      const selectRoomImage = async (file) => {
         if (!file) return;
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-        if (!allowedTypes.includes(file.type) || file.size > 8 * 1024 * 1024) {
-          Swal.fire({ icon: 'error', title: 'Invalid image', text: 'Choose a JPG, PNG, or WebP image no larger than 8 MB.' });
-          return;
+        if (roomImageApply) roomImageApply.disabled = true;
+        if (roomImageName) roomImageName.textContent = 'Optimizing image...';
+        try {
+          const optimizedFile = await ItourImageOptimizer.optimizeSource(file, 2400);
+          if (roomImagePreviewUrl) URL.revokeObjectURL(roomImagePreviewUrl);
+          roomImagePendingFile = optimizedFile;
+          roomImagePreviewUrl = URL.createObjectURL(optimizedFile);
+          if (roomImagePreview) roomImagePreview.src = roomImagePreviewUrl;
+          if (roomImageName) roomImageName.textContent = optimizedFile.name;
+          if (roomImageDropzone) roomImageDropzone.hidden = true;
+          if (roomImageSelected) roomImageSelected.hidden = false;
+          if (roomImageApply) roomImageApply.disabled = false;
+        } catch (error) {
+          if (roomImageName) roomImageName.textContent = '';
+          Swal.fire({ icon: 'error', title: 'Image could not be processed', text: error.message || 'Please try another photo.' });
         }
-        if (roomImagePreviewUrl) URL.revokeObjectURL(roomImagePreviewUrl);
-        roomImagePendingFile = file;
-        roomImagePreviewUrl = URL.createObjectURL(file);
-        if (roomImagePreview) roomImagePreview.src = roomImagePreviewUrl;
-        if (roomImageName) roomImageName.textContent = file.name;
-        if (roomImageDropzone) roomImageDropzone.hidden = true;
-        if (roomImageSelected) roomImageSelected.hidden = false;
-        if (roomImageApply) roomImageApply.disabled = false;
       };
 
       document.addEventListener('click', (event) => {

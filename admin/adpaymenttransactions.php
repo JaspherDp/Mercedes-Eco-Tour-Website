@@ -378,9 +378,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
             refundPageRedirect('success', 'Manual Refund Completed', paymentMoney($remainingMinor / 100) . ' was recorded as sent to ' . $destinationLabel . '. ' . ($emailSent ? 'The tourist was notified.' : 'The email could not be delivered.'), $requestId);
         }
 
-        if (strtolower((string)$request['refund_policy']) === 'partial_refund') {
-            throw new RuntimeException('This is a partial refund. Use Process Manual Refund and record the completed transfer details.');
-        }
         $service = PayMongoService::fromEnvironment();
 
         if (($_POST['action'] ?? '') === 'refresh_refund') {
@@ -393,8 +390,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
                     ? $service->retrieveQrPhRefund((string)$refundRow['provider_refund_id'], (string)$refundRow['provider_payment_id'])
                     : $service->retrieveRefund((string)$refundRow['provider_refund_id']);
                 $parsed = bookingRefundParsePayMongoResponse($response);
-                $update = $pdo->prepare('UPDATE booking_refunds SET status=?, provider_response=?, failure_code=NULL, failure_message=NULL, completed_at=CASE WHEN ?=\'succeeded\' THEN NOW() ELSE completed_at END WHERE booking_refund_id=?');
-                $update->execute([$parsed['status'], json_encode($response, JSON_UNESCAPED_SLASHES), $parsed['status'], (int)$refundRow['booking_refund_id']]);
+                if (bookingRefundProviderResponseDisposition($parsed['status']) === 'unexpected') {
+                    throw new UnexpectedValueException('PayMongo returned an unknown or missing refund status while refreshing transaction #' . (int)$refundRow['payment_transaction_id'] . '.');
+                }
+                if (($parsed['payment_id'] !== '' && !hash_equals((string)$refundRow['provider_payment_id'], $parsed['payment_id']))
+                    || ($parsed['amount_minor'] > 0 && $parsed['amount_minor'] !== (int)$refundRow['amount_minor'])
+                    || ($parsed['currency'] !== '' && $parsed['currency'] !== 'PHP')
+                    || $parsed['livemode']) {
+                    throw new UnexpectedValueException('PayMongo returned a refund resource that does not match the local refund transaction.');
+                }
+                $nextStatus = bookingRefundMonotonicProviderStatus((string)$refundRow['status'], $parsed['status']);
+                $existingResponse = json_decode((string)($refundRow['provider_response'] ?? ''), true);
+                $existingTransferLink = (string)($existingResponse['data']['attributes']['transfer_link'] ?? '');
+                if (filter_var($existingTransferLink, FILTER_VALIDATE_URL)
+                    && empty($response['data']['attributes']['transfer_link'])) {
+                    $response['data']['attributes']['transfer_link'] = $existingTransferLink;
+                }
+                $update = $pdo->prepare("UPDATE booking_refunds SET status=?, provider_response=?, failure_code=CASE WHEN ?='failed' THEN COALESCE(failure_code,'provider_refund_failed') ELSE NULL END, failure_message=CASE WHEN ?='failed' THEN COALESCE(failure_message,'PayMongo reported that the refund failed.') ELSE NULL END, completed_at=CASE WHEN ?='succeeded' THEN NOW() ELSE completed_at END WHERE booking_refund_id=?");
+                $update->execute([$nextStatus, json_encode($response, JSON_UNESCAPED_SLASHES), $nextStatus, $nextStatus, $nextStatus, (int)$refundRow['booking_refund_id']]);
                 $updated++;
             }
             $status = bookingRefundSyncCancellationStatus($pdo, $requestId);
@@ -432,7 +445,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
                 || !bookingRefundSupportsAutomaticPayMongoRefund($candidateMethod)) {
                 continue;
             }
-            $candidate['planned_refund_minor'] = min($plannedRemainingMinor, $candidateAvailableMinor);
+            $candidate['planned_refund_minor'] = bookingRefundAutomaticAllocation($candidateMethod, $plannedRemainingMinor, $candidateAvailableMinor);
+            if ((int)$candidate['planned_refund_minor'] < 100) continue;
             $candidate['planned_operation'] = 'refund';
             $plannedSources[] = $candidate;
             $plannedRemainingMinor -= (int)$candidate['planned_refund_minor'];
@@ -442,6 +456,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
         }
         $sources = $plannedSources;
         $submitted = [];
+        $failures = [];
         foreach ($sources as $source) {
             if ($remainingMinor <= 0) break;
             $availableMinor = max(0, (int)$source['amount_minor'] - (int)$source['refunded_minor']);
@@ -456,7 +471,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
             $paymentAttributes = is_array($paymentResource['attributes'] ?? null) ? $paymentResource['attributes'] : [];
             $remotePaymentId = trim((string)($paymentResource['id'] ?? ''));
             $remotePaymentStatus = strtolower(trim((string)($paymentAttributes['status'] ?? '')));
-            $remotePaymentAmount = max(0, (int)($paymentAttributes['amount'] ?? 0));
             $remoteSource = is_array($paymentAttributes['source'] ?? null) ? $paymentAttributes['source'] : [];
             $remoteMethod = strtolower(trim((string)($remoteSource['type'] ?? $source['payment_method_type'])));
             if ($remotePaymentId !== (string)$source['provider_payment_id']) {
@@ -468,24 +482,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
             if (($paymentAttributes['livemode'] ?? false) === true) {
                 throw new RuntimeException('A live PayMongo Payment cannot be refunded with the configured test credentials.');
             }
+            $remoteRefunds = bookingRefundRemoteRefundResources($paymentResource);
+            if ($remoteRefunds !== []) {
+                $knownRefunds = $pdo->prepare("SELECT provider_refund_id FROM booking_refunds WHERE payment_transaction_id=? AND provider_refund_id IS NOT NULL");
+                $knownRefunds->execute([(int)$source['payment_transaction_id']]);
+                $knownProviderRefundIds = array_fill_keys(array_filter(array_map('strval', $knownRefunds->fetchAll(PDO::FETCH_COLUMN))), true);
+                foreach ($remoteRefunds as $remoteRefund) {
+                    if (isset($knownProviderRefundIds[$remoteRefund['id']])) continue;
+                    if (!in_array($remoteRefund['status'], ['pending', 'processing', 'succeeded'], true)) continue;
+                    throw new RuntimeException('PayMongo reports an existing refund for payment transaction #' . (int)$source['payment_transaction_id'] . ' that is not yet reconciled locally. Review the PayMongo refund before submitting another request.');
+                }
+            }
             $refundWindowDays = bookingRefundWindowDays($remoteMethod);
             $remotePaidAt = (int)($paymentAttributes['paid_at'] ?? 0);
             if ($refundWindowDays !== null && $remotePaidAt > 0 && $remotePaidAt < time() - ($refundWindowDays * 86400)) {
                 throw new RuntimeException(bookingRefundMethodLabel($remoteMethod) . ' refunds must be submitted within ' . $refundWindowDays . ' days of payment.');
             }
-            $providerAvailableAt = max(0, (int)($paymentAttributes['available_at'] ?? 0));
-            if (in_array($remoteMethod, ['qrph', 'qr_code'], true) && $providerAvailableAt > time()) {
-                $availableDate = (new DateTimeImmutable('@' . $providerAvailableAt))
-                    ->setTimezone(new DateTimeZone('Asia/Manila'))
-                    ->format('M j, Y \a\t g:i A');
-                throw new RuntimeException('This QR Ph payment is paid, but its funds are not yet available for refund in PayMongo. Try again on ' . $availableDate . '. No refund was submitted.');
-            }
-            if (in_array($remoteMethod, ['qrph', 'qr_code'], true) && $amountMinor !== $remotePaymentAmount) {
-                throw new RuntimeException('QR Ph only supports a full refund. The refund amount must equal the original PayMongo Payment amount of ' . paymentMoney($remotePaymentAmount / 100) . '.');
-            }
-
+            // `available_at` is the settlement/payout availability timestamp, not
+            // a refund eligibility gate. Let PayMongo accept, queue, or reject the
+            // refund based on the paid Payment and the merchant payout balance.
             $idempotencyPrefix = in_array($remoteMethod, ['qrph', 'qr_code'], true) ? 'qrph-refund-v1-' : 'refund-v3-';
-            $idempotency = $idempotencyPrefix . 'cr' . $requestId . '-pt' . (int)$source['payment_transaction_id'] . '-' . $amountMinor;
+            $attemptCount = $pdo->prepare('SELECT COUNT(*) FROM booking_refunds WHERE cancellation_request_id=? AND payment_transaction_id=? AND amount_minor=?');
+            $attemptCount->execute([$requestId, (int)$source['payment_transaction_id'], $amountMinor]);
+            $attemptSequence = max(1, (int)$attemptCount->fetchColumn() + 1);
+            $idempotency = $idempotencyPrefix . 'cr' . $requestId . '-pt' . (int)$source['payment_transaction_id'] . '-' . $amountMinor . '-a' . $attemptSequence;
             $destinationLabel = bookingRefundMethodLabel($remoteMethod);
             $insert = $pdo->prepare("INSERT INTO booking_refunds (cancellation_request_id,payment_transaction_id,tourist_id,booking_domain,booking_id,booking_reference,provider,provider_operation,provider_payment_id,idempotency_key,amount_minor,currency,payment_method_type,payment_destination,destination_institution,destination_last4,reason,status,initiated_by_admin_id,initiated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,'others','initiating',?,NOW())");
             try {
@@ -493,15 +513,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
                 $refundId = (int)$pdo->lastInsertId();
             } catch (PDOException $duplicate) {
                 if ((string)$duplicate->getCode() !== '23000') throw $duplicate;
-                $existing = $pdo->prepare('SELECT booking_refund_id,status FROM booking_refunds WHERE idempotency_key=? LIMIT 1');
-                $existing->execute([$idempotency]);
-                $existingRefund = $existing->fetch(PDO::FETCH_ASSOC);
-                if (!$existingRefund || strtolower((string)$existingRefund['status']) !== 'failed') continue;
-                $refundId = (int)$existingRefund['booking_refund_id'];
-                $pdo->prepare("UPDATE booking_refunds SET status='initiating',failure_code=NULL,failure_message=NULL,initiated_at=NOW(),initiated_by_admin_id=? WHERE booking_refund_id=?")
-                    ->execute([(int)($_SESSION['admin_id'] ?? 0), $refundId]);
+                continue;
             }
             $isQrPhRefund = in_array($remoteMethod, ['qrph', 'qr_code'], true);
+            $responseBindingValidated = false;
+            $response = null;
             try {
                 $response = $isQrPhRefund
                     ? $service->createQrPhRefund((string)$source['provider_payment_id'], $amountMinor, 'requested_by_customer', 'Approved cancellation ' . (string)$request['booking_reference'], $idempotency)
@@ -512,6 +528,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
                     : null;
                 $parsed = bookingRefundParsePayMongoResponse($response);
                 if ($parsed['id'] === '') throw new RuntimeException('PayMongo did not return a refund reference.');
+                if (!hash_equals((string)$source['provider_payment_id'], $parsed['payment_id'])
+                    || $parsed['amount_minor'] !== $amountMinor
+                    || $parsed['currency'] !== 'PHP'
+                    || $parsed['livemode']) {
+                    throw new UnexpectedValueException('PayMongo returned a refund resource that does not match the requested payment, amount, currency, or test mode.');
+                }
+                $responseBindingValidated = true;
+                $disposition = bookingRefundProviderResponseDisposition($parsed['status']);
                 $update = $pdo->prepare('UPDATE booking_refunds SET provider_refund_id=?,status=?,provider_response=?,provider_http_status=?,provider_diagnostic=?,completed_at=CASE WHEN ?=\'succeeded\' THEN NOW() ELSE NULL END WHERE booking_refund_id=?');
                 $update->execute([
                     $parsed['id'],
@@ -522,12 +546,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
                     $parsed['status'],
                     $refundId,
                 ]);
+                if ($disposition !== 'submitted') {
+                    $failureCode = $disposition === 'failed' ? 'provider_refund_failed' : 'unexpected_refund_status';
+                    $failureMessage = $disposition === 'failed'
+                        ? 'PayMongo returned a failed refund for payment transaction #' . (int)$source['payment_transaction_id'] . '.'
+                        : 'PayMongo returned an unknown or missing refund status for payment transaction #' . (int)$source['payment_transaction_id'] . '.';
+                    $pdo->prepare("UPDATE booking_refunds SET status='failed',failure_code=?,failure_message=? WHERE booking_refund_id=?")
+                        ->execute([$failureCode, $failureMessage, $refundId]);
+                    bookingRefundSyncCancellationStatus($pdo, $requestId);
+                    $failures[] = ['payment_transaction_id' => (int)$source['payment_transaction_id'], 'code' => $failureCode, 'message' => $failureMessage];
+                    break;
+                }
                 $submitted[] = ['id' => $refundId, 'provider_refund_id' => $parsed['id'], 'amount_minor' => $amountMinor, 'method' => $remoteMethod, 'destination' => bookingRefundMethodLabel($remoteMethod) . ' account used for payment', 'claim_url' => $parsed['transfer_link']];
                 $remainingMinor -= $amountMinor;
             } catch (Throwable $providerError) {
                 $failureCode = 'paymongo_error';
                 $failureMessage = $providerError->getMessage();
-                $providerResponse = null;
+                $providerResponse = isset($response) && is_array($response) ? $response : null;
                 if ($providerError instanceof PayMongoException) {
                     $providerResponse = $providerError->getResponse();
                     $providerErrorData = is_array($providerResponse['errors'][0] ?? null) ? $providerResponse['errors'][0] : [];
@@ -535,11 +570,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
                     $failureCode = trim((string)($providerErrorData['code'] ?? $providerErrorData['sub_code'] ?? ($providerFailureAttributes['status'] ?? 'paymongo_error'))) ?: 'paymongo_error';
                     $failureMessage = trim((string)($providerErrorData['detail'] ?? $providerFailureAttributes['failure_message'] ?? $providerFailureAttributes['error_message'] ?? ''));
                     if ($failureMessage === '' && strtolower((string)($providerFailureAttributes['status'] ?? '')) === 'failed') {
-                        $failureMessage = 'PayMongo created the refund with a failed status but did not provide a reason. Confirm that the payment funds are already available and that the PayMongo wallet has sufficient available balance.';
+                        $failureMessage = 'PayMongo returned a failed refund without an error reason. No refund was submitted. If a retry through the current Refund API also fails, review the Payment in the PayMongo Dashboard or contact PayMongo support.';
                     }
                     if ($failureMessage === '') $failureMessage = $providerError->getMessage();
                 }
                 $providerResponse = is_array($providerResponse) ? payMongoSanitizeDiagnosticValue($providerResponse) : null;
+                if (!$responseBindingValidated && is_array($providerResponse)) {
+                    $failedParsed = bookingRefundParsePayMongoResponse($providerResponse);
+                    $responseBindingValidated = preg_match('/^ref_[A-Za-z0-9]+$/', $failedParsed['id']) === 1
+                        && hash_equals((string)$source['provider_payment_id'], $failedParsed['payment_id'])
+                        && $failedParsed['amount_minor'] === $amountMinor
+                        && $failedParsed['currency'] === 'PHP'
+                        && !$failedParsed['livemode'];
+                }
                 $qrDiagnostic = $isQrPhRefund
                     ? payMongoQrRefundDiagnostic(
                         $service,
@@ -549,7 +592,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
                         $providerError instanceof PayMongoException ? $providerError : null
                     )
                     : null;
-                $failedProviderRefundId = trim((string)($providerResponse['data']['id'] ?? ''));
+                $failedProviderRefundId = $responseBindingValidated ? trim((string)($providerResponse['data']['id'] ?? '')) : '';
                 $update = $pdo->prepare("UPDATE booking_refunds SET provider_refund_id=COALESCE(NULLIF(?,''),provider_refund_id),status='failed',failure_code=?,failure_message=?,provider_response=?,provider_http_status=?,provider_diagnostic=? WHERE booking_refund_id=?");
                 $update->execute([
                     $failedProviderRefundId,
@@ -560,10 +603,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
                     $qrDiagnostic !== null ? json_encode($qrDiagnostic, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) : null,
                     $refundId,
                 ]);
-                throw new RuntimeException('PayMongo [' . $failureCode . ']: ' . $failureMessage, 0, $providerError);
+                bookingRefundSyncCancellationStatus($pdo, $requestId);
+                $failures[] = [
+                    'payment_transaction_id' => (int)$source['payment_transaction_id'],
+                    'code' => $failureCode,
+                    'message' => 'PayMongo [' . $failureCode . ']: ' . $failureMessage,
+                ];
+                break;
             }
         }
-        if (!$submitted) throw new RuntimeException('No eligible paid PayMongo Payment resource was found for this refund.');
+        $outcome = bookingRefundOperationOutcome($submitted, $failures);
+        if (!$submitted) {
+            $failure = $failures[0] ?? null;
+            throw new RuntimeException($failure ? (string)$failure['message'] : 'No eligible paid PayMongo Payment resource was found for this refund.');
+        }
 
         $currentStatus = bookingRefundSyncCancellationStatus($pdo, $requestId);
         $emailAmount = array_sum(array_column($submitted, 'amount_minor')) / 100;
@@ -577,6 +630,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
             'timeline' => $timeline['short'],
             'timeline_detail' => $timeline['detail'],
             'claim_url' => (string)($submitted[0]['claim_url'] ?? ''),
+            'claim_actions' => bookingRefundClaimActions($submitted),
         ]));
         $ids = array_column($submitted, 'id');
         $marks = implode(',', array_fill(0, count($ids), '?'));
@@ -584,15 +638,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
         $emailUpdate->execute(array_merge([$emailSent ? 'sent' : 'failed', $emailSent ? 'sent' : 'failed', $emailSent ? null : 'SMTP delivery failed.'], $ids));
         $routeDescription = 'the original ' . bookingRefundMethodLabel($method) . ' payment';
         logActivity($pdo, 'Admin', (int)($_SESSION['admin_id'] ?? 0), (string)($_SESSION['username'] ?? 'Administrator'), 'Refund Submitted', 'Submitted ' . paymentMoney($emailAmount) . ' to ' . $routeDescription . ' for ' . (string)$request['booking_reference'] . '.', 'Payments & Transactions', $requestId);
+        if ($outcome['state'] === 'partial') {
+            $failedTransactions = implode(', ', array_map(static fn(array $failure): string => '#' . (int)$failure['payment_transaction_id'], $failures));
+            $message = paymentMoney($emailAmount) . ' was preserved as submitted, but payment transaction ' . $failedTransactions . ' failed. The booking is partially refunded and requires attention. Successful transactions will not be resubmitted.';
+            refundPageRedirect('error', 'Partially Refunded — Requires Attention', $message, $requestId);
+        }
         $message = paymentMoney($emailAmount) . ' was submitted to ' . $routeDescription . '. ' . ($emailSent ? 'The tourist was emailed the provider timeline.' : 'The refund was accepted, but the confirmation email could not be delivered.');
         refundPageRedirect('success', $currentStatus === 'completed' ? 'Refund Completed' : 'Refund Processing', $message, $requestId);
     } catch (Throwable $error) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         $errorMessage = $error->getMessage();
-        $errorTitle = str_contains($errorMessage, 'not yet available for refund in PayMongo')
-            ? 'Refund Not Yet Available'
-            : 'Refund Not Processed';
-        refundPageRedirect('error', $errorTitle, $errorMessage, $requestId);
+        refundPageRedirect('error', 'Refund Not Processed', $errorMessage, $requestId);
     }
 }
 
@@ -894,7 +950,7 @@ if (!in_array($activeLedgerView, ['transactions', 'receivables', 'refunds'], tru
 $focusedCancellationId = max(0, (int)($_GET['cancellation_request_id'] ?? 0));
 $refundSearch = trim((string)($_GET['refund_q'] ?? ''));
 $refundStateFilter = strtolower((string)($_GET['refund_state'] ?? 'all'));
-if (!in_array($refundStateFilter, ['all', 'ready', 'processing', 'succeeded', 'failed'], true)) $refundStateFilter = 'all';
+if (!in_array($refundStateFilter, ['all', 'ready', 'processing', 'partial', 'succeeded', 'failed'], true)) $refundStateFilter = 'all';
 
 $refundRequestSql = "
     SELECT cr.*, t.full_name, t.email, t.profile_picture,
@@ -916,7 +972,7 @@ $refundRequestSql = "
 ";
 $refundRequests = $pdo->query($refundRequestSql)->fetchAll(PDO::FETCH_ASSOC);
 $refundRows = [];
-$refundStats = ['all' => 0, 'ready' => 0, 'processing' => 0, 'succeeded' => 0, 'failed' => 0, 'eligible_minor' => 0, 'refunded_minor' => 0, 'pending_minor' => 0];
+$refundStats = ['all' => 0, 'ready' => 0, 'processing' => 0, 'partial' => 0, 'succeeded' => 0, 'failed' => 0, 'eligible_minor' => 0, 'refunded_minor' => 0, 'pending_minor' => 0];
 $sourceLookup = $pdo->prepare("
     SELECT pt.*,
       COALESCE((SELECT SUM(br.amount_minor) FROM booking_refunds br WHERE br.payment_transaction_id=pt.payment_transaction_id AND br.status IN ('initiating','pending','processing','succeeded')),0) allocated_minor
@@ -931,7 +987,8 @@ foreach ($refundRequests as $request) {
     $refundedMinor = (int)$request['refunded_minor'];
     $activeMinor = (int)$request['active_refund_minor'];
     $state = $refundedMinor >= $targetMinor ? 'succeeded'
-        : ($activeMinor > 0 ? 'processing' : ((int)$request['failed_refund_count'] > 0 ? 'failed' : 'ready'));
+        : ($activeMinor > 0 ? 'processing'
+            : ($refundedMinor > 0 ? 'partial' : ((int)$request['failed_refund_count'] > 0 ? 'failed' : 'ready')));
     $refundStats['all']++;
     $refundStats[$state]++;
     $refundStats['eligible_minor'] += $targetMinor;
@@ -963,17 +1020,16 @@ foreach ($refundRequests as $request) {
         ) {
             $sourceAvailableMinor = max(0, (int)$source['amount_minor'] - (int)$source['allocated_minor']);
             $sourceMethod = strtolower((string)$source['payment_method_type']);
-            if (in_array($sourceMethod, ['qrph', 'qr_code'], true)
-                && $automaticRemainingMinor < $sourceAvailableMinor) {
-                continue;
-            }
-            $usableMinor = min($automaticRemainingMinor, $sourceAvailableMinor);
+            $usableMinor = bookingRefundAutomaticAllocation($sourceMethod, $automaticRemainingMinor, $sourceAvailableMinor);
             $availableAutomaticMinor += $usableMinor;
             $automaticRemainingMinor -= $usableMinor;
         }
     }
     $method = (string)($primarySource['payment_method_type'] ?? '');
-    $manualRequired = strtolower((string)$request['refund_policy']) === 'partial_refund';
+    $automaticCapable = (int)max(0, $targetMinor - $refundedMinor - $activeMinor) >= 100
+        && $automaticRemainingMinor === 0
+        && $availableAutomaticMinor >= (int)max(0, $targetMinor - $refundedMinor - $activeMinor);
+    $manualRequired = strtolower((string)$request['refund_policy']) === 'partial_refund' && !$automaticCapable;
     $timeline = $manualRequired
         ? ['short' => 'Recorded after transfer', 'detail' => 'The administrator sends the eligible partial amount and records the transfer reference before completion.']
         : bookingRefundTimeline($method, $targetMinor);
@@ -987,8 +1043,7 @@ foreach ($refundRequests as $request) {
     $request['provider_payment_id'] = (string)($primarySource['provider_payment_id'] ?? '');
     $request['merchant_reference'] = (string)($primarySource['merchant_reference'] ?? '');
     $request['payment_date'] = (string)($primarySource['paid_at'] ?? $primarySource['created_at'] ?? '');
-    $request['automatic_available'] = !$manualRequired && (int)$request['remaining_minor'] >= 100 && $automaticRemainingMinor === 0
-        && $availableAutomaticMinor >= (int)$request['remaining_minor'];
+    $request['automatic_available'] = $automaticCapable;
     $request['manual_required'] = $manualRequired;
     $request['manual_available'] = $manualRequired && (int)$request['remaining_minor'] >= 100
         && !empty($request['refund_destination_account_cipher']) && !empty($request['refund_destination_verified_at']);
@@ -997,7 +1052,7 @@ foreach ($refundRequests as $request) {
     $refundRows[] = $request;
 }
 $refundVisibleCount = count($refundRows);
-$refundPendingCount = $refundStats['ready'] + $refundStats['processing'] + $refundStats['failed'];
+$refundPendingCount = $refundStats['ready'] + $refundStats['processing'] + $refundStats['partial'] + $refundStats['failed'];
 $refundCompletionPercent = $refundStats['eligible_minor'] > 0
     ? min(100, max(0, ($refundStats['refunded_minor'] / $refundStats['eligible_minor']) * 100))
     : 100;
@@ -1396,13 +1451,13 @@ $exportFilterSummary = $exportFilterLabels ? implode(' · ', $exportFilterLabels
             </div>
             <div class="refund-policy-note">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.6 2.8 8 7 10 4.2-2 7-5.4 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>
-              <div><strong>Refund routing control</strong><span>Full eligible payments use PayMongo's Refund API. Partial eligible amounts require an administrator transfer to the tourist's verified account and a recorded channel, sender account, and provider reference.</span></div>
+              <div><strong>Refund routing control</strong><span>Eligible full or partial amounts use PayMongo's Refund API when the original payment supports it. Manual transfer remains available only when the approved partial amount cannot be routed automatically.</span></div>
             </div>
             <form method="get" class="refund-filters <?= ($refundSearch !== '' || $refundStateFilter !== 'all') ? 'has-clear' : '' ?>">
               <input type="hidden" name="view" value="refunds">
               <label class="filter-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input type="search" name="refund_q" value="<?= htmlspecialchars($refundSearch) ?>" placeholder="Search tourist, reference, or booking type..."></label>
               <select name="refund_state" aria-label="Refund status">
-                <?php foreach (['all' => 'All refund statuses', 'ready' => 'Ready to process', 'processing' => 'Provider processing', 'succeeded' => 'Refunded', 'failed' => 'Needs attention'] as $value => $label): ?>
+                <?php foreach (['all' => 'All refund statuses', 'ready' => 'Ready to refund', 'processing' => 'Provider processing', 'partial' => 'Partially refunded', 'succeeded' => 'Refunded', 'failed' => 'Failed / requires attention'] as $value => $label): ?>
                   <option value="<?= $value ?>" <?= $refundStateFilter === $value ? 'selected' : '' ?>><?= $label ?></option>
                 <?php endforeach; ?>
               </select>
@@ -1427,6 +1482,21 @@ $exportFilterSummary = $exportFilterLabels ? implode(' · ', $exportFilterLabels
                     $latestFailureMessage = (string)($refundAttempt['failure_message'] ?? '');
                     break;
                   }
+                  $refundAttempts = array_map(static function (array $attempt): array {
+                    $providerResponse = json_decode((string)($attempt['provider_response'] ?? ''), true);
+                    $providerAttributes = is_array($providerResponse['data']['attributes'] ?? null) ? $providerResponse['data']['attributes'] : [];
+                    return [
+                      'transaction' => !empty($attempt['payment_transaction_id']) ? '#' . (int)$attempt['payment_transaction_id'] : 'Manual refund',
+                      'amount' => paymentMoney(((int)($attempt['amount_minor'] ?? 0)) / 100),
+                      'method' => bookingRefundMethodLabel((string)($attempt['payment_method_type'] ?? '')),
+                      'status' => strtolower((string)($attempt['status'] ?? '')) === 'failed'
+                        ? 'Failed'
+                        : bookingRefundStatusLabel((string)($attempt['status'] ?? '')),
+                      'reference' => (string)($attempt['provider_refund_id'] ?? $attempt['provider_reference_number'] ?? ''),
+                      'claim_required' => filter_var((string)($providerAttributes['transfer_link'] ?? ''), FILTER_VALIDATE_URL) !== false,
+                      'failure' => (string)($attempt['failure_message'] ?? ''),
+                    ];
+                  }, (array)$refund['refund_history']);
                   $details = [
                     'request_id' => $requestId,
                     'guest' => (string)$refund['full_name'],
@@ -1463,6 +1533,7 @@ $exportFilterSummary = $exportFilterLabels ? implode(' · ', $exportFilterLabels
                     'automatic_available' => (bool)$refund['automatic_available'],
                     'failure_code' => $latestFailureCode,
                     'failure_message' => $latestFailureMessage,
+                    'attempts' => $refundAttempts,
                   ];
                 ?>
                   <tr id="refund-request-<?= $requestId ?>" class="<?= $focused ? 'refund-focus' : '' ?>">
@@ -1476,10 +1547,10 @@ $exportFilterSummary = $exportFilterLabels ? implode(' · ', $exportFilterLabels
                       <button type="button" class="refund-action-menu" aria-haspopup="true" aria-expanded="false">Actions <svg class="refund-menu-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m7 9 5 5 5-5"/></svg></button>
                       <div class="refund-action-popover" hidden>
                         <button type="button" data-refund-details='<?= htmlspecialchars(json_encode($details, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'><svg class="refund-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.8"/></svg>View details</button>
-                        <?php if (in_array($refund['refund_state'], ['ready', 'failed'], true)): ?>
+                        <?php if (in_array($refund['refund_state'], ['ready', 'partial', 'failed'], true)): ?>
                           <?php if (!empty($refund['manual_required']) && !empty($refund['manual_available'])): ?><button type="button" data-process-manual-refund data-request-id="<?= $requestId ?>"><svg class="refund-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v10H4z"/><path d="M7 11h5M16 10v2"/></svg>Process manual refund</button>
                           <?php elseif (!empty($refund['manual_required'])): ?><span class="refund-action-disabled" title="The tourist must add a verified refund account first.">Refund account required</span>
-                          <?php elseif ($refund['automatic_available']): ?><form method="post" data-process-refund><input type="hidden" name="action" value="process_refund"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>"><input type="hidden" name="cancellation_request_id" value="<?= $requestId ?>"><button type="submit"><svg class="refund-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg><?= $refund['refund_state'] === 'failed' ? 'Retry API refund' : 'Process API refund' ?></button></form>
+                          <?php elseif ($refund['automatic_available']): ?><form method="post" data-process-refund><input type="hidden" name="action" value="process_refund"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>"><input type="hidden" name="cancellation_request_id" value="<?= $requestId ?>"><button type="submit"><svg class="refund-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg><?= $refund['refund_state'] === 'partial' ? 'Continue remaining refund' : ($refund['refund_state'] === 'failed' ? 'Retry API refund' : 'Process API refund') ?></button></form>
                           <?php else: ?><span class="refund-action-disabled" title="The payment does not meet PayMongo API refund requirements.">API refund unavailable</span><?php endif; ?>
                         <?php elseif ($refund['refund_state'] === 'processing'): ?>
                           <form method="post" data-refresh-refund><input type="hidden" name="action" value="refresh_refund"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>"><input type="hidden" name="cancellation_request_id" value="<?= $requestId ?>"><button type="submit"><svg class="refund-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.8-4L3 10"/><path d="M3 5v5h5M4 13a8 8 0 0 0 14.8 4L21 14"/><path d="M21 19v-5h-5"/></svg>Refresh provider status</button></form>

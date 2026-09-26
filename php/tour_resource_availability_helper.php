@@ -274,11 +274,18 @@ function tourPackageUnavailableDates(PDO $pdo, string $packageName, string $from
     return array_keys($dates);
 }
 
-function tourPackageLock(PDO $pdo, string $packageName): string
+function tourPackageLockName(string $packageName): string
 {
     $packageName = trim($packageName);
     if ($packageName === '') return '';
-    $name = 'tour-package-' . hash('sha256', strtolower($packageName));
+    $prefix = 'tour-package-';
+    return $prefix . substr(hash('sha256', strtolower($packageName)), 0, 64 - strlen($prefix));
+}
+
+function tourPackageLock(PDO $pdo, string $packageName): string
+{
+    $name = tourPackageLockName($packageName);
+    if ($name === '') return '';
     $stmt = $pdo->prepare('SELECT GET_LOCK(?, 5)');
     $stmt->execute([$name]);
     if ((int)$stmt->fetchColumn() !== 1) throw new RuntimeException('Availability is being updated. Please try again.');

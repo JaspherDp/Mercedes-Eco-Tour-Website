@@ -34,8 +34,18 @@ function ItourSecureValidateUploadedImage(
     int $maxWidth = 10000,
     int $maxHeight = 10000
 ): array {
-    if ((int)($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) {
-        throw new InvalidArgumentException('The selected image could not be uploaded.');
+    $uploadError = (int)($file['error'] ?? UPLOAD_ERR_NO_FILE);
+    if ($uploadError !== UPLOAD_ERR_OK) {
+        if ($uploadError === UPLOAD_ERR_INI_SIZE || $uploadError === UPLOAD_ERR_FORM_SIZE) {
+            throw new InvalidArgumentException('The image exceeds the server upload limit. Please use a smaller photo or increase the PHP upload limit.');
+        }
+        if ($uploadError === UPLOAD_ERR_PARTIAL) {
+            throw new InvalidArgumentException('The image upload was interrupted. Please try again.');
+        }
+        if ($uploadError === UPLOAD_ERR_NO_FILE) {
+            throw new InvalidArgumentException('Choose an image to upload.');
+        }
+        throw new InvalidArgumentException('The selected image could not be uploaded. Please try again.');
     }
 
     $temporaryPath = (string)($file['tmp_name'] ?? '');
@@ -170,6 +180,41 @@ function ItourSecureReencodeImageFile(array $validated, string $targetPath, ?str
     }
     try {
         ItourSecureWriteImage($image, $targetPath, $outputMime ?? (string)$validated['mime']);
+    } finally {
+        imagedestroy($image);
+    }
+}
+
+function ItourSecureOptimizeUploadedImage(
+    array $validated,
+    string $targetPath,
+    int $maxLongEdge = 2400,
+    ?string $outputMime = null
+): void {
+    if ($maxLongEdge < 320 || $maxLongEdge > 4096) {
+        throw new InvalidArgumentException('The requested image output size is invalid.');
+    }
+    $bytes = @file_get_contents((string)$validated['temporary_path']);
+    if (!is_string($bytes)) throw new RuntimeException('The validated image could not be read.');
+    $image = ItourSecureDecodeImage($bytes);
+    if ((string)$validated['mime'] === 'image/jpeg') {
+        $image = ItourSecureApplyJpegOrientation($image, (string)$validated['temporary_path']);
+    }
+    try {
+        $width = imagesx($image);$height = imagesy($image);
+        $scale = min(1, $maxLongEdge / max($width, $height));
+        if ($scale < 1) {
+            $newWidth = max(1, (int)round($width * $scale));
+            $newHeight = max(1, (int)round($height * $scale));
+            $resized = imagecreatetruecolor($newWidth, $newHeight);
+            if (!$resized instanceof GdImage) throw new RuntimeException('The optimized image canvas could not be created.');
+            imagealphablending($resized, false);imagesavealpha($resized, true);
+            if (!imagecopyresampled($resized,$image,0,0,0,0,$newWidth,$newHeight,$width,$height)) {
+                imagedestroy($resized);throw new RuntimeException('The image could not be resized.');
+            }
+            imagedestroy($image);$image=$resized;
+        }
+        ItourSecureWriteImage($image,$targetPath,$outputMime??(string)$validated['mime']);
     } finally {
         imagedestroy($image);
     }

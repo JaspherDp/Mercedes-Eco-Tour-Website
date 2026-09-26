@@ -6,6 +6,8 @@ require_once __DIR__ . '/app_url_helper.php';
 
 const ITOUR_TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 const ITOUR_TURNSTILE_ERROR = 'Security verification failed. Please try again.';
+const ITOUR_TURNSTILE_TEST_SITE_KEY_ALWAYS_PASS = '1x00000000000000000000AA';
+const ITOUR_TURNSTILE_TEST_SECRET_KEY_ALWAYS_PASS = '1x0000000000000000000000000000000AA';
 
 function ItourTurnstileIsLocalRequest(): bool
 {
@@ -15,7 +17,7 @@ function ItourTurnstileIsLocalRequest(): bool
     return in_array($host, ['localhost', '127.0.0.1', '::1'], true);
 }
 
-/** @return array{site_key:string,configured:bool,development_bypass:bool} */
+/** @return array{site_key:string,configured:bool,development_bypass:bool,local_test_verification:bool} */
 function ItourTurnstileConfiguration(): array
 {
     static $configuration = null;
@@ -25,6 +27,8 @@ function ItourTurnstileConfiguration(): array
     $secretKey = PaymentHelper::env('CLOUDFLARE_TURNSTILE_SECRET_KEY');
     $configured = $siteKey !== '' && $secretKey !== '';
     $bothEmpty = $siteKey === '' && $secretKey === '';
+    $alwaysPassTestPair = hash_equals(ITOUR_TURNSTILE_TEST_SITE_KEY_ALWAYS_PASS, $siteKey)
+        && hash_equals(ITOUR_TURNSTILE_TEST_SECRET_KEY_ALWAYS_PASS, $secretKey);
 
     try {
         $isProduction = ItourAppIsProduction();
@@ -37,6 +41,10 @@ function ItourTurnstileConfiguration(): array
         'site_key' => $siteKey,
         'configured' => $configured,
         'development_bypass' => $bothEmpty && !$isProduction && ItourTurnstileIsLocalRequest(),
+        // Keep Cloudflare's visible test widget on localhost, but do not make
+        // local development depend on outbound access to Siteverify. This mode
+        // is impossible on a production environment or public hostname.
+        'local_test_verification' => $alwaysPassTestPair && !$isProduction && ItourTurnstileIsLocalRequest(),
     ];
 }
 
@@ -66,6 +74,7 @@ function verifyTurnstile(string $token, ?string $remoteIp = null): bool
 
     $token = trim($token);
     if ($token === '' || strlen($token) > 2048) return false;
+    if ($configuration['local_test_verification']) return true;
 
     $fields = [
         'secret' => PaymentHelper::env('CLOUDFLARE_TURNSTILE_SECRET_KEY'),

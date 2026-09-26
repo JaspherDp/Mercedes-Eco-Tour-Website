@@ -1762,10 +1762,10 @@ img { max-width: 100%; }
   }
   .mobile-floating-book {
     position: fixed;
-    right: 14px;
+    right: 74px;
     bottom: 16px;
     z-index: 1199;
-    min-height: 50px;
+    min-height: 48px;
     display: inline-flex;
     align-items: center;
     gap: 7px;
@@ -1792,7 +1792,6 @@ img { max-width: 100%; }
     stroke-linecap: round;
     stroke-linejoin: round;
   }
-  .homepage.back-to-top-visible .mobile-floating-book { right: 70px; }
   .hero-visual { display: none; }
   .hero-route-map { min-height: 432px; border-radius: 22px; }
   .hero-map-heading { padding: 17px 16px 7px; }

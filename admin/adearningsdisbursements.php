@@ -7,6 +7,7 @@ AppSessionStart();
 require_once __DIR__ . '/../php/db_connection.php';
 require_once __DIR__ . '/../php/admin_auth_helper.php';
 require_once __DIR__ . '/../php/activity_logger.php';
+require_once __DIR__ . '/../payments/PaymentHelper.php';
 AdminRequireLogin();
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
@@ -26,6 +27,62 @@ function payoutEnsureTable(PDO $pdo): void {
       PRIMARY KEY (payout_id), UNIQUE KEY uq_provider_booking (booking_domain,booking_id,provider_key),
       KEY idx_payout_status (status), KEY idx_payout_provider (provider_type,provider_id), KEY idx_payout_settled (settled_at)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+
+    $columns=[];
+    foreach($pdo->query('SHOW COLUMNS FROM provider_payouts')->fetchAll(PDO::FETCH_ASSOC) as $column)$columns[(string)$column['Field']]=true;
+    $migrations=[
+      'settlement_type'=>"ALTER TABLE provider_payouts ADD COLUMN settlement_type VARCHAR(20) NULL AFTER settlement_method",
+      'settlement_destination_id'=>"ALTER TABLE provider_payouts ADD COLUMN settlement_destination_id BIGINT UNSIGNED NULL AFTER settlement_type",
+      'settlement_institution'=>"ALTER TABLE provider_payouts ADD COLUMN settlement_institution VARCHAR(150) NULL AFTER settlement_destination_id",
+      'settlement_account_name'=>"ALTER TABLE provider_payouts ADD COLUMN settlement_account_name VARCHAR(190) NULL AFTER settlement_institution",
+      'settlement_destination_cipher'=>"ALTER TABLE provider_payouts ADD COLUMN settlement_destination_cipher TEXT NULL AFTER settlement_account_name",
+      'settlement_destination_last4'=>"ALTER TABLE provider_payouts ADD COLUMN settlement_destination_last4 VARCHAR(4) NULL AFTER settlement_destination_cipher",
+      'settlement_destination_label'=>"ALTER TABLE provider_payouts ADD COLUMN settlement_destination_label VARCHAR(190) NULL AFTER settlement_destination_last4",
+    ];
+    foreach($migrations as $column=>$sql)if(!isset($columns[$column]))$pdo->exec($sql);
+
+    $pdo->exec("CREATE TABLE IF NOT EXISTS provider_payout_destinations (
+      destination_id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, provider_type VARCHAR(30) NOT NULL,
+      provider_id INT NOT NULL, method VARCHAR(40) NOT NULL, institution VARCHAR(150) NOT NULL,
+      account_name VARCHAR(190) NOT NULL, account_identifier_cipher TEXT NOT NULL,
+      account_identifier_last4 VARCHAR(4) NOT NULL, account_identifier_hash CHAR(64) NOT NULL,
+      is_default TINYINT(1) NOT NULL DEFAULT 1, created_by_admin_id INT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (destination_id),
+      UNIQUE KEY uq_provider_payout_destination (provider_type,provider_id,method,institution,account_identifier_hash),
+      KEY idx_provider_payout_destination_default (provider_type,provider_id,is_default,updated_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+}
+
+function payoutDestinationKey(): string {
+  $material=PaymentHelper::env('REFUND_DESTINATION_ENCRYPTION_KEY');
+  if($material==='')throw new RuntimeException('Payout destination encryption is not configured.');
+  return hash_hkdf('sha256',$material,32,'itour-mercedes-provider-payout-destination-v1');
+}
+function payoutEncryptIdentifier(string $value): string {
+  $value=trim($value);if($value==='')throw new InvalidArgumentException('The payout account identifier is required.');
+  $iv=random_bytes(12);$tag='';$cipher=openssl_encrypt($value,'aes-256-gcm',payoutDestinationKey(),OPENSSL_RAW_DATA,$iv,$tag);
+  if($cipher===false)throw new RuntimeException('The payout destination could not be protected.');
+  return base64_encode($iv.$tag.$cipher);
+}
+function payoutDecryptIdentifier(string $encoded): string {
+  $payload=base64_decode($encoded,true);if($payload===false||strlen($payload)<29)throw new RuntimeException('The saved payout destination is invalid.');
+  $plain=openssl_decrypt(substr($payload,28),'aes-256-gcm',payoutDestinationKey(),OPENSSL_RAW_DATA,substr($payload,0,12),substr($payload,12,16));
+  if($plain===false||trim($plain)==='')throw new RuntimeException('The saved payout destination could not be opened.');
+  return trim($plain);
+}
+function payoutIdentifierHash(string $value): string { return hash_hmac('sha256',strtolower(preg_replace('/\s+/','',trim($value))),payoutDestinationKey()); }
+function payoutIdentifierLast4(string $value): string { $compact=preg_replace('/\s+/','',trim($value));return substr($compact,-4); }
+function payoutMaskedIdentifier(string $last4): string { return $last4!==''?'•••• '.$last4:'Not recorded'; }
+function payoutContextToken(array $payout,string $csrfToken): string {
+  $payload=implode('|',[(int)$payout['payout_id'],(string)$payout['provider_type'],(int)$payout['provider_id'],(string)$payout['provider_key'],number_format((float)$payout['gross_amount'],2,'.','')]);
+  return hash_hmac('sha256',$payload,$csrfToken);
+}
+function payoutProviderExists(PDO $pdo,string $type,int $id): bool {
+  if($id<1)return false;
+  [$table,$column]=match($type){'operator'=>['operators','operator_id'],'tourguide'=>['tour_guides','guide_id'],'boat'=>['boats','boat_id'],'hotel'=>['hotel_resorts','hotel_resort_id'],default=>['','']};
+  if($table==='')return false;$stmt=$pdo->prepare("SELECT 1 FROM {$table} WHERE {$column}=? LIMIT 1");$stmt->execute([$id]);return (bool)$stmt->fetchColumn();
 }
 function payoutSyncLedger(PDO $pdo): void {
     $pdo->exec("UPDATE provider_payouts p JOIN bookings b ON b.booking_id=p.booking_id AND p.booking_domain=LOWER(b.booking_type)
@@ -92,6 +149,26 @@ function payoutRetentionAssessment(array $record): array {
 payoutEnsureTable($pdo);
 payoutSyncLedger($pdo);
 
+if($_SERVER['REQUEST_METHOD']==='GET'&&isset($_GET['destination_for'])){
+  header('Content-Type: application/json; charset=utf-8');header('Cache-Control: no-store');
+  try{
+    if(!hash_equals($csrfToken,(string)($_SERVER['HTTP_X_CSRF_TOKEN']??'')))throw new RuntimeException('Your session token expired. Refresh the page and try again.');
+    $payoutId=(int)$_GET['destination_for'];
+    $stmt=$pdo->prepare("SELECT payout_id,provider_type,provider_id,provider_key,provider_name,gross_amount,status FROM provider_payouts WHERE payout_id=? LIMIT 1");
+    $stmt->execute([$payoutId]);$payout=$stmt->fetch(PDO::FETCH_ASSOC);
+    if(!$payout||!in_array((string)$payout['status'],['pending','approved'],true))throw new RuntimeException('This payout is no longer available.');
+    $providerType=(string)$payout['provider_type'];$providerId=(int)$payout['provider_id'];
+    if(!payoutProviderExists($pdo,$providerType,$providerId))throw new RuntimeException('The payout provider could not be verified.');
+    $saved=$pdo->prepare("SELECT destination_id,method,institution,account_name,account_identifier_cipher,account_identifier_last4,is_default FROM provider_payout_destinations WHERE provider_type=? AND provider_id=? ORDER BY is_default DESC,updated_at DESC,destination_id DESC");
+    $saved->execute([$providerType,$providerId]);$destinations=[];
+    foreach($saved->fetchAll(PDO::FETCH_ASSOC) as $destination){
+      $destinations[]=['id'=>(int)$destination['destination_id'],'method'=>(string)$destination['method'],'institution'=>(string)$destination['institution'],'account_name'=>(string)$destination['account_name'],'account_identifier'=>payoutDecryptIdentifier((string)$destination['account_identifier_cipher']),'masked_identifier'=>payoutMaskedIdentifier((string)$destination['account_identifier_last4']),'is_default'=>(bool)$destination['is_default']];
+    }
+    echo json_encode(['success'=>true,'provider'=>(string)$payout['provider_name'],'destinations'=>$destinations],JSON_UNESCAPED_SLASHES|JSON_INVALID_UTF8_SUBSTITUTE);
+  }catch(Throwable $error){http_response_code(422);echo json_encode(['success'=>false,'message'=>$error->getMessage()?:'Payout details are unavailable.']);}
+  exit;
+}
+
 if ($_SERVER['REQUEST_METHOD']==='POST') {
   if(!hash_equals($csrfToken,(string)($_POST['csrf_token']??'')))payoutRedirect('error','Your session token expired. Please try again.');
   $action=strtolower((string)($_POST['action']??''));$payoutId=(int)($_POST['payout_id']??0);
@@ -104,6 +181,7 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
     $stmt->execute([$payoutId]);$payout=$stmt->fetch(PDO::FETCH_ASSOC);if(!$payout)throw new RuntimeException('The payout record could not be found.');
     if($action==='settle'){
       if(!in_array((string)$payout['status'],['pending','approved'],true))throw new RuntimeException('Only an unsettled payout can be settled.');
+      if(!payoutProviderExists($pdo,(string)$payout['provider_type'],(int)$payout['provider_id']))throw new RuntimeException('The payout provider could not be verified.');
       $settlementAmount=(float)$payout['gross_amount'];$completion=(string)$payout['completion_status'];
       if($completion!=='completed'){
         $cancellationDomain=(string)$payout['booking_domain']==='hotel'?'hotel':'tour';
@@ -115,12 +193,47 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
         $settlementAmount=(float)$retention['amount'];
       }
       if($settlementAmount<=0.009)throw new RuntimeException('This booking has no provider amount available to settle.');
+      $submittedContext=(string)($_POST['settlement_context']??'');$contextPayout=$payout;$contextPayout['gross_amount']=$settlementAmount;
+      if($submittedContext===''||!hash_equals(payoutContextToken($contextPayout,$csrfToken),$submittedContext))throw new RuntimeException('The payout amount or provider changed while the form was open. Refresh and review the payout again.');
       $method=strtolower(trim((string)($_POST['settlement_method']??'')));$reference=trim((string)($_POST['settlement_reference']??''));$note=trim((string)($_POST['settlement_note']??''));
       if(!in_array($method,['bank_transfer','e_wallet','cash','other'],true))throw new RuntimeException('Select a valid disbursement method.');
       if($reference===''||mb_strlen($reference)>120)throw new RuntimeException('Enter a valid transfer or acknowledgment reference.');
       if(mb_strlen($note)>500)throw new RuntimeException('The settlement note must not exceed 500 characters.');
-      $update=$pdo->prepare("UPDATE provider_payouts SET gross_amount=?,status='settled',approved_by_admin_id=COALESCE(approved_by_admin_id,?),approved_at=COALESCE(approved_at,NOW()),settlement_method=?,settlement_reference=?,settlement_note=?,settled_by_admin_id=?,settled_at=NOW() WHERE payout_id=? AND status IN ('pending','approved')");
-      $update->execute([$settlementAmount,$adminId,$method,$reference,$note!==''?$note:null,$adminId,$payoutId]);if($update->rowCount()!==1)throw new RuntimeException('The payout changed before settlement could be recorded.');$pdo->commit();
+      $destinationId=(int)($_POST['saved_destination_id']??0);$institution='';$accountName='';$accountIdentifier='';$destinationLabel='';
+      if(in_array($method,['bank_transfer','e_wallet'],true)){
+        if($destinationId>0){
+          $saved=$pdo->prepare("SELECT * FROM provider_payout_destinations WHERE destination_id=? AND provider_type=? AND provider_id=? AND method=? LIMIT 1 FOR UPDATE");
+          $saved->execute([$destinationId,(string)$payout['provider_type'],(int)$payout['provider_id'],$method]);$destination=$saved->fetch(PDO::FETCH_ASSOC);
+          if(!$destination)throw new RuntimeException('The selected saved payout destination does not belong to this provider.');
+          $institution=(string)$destination['institution'];$accountName=(string)$destination['account_name'];$accountIdentifier=payoutDecryptIdentifier((string)$destination['account_identifier_cipher']);
+        }else{
+          $institution=trim((string)($_POST['settlement_institution']??''));$accountName=trim((string)($_POST['settlement_account_name']??''));$accountIdentifier=trim((string)($_POST['settlement_account_identifier']??''));
+          if($method==='e_wallet'&&!in_array(strtolower($institution),['gcash','maya','other'],true))throw new RuntimeException('Select a valid e-wallet provider.');
+          if($institution===''||mb_strlen($institution)>150||$accountName===''||mb_strlen($accountName)>190)throw new RuntimeException('Complete the recipient payout details.');
+          if(mb_strlen($accountIdentifier)<5||mb_strlen($accountIdentifier)>40||!preg_match('/^[0-9A-Za-z+._ -]+$/',$accountIdentifier))throw new RuntimeException('Enter a valid account or mobile number.');
+          if($method==='e_wallet'){
+            $digits=preg_replace('/\D+/','',$accountIdentifier);
+            if(preg_match('/^(?:\+?63|0)9\d{9}$/',$accountIdentifier)!==1&&preg_match('/^(?:63|0)9\d{9}$/',$digits)!==1)throw new RuntimeException('Enter a valid Philippine mobile number, such as 09XXXXXXXXX.');
+            if(str_starts_with($digits,'63'))$digits='0'.substr($digits,2);$accountIdentifier=$digits;
+          }
+          if(!empty($_POST['remember_destination'])){
+            $cipher=payoutEncryptIdentifier($accountIdentifier);$last4=payoutIdentifierLast4($accountIdentifier);$fingerprint=payoutIdentifierHash($accountIdentifier);
+            $pdo->prepare("UPDATE provider_payout_destinations SET is_default=0 WHERE provider_type=? AND provider_id=?")->execute([(string)$payout['provider_type'],(int)$payout['provider_id']]);
+            $save=$pdo->prepare("INSERT INTO provider_payout_destinations (provider_type,provider_id,method,institution,account_name,account_identifier_cipher,account_identifier_last4,account_identifier_hash,is_default,created_by_admin_id) VALUES (?,?,?,?,?,?,?,?,1,?) ON DUPLICATE KEY UPDATE account_name=VALUES(account_name),account_identifier_cipher=VALUES(account_identifier_cipher),account_identifier_last4=VALUES(account_identifier_last4),is_default=1,created_by_admin_id=VALUES(created_by_admin_id),updated_at=NOW()");
+            $save->execute([(string)$payout['provider_type'],(int)$payout['provider_id'],$method,$institution,$accountName,$cipher,$last4,$fingerprint,$adminId]);
+            $destinationId=(int)$pdo->lastInsertId();if($destinationId<1){$find=$pdo->prepare("SELECT destination_id FROM provider_payout_destinations WHERE provider_type=? AND provider_id=? AND method=? AND institution=? AND account_identifier_hash=? LIMIT 1");$find->execute([(string)$payout['provider_type'],(int)$payout['provider_id'],$method,$institution,$fingerprint]);$destinationId=(int)$find->fetchColumn();}
+          }
+        }
+      }elseif($method==='cash'){
+        $accountName=trim((string)($_POST['cash_received_by']??''));if($accountName===''||mb_strlen($accountName)>190)throw new RuntimeException('Enter the person who received the cash.');$institution='Cash';$destinationLabel='Received by '.$accountName;
+      }else{
+        $institution=trim((string)($_POST['other_channel_name']??''));$destinationLabel=trim((string)($_POST['other_destination']??''));
+        if($institution===''||mb_strlen($institution)>150||$destinationLabel===''||mb_strlen($destinationLabel)>190)throw new RuntimeException('Enter the manual payment channel and recipient or destination.');
+        $accountName=$destinationLabel;
+      }
+      $snapshotCipher=$accountIdentifier!==''?payoutEncryptIdentifier($accountIdentifier):null;$snapshotLast4=$accountIdentifier!==''?payoutIdentifierLast4($accountIdentifier):null;
+      $update=$pdo->prepare("UPDATE provider_payouts SET gross_amount=?,status='settled',approved_by_admin_id=COALESCE(approved_by_admin_id,?),approved_at=COALESCE(approved_at,NOW()),settlement_method=?,settlement_type='manual',settlement_destination_id=?,settlement_institution=?,settlement_account_name=?,settlement_destination_cipher=?,settlement_destination_last4=?,settlement_destination_label=?,settlement_reference=?,settlement_note=?,settled_by_admin_id=?,settled_at=NOW() WHERE payout_id=? AND status IN ('pending','approved')");
+      $update->execute([$settlementAmount,$adminId,$method,$destinationId?:null,$institution?:null,$accountName?:null,$snapshotCipher,$snapshotLast4,$destinationLabel?:null,$reference,$note!==''?$note:null,$adminId,$payoutId]);if($update->rowCount()!==1)throw new RuntimeException('The payout changed before settlement could be recorded.');$pdo->commit();
       logActivity($pdo,'Admin',$adminId,$adminName,'Settled Provider Payout','Recorded '.payoutMoney($settlementAmount).' payout for booking '.$payout['booking_reference'].' to '.$payout['provider_name'].'.','Earnings & Disbursements',$payoutId);
       payoutRedirect('success','Payout '.$payout['booking_reference'].' was recorded as settled.');
     }
@@ -128,15 +241,15 @@ if ($_SERVER['REQUEST_METHOD']==='POST') {
   }catch(Throwable $error){if($pdo->inTransaction())$pdo->rollBack();payoutRedirect('error',$error->getMessage());}
 }
 
-$tourRows=$pdo->query("SELECT p.*,t.full_name guest_name,t.email guest_email,b.booking_date service_date,b.created_at booking_created,b.payment_method,b.status booking_status,b.is_complete completion_status,
+$tourRows=$pdo->query("SELECT p.*,COALESCE(NULLIF(au.full_name,''),NULLIF(au.username,''),'Administrator') settled_by_name,t.full_name guest_name,t.email guest_email,b.booking_date service_date,b.created_at booking_created,b.payment_method,b.status booking_status,b.is_complete completion_status,
  b.location,b.package_name,b.pax,b.phone_number,b.num_adults,b.num_children,b.jump_off_port,b.tour_type,b.tour_range,b.grand_total booking_total,b.payment_amount amount_paid,b.remaining_balance,
  (SELECT br.status FROM booking_refunds br WHERE br.cancellation_request_id=cr.cancellation_request_id ORDER BY br.booking_refund_id DESC LIMIT 1) refund_transaction_status,
  (SELECT COALESCE(SUM(br.amount_minor),0) FROM booking_refunds br WHERE br.cancellation_request_id=cr.cancellation_request_id AND br.status='succeeded') refund_amount_minor,
  cr.cancellation_request_id,cr.request_status cancellation_status,cr.refund_status request_refund_status,cr.refund_policy,cr.refundable_amount,cr.non_refundable_amount,
  CASE WHEN LOWER(COALESCE(b.is_complete,'')) IN ('cancelled','declined') OR LOWER(COALESCE(b.status,''))='declined' THEN 1 ELSE 0 END is_excluded
- FROM provider_payouts p JOIN bookings b ON b.booking_id=p.booking_id AND p.booking_domain<>'hotel' LEFT JOIN tourist t ON t.tourist_id=b.tourist_id
+ FROM provider_payouts p JOIN bookings b ON b.booking_id=p.booking_id AND p.booking_domain<>'hotel' LEFT JOIN tourist t ON t.tourist_id=b.tourist_id LEFT JOIN admin_users au ON au.admin_id=p.settled_by_admin_id
  LEFT JOIN booking_cancellation_requests cr ON cr.cancellation_request_id=(SELECT cr2.cancellation_request_id FROM booking_cancellation_requests cr2 WHERE cr2.booking_id=p.booking_id AND LOWER(cr2.booking_domain)='tour' ORDER BY cr2.cancellation_request_id DESC LIMIT 1)")->fetchAll(PDO::FETCH_ASSOC);
-$hotelRows=$pdo->query("SELECT p.*,CONCAT_WS(' ',hb.first_name,hb.last_name) guest_name,hb.email guest_email,hb.checkout_date service_date,hb.created_at booking_created,
+$hotelRows=$pdo->query("SELECT p.*,COALESCE(NULLIF(au.full_name,''),NULLIF(au.username,''),'Administrator') settled_by_name,CONCAT_WS(' ',hb.first_name,hb.last_name) guest_name,hb.email guest_email,hb.checkout_date service_date,hb.created_at booking_created,
  COALESCE(hb.balance_payment_method,hb.payment_type) payment_method,hb.booking_status,hb.booking_status completion_status,
  hr.island location,hr.name package_name,(hb.adults+hb.children) pax,hb.phone_number,hb.adults num_adults,hb.children num_children,'' jump_off_port,'accommodation' tour_type,
  CONCAT(DATE_FORMAT(hb.checkin_date,'%b %e, %Y'),' - ',DATE_FORMAT(hb.checkout_date,'%b %e, %Y')) tour_range,hb.total_amount booking_total,hb.amount_paid,hb.remaining_balance,
@@ -144,7 +257,7 @@ $hotelRows=$pdo->query("SELECT p.*,CONCAT_WS(' ',hb.first_name,hb.last_name) gue
  (SELECT COALESCE(SUM(br.amount_minor),0) FROM booking_refunds br WHERE br.cancellation_request_id=cr.cancellation_request_id AND br.status='succeeded') refund_amount_minor,
  cr.cancellation_request_id,cr.request_status cancellation_status,cr.refund_status request_refund_status,cr.refund_policy,cr.refundable_amount,cr.non_refundable_amount,
  CASE WHEN LOWER(COALESCE(hb.booking_status,'')) IN ('cancelled','declined','no-show') THEN 1 ELSE 0 END is_excluded
- FROM provider_payouts p JOIN hotel_room_bookings hb ON hb.hotel_booking_id=p.booking_id AND p.booking_domain='hotel' LEFT JOIN hotel_resorts hr ON hr.hotel_resort_id=hb.hotel_resort_id
+ FROM provider_payouts p JOIN hotel_room_bookings hb ON hb.hotel_booking_id=p.booking_id AND p.booking_domain='hotel' LEFT JOIN hotel_resorts hr ON hr.hotel_resort_id=hb.hotel_resort_id LEFT JOIN admin_users au ON au.admin_id=p.settled_by_admin_id
  LEFT JOIN booking_cancellation_requests cr ON cr.cancellation_request_id=(SELECT cr2.cancellation_request_id FROM booking_cancellation_requests cr2 WHERE cr2.booking_id=p.booking_id AND LOWER(cr2.booking_domain)='hotel' ORDER BY cr2.cancellation_request_id DESC LIMIT 1)")->fetchAll(PDO::FETCH_ASSOC);
 $allRows=array_merge($tourRows,$hotelRows);
 $syncPayoutAmount=$pdo->prepare("UPDATE provider_payouts SET gross_amount=?,updated_at=NOW() WHERE payout_id=? AND status='pending'");
@@ -190,7 +303,7 @@ $chartCollections=array_map(fn($k)=>$collectionMap[$k]??0,$monthKeys);$chartSett
 $pageRecords=array_map(static fn(array $row):array=>['provider_key'=>(string)$row['provider_key'],'provider_type'=>strtolower((string)$row['provider_type']),'provider_name'=>(string)$row['provider_name'],'state'=>(string)$row['workflow_status'],'payout'=>(float)$row['payout_amount'],'collected'=>(float)$row['amount_paid'],'booking_month'=>substr((string)$row['booking_created'],0,7),'settled_month'=>!empty($row['settled_at'])?substr((string)$row['settled_at'],0,7):''],$allRows);
 $notice=$_SESSION['payout_notice']??null;unset($_SESSION['payout_notice']);
 ?>
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Earnings & Disbursements | iTour Mercedes Admin</title><link rel="icon" type="image/png" href="img/newlogo.png"><link rel="stylesheet" href="styles/admin_panel_theme.css"><link rel="stylesheet" href="styles/adearningsdisbursements.css?v=11"></head><body>
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Earnings & Disbursements | iTour Mercedes Admin</title><link rel="icon" type="image/png" href="img/newlogo.png"><link rel="stylesheet" href="styles/admin_panel_theme.css"><link rel="stylesheet" href="styles/adearningsdisbursements.css?v=13"></head><body>
 <div class="admin-container"><?php include __DIR__.'/admin_sidebar.php'; ?><main class="main-content payout-main">
 <header class="admin-header admin-page-header"><div class="admin-header-left admin-page-title"><span class="admin-page-title-icon"><svg viewBox="0 0 24 24"><path d="M4 6.5h14a2 2 0 0 1 2 2V19H4a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2h12"/><path d="M20 11h-5a2 2 0 0 0 0 4h5M15 13h.01"/></svg></span><div class="admin-page-title-copy"><h2>Earnings & Disbursements</h2><p class="admin-header-subtitle">Central PayMongo collections and controlled provider settlements</p></div></div><div class="admin-header-right payout-header-actions"><div class="page-scope-filter" aria-label="Filter the earnings workspace"><span class="scope-filter-icon"><svg viewBox="0 0 24 24"><path d="M4 6h16M7 12h10M10 18h4"/></svg></span><label><span>Stakeholder</span><select id="pageStakeholderFilter"><option value="all" <?= $stakeholderFilter==='all'?'selected':'' ?>>All stakeholders</option><option value="operator" <?= $stakeholderFilter==='operator'?'selected':'' ?>>Tour operators</option><option value="hotel" <?= $stakeholderFilter==='hotel'?'selected':'' ?>>Hotels / resorts</option><option value="tourguide" <?= $stakeholderFilter==='tourguide'?'selected':'' ?>>Tour guides</option><option value="boat" <?= $stakeholderFilter==='boat'?'selected':'' ?>>Boats</option></select></label><span class="scope-filter-arrow">Then</span><label><span>Specific recipient</span><select id="pageProviderFilter"><option value="all">All providers</option><?php foreach($providerDirectory as $providerOption):?><option value="<?= htmlspecialchars($providerOption['key']) ?>" data-provider-type="<?= htmlspecialchars($providerOption['type']) ?>" <?= $providerFilter===$providerOption['key']?'selected':'' ?>><?= htmlspecialchars($providerOption['name']) ?></option><?php endforeach;?></select></label><button type="button" class="scope-filter-reset" id="pageScopeReset" title="Show all stakeholders" <?= $stakeholderFilter==='all'&&$providerFilter==='all'?'hidden':'' ?>>Reset</button></div><a class="payout-export" id="payoutExport" href="?<?= htmlspecialchars(http_build_query(array_merge($_GET,['export'=>'csv']))) ?>"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M4 17v3h16v-3"/></svg>Export ledger</a></div></header>
 <section class="payout-workspace">
@@ -219,13 +332,31 @@ $notice=$_SESSION['payout_notice']??null;unset($_SESSION['payout_notice']);
   <button type="button" data-payout-details='<?= htmlspecialchars(json_encode($detail,JSON_HEX_APOS|JSON_HEX_QUOT),ENT_QUOTES) ?>'><svg viewBox="0 0 24 24"><path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>View payout details</button>
   <button type="button" data-booking-details='<?= htmlspecialchars(json_encode($bookingDetail,JSON_HEX_APOS|JSON_HEX_QUOT),ENT_QUOTES) ?>'><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>View booking details</button>
   <button type="button" data-copy-reference="<?= htmlspecialchars((string)$row['booking_reference']) ?>"><svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/></svg>Copy booking reference</button>
-  <?php if($state==='available'):?><button type="button" class="menu-settle" data-settle='<?= htmlspecialchars(json_encode(['id'=>(int)$row['payout_id'],'reference'=>$row['booking_reference'],'provider'=>$row['provider_name'],'amount'=>payoutMoney((float)$row['payout_amount'])],JSON_HEX_APOS|JSON_HEX_QUOT),ENT_QUOTES) ?>'><svg viewBox="0 0 24 24"><path d="M4 7h16v12H4zM7 11h10M7 15h6"/></svg>Settle payout</button><?php endif;?>
-  <?php if($state==='settled'):?><button type="button" data-receipt='<?= htmlspecialchars(json_encode(['booking'=>$row['booking_reference'],'provider'=>$row['provider_name'],'amount'=>payoutMoney((float)$row['payout_amount']),'method'=>payoutLabel((string)$row['settlement_method']),'reference'=>$row['settlement_reference'],'note'=>$row['settlement_note'],'settled'=>date('F j, Y · g:i A',strtotime((string)$row['settled_at']))],JSON_HEX_APOS|JSON_HEX_QUOT),ENT_QUOTES) ?>'><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"/><path d="M9 8h6M9 12h6"/></svg>View settlement record</button><?php endif;?>
+  <?php if($state==='available'):?><button type="button" class="menu-settle" data-settle='<?= htmlspecialchars(json_encode(['id'=>(int)$row['payout_id'],'reference'=>$row['booking_reference'],'provider'=>$row['provider_name'],'amount'=>payoutMoney((float)$row['payout_amount']),'context'=>payoutContextToken($row,$csrfToken)],JSON_HEX_APOS|JSON_HEX_QUOT),ENT_QUOTES) ?>'><svg viewBox="0 0 24 24"><path d="M4 7h16v12H4zM7 11h10M7 15h6"/></svg>Settle payout</button><?php endif;?>
+  <?php if($state==='settled'):?><button type="button" data-receipt='<?= htmlspecialchars(json_encode(['booking'=>$row['booking_reference'],'provider'=>$row['provider_name'],'amount'=>payoutMoney((float)$row['payout_amount']),'method'=>payoutLabel((string)$row['settlement_method']),'institution'=>$row['settlement_institution']??'','account_name'=>$row['settlement_account_name']??'','destination'=>!empty($row['settlement_destination_last4'])?payoutMaskedIdentifier((string)$row['settlement_destination_last4']):(string)($row['settlement_destination_label']??''),'reference'=>$row['settlement_reference'],'settled_by'=>$row['settled_by_name']??'Administrator','note'=>$row['settlement_note'],'settled'=>date('F j, Y · g:i A',strtotime((string)$row['settled_at']))],JSON_HEX_APOS|JSON_HEX_QUOT),ENT_QUOTES) ?>'><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"/><path d="M9 8h6M9 12h6"/></svg>View settlement record</button><?php endif;?>
   <?php if((int)($row['cancellation_request_id']??0)>0):?><a class="refund-tool" href="adpaymenttransactions.php?view=refunds&amp;cancellation_request_id=<?= (int)$row['cancellation_request_id'] ?>"><svg viewBox="0 0 24 24"><path d="M4 10h12a4 4 0 0 1 0 8H8"/><path d="m8 6-4 4 4 4"/></svg>Open refund record</a><?php endif;?>
 </div></div></td></tr>
 <?php endforeach;?><tr id="ledgerEmptyRow" <?= $allRows?'hidden':'' ?>><td colspan="9"><div class="table-empty"><strong>No payout records found</strong><span>Try changing the filters or search terms.</span></div></td></tr></tbody></table></div><footer class="ledger-footer"><span id="ledgerResultCount">Showing <?= count($filteredRows) ?> of <?= count($allRows) ?> booking payment records</span><span>Filtered payout total <strong id="ledgerFilteredTotal"><?= payoutMoney(array_sum(array_map(fn($r)=>(float)$r['payout_amount'],$filteredRows))) ?></strong></span></footer></section></section></main></div>
-<div class="payout-modal" id="settlementModal" aria-hidden="true"><div class="modal-backdrop" data-close-modal></div><section role="dialog" aria-modal="true"><header><div><span class="modal-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v12H4zM7 11h10M7 15h6"/></svg></span><div><small>RECORD DISBURSEMENT</small><h3>Settle provider payout</h3><p>Record the completed transfer for the audit trail.</p></div></div><button type="button" data-close-modal>×</button></header><form method="post" id="settlementForm"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>"><input type="hidden" name="action" value="settle"><input type="hidden" name="payout_id" id="settlementPayoutId"><div class="settlement-summary"><div><span>Booking</span><strong id="settlementBooking">—</strong></div><div><span>Recipient</span><strong id="settlementProvider">—</strong></div><div><span>Amount to settle</span><strong id="settlementAmount">—</strong></div></div><label><span>Disbursement method</span><select name="settlement_method" required><option value="" selected disabled>Select transfer method</option><option value="bank_transfer">Bank transfer</option><option value="e_wallet">E-wallet</option><option value="cash">Cash acknowledgment</option><option value="other">Other verified method</option></select></label><label><span>Transfer / acknowledgment reference</span><input type="text" name="settlement_reference" maxlength="120" required placeholder="e.g. TXN-2026-00124"><small>Required for reconciliation and audit history.</small></label><label><span>Internal note <em>Optional</em></span><textarea name="settlement_note" maxlength="500" rows="3" placeholder="Add settlement details or recipient confirmation"></textarea></label><div class="modal-warning"><svg viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5M12 17h.01"/></svg><p>Submitting this form authorizes and records the payout as settled.</p></div><footer><button type="button" class="modal-cancel" data-close-modal>Cancel</button><button type="submit" class="modal-confirm">Settle payout</button></footer></form></section></div>
+<div class="payout-modal" id="settlementModal" aria-hidden="true"><div class="modal-backdrop" data-close-modal></div><section role="dialog" aria-modal="true" aria-labelledby="settlementModalTitle">
+<header><div><span class="modal-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16v12H4zM7 11h10M7 15h6"/></svg></span><div><small>RECORD MANUAL DISBURSEMENT</small><h3 id="settlementModalTitle">Settle provider payout</h3><p>Record a transfer you completed outside iTour Mercedes.</p></div></div><button type="button" data-close-modal aria-label="Close">×</button></header>
+<form method="post" id="settlementForm" autocomplete="off">
+  <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>"><input type="hidden" name="action" value="settle"><input type="hidden" name="payout_id" id="settlementPayoutId"><input type="hidden" name="settlement_context" id="settlementContext"><input type="hidden" name="saved_destination_id" id="savedDestinationId">
+  <div class="settlement-overview"><div class="settlement-identity"><div><span>Booking</span><strong id="settlementBooking">—</strong></div><div><span>Recipient</span><strong id="settlementProvider">—</strong></div></div><div class="settlement-amount-card"><span>Amount to settle</span><strong id="settlementAmount">—</strong><small>Calculated securely from the payout record</small></div></div>
+  <label><span>Disbursement method</span><select name="settlement_method" id="settlementMethod" required><option value="" selected disabled>Select transfer method</option><option value="bank_transfer">Bank transfer</option><option value="e_wallet">E-wallet</option><option value="cash">Cash</option><option value="other">Other</option></select></label>
+  <section class="saved-destination" id="savedDestinationPanel" hidden><div><small>SAVED FOR THIS PROVIDER</small><strong id="savedDestinationTitle"></strong><span id="savedDestinationSummary"></span></div><div><button type="button" id="useSavedDestination">Use saved payout details</button><button type="button" id="enterDifferentDestination">Enter different details</button></div></section>
+  <section class="destination-section" id="electronicDestination" hidden><header><div><small>RECIPIENT PAYOUT DETAILS</small><h4 id="destinationHeading">Recipient payout details</h4></div></header><div class="destination-fields">
+    <label><span id="institutionLabel">Bank / Financial Institution</span><select name="settlement_institution" id="walletInstitution" hidden><option value="">Select e-wallet</option><option value="GCash">GCash</option><option value="Maya">Maya</option><option value="Other">Other</option></select><input type="text" name="settlement_institution" id="settlementInstitution" maxlength="150" placeholder="Enter bank or financial institution"></label>
+    <label><span>Account name</span><input type="text" name="settlement_account_name" id="settlementAccountName" maxlength="190" autocomplete="off"></label>
+    <label><span id="accountIdentifierLabel">Account number</span><div class="sensitive-input"><input type="password" name="settlement_account_identifier" id="settlementAccountIdentifier" maxlength="40" autocomplete="new-password"><button type="button" id="toggleAccountIdentifier" aria-label="Show account number">Show</button></div></label>
+  </div><label class="remember-destination"><input type="checkbox" name="remember_destination" value="1" id="rememberDestination"><span><strong>Remember these payout details for this provider</strong><small>Save this payout destination for future settlements to this provider.</small></span></label></section>
+  <section class="destination-section" id="cashDestination" hidden><header><div><small>CASH RECIPIENT DETAILS</small><h4>Cash recipient details</h4></div></header><label><span>Received by</span><input type="text" name="cash_received_by" id="cashReceivedBy" maxlength="190" placeholder="Name of the person who received the cash"></label></section>
+  <section class="destination-section" id="otherDestinationSection" hidden><header><div><small>OTHER MANUAL METHOD</small><h4>Recipient payout details</h4></div></header><div class="destination-fields"><label><span>Method / channel name</span><input type="text" name="other_channel_name" id="otherChannelName" maxlength="150"></label><label><span>Recipient / destination</span><input type="text" name="other_destination" id="otherDestination" maxlength="190"></label></div></section>
+  <label><span>Transaction / acknowledgment reference</span><input type="text" name="settlement_reference" id="settlementReference" maxlength="120" required placeholder="e.g. 123456789012"><small>Enter the reference from the completed manual transfer for reconciliation and audit history.</small></label>
+  <label><span>Internal note <em>Optional</em></span><textarea name="settlement_note" maxlength="500" rows="3" placeholder="Add settlement details, recipient confirmation, or other internal notes."></textarea><small>Do not enter bank or e-wallet credentials here.</small></label>
+  <div class="modal-warning"><svg viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5M12 17h.01"/></svg><p><strong>Important:</strong> iTour Mercedes will not send money automatically. Confirm that you have already completed the transfer before recording this payout as settled.</p></div>
+  <footer><button type="button" class="modal-cancel" data-close-modal>Cancel</button><button type="submit" class="modal-confirm">Record as settled</button></footer>
+</form></section></div>
 <div class="payout-drawer" id="payoutDetailDrawer" aria-hidden="true"><div class="drawer-backdrop" data-close-drawer></div><aside role="dialog" aria-modal="true" aria-labelledby="payoutDrawerTitle"><header><div><span class="drawer-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg></span><div><small>BOOKING PAYOUT</small><h3 id="payoutDrawerTitle">Ledger record details</h3><p>Booking, refund, and disbursement context</p></div></div><button type="button" data-close-drawer aria-label="Close payout details">×</button></header><div class="drawer-content" id="payoutDetailBody"></div><footer><button type="button" class="drawer-close-button" data-close-drawer>Close</button></footer></aside></div>
 <div class="payout-drawer" id="bookingDetailDrawer" aria-hidden="true"><div class="drawer-backdrop" data-close-drawer></div><aside role="dialog" aria-modal="true" aria-labelledby="bookingDrawerTitle"><header><div><span class="drawer-icon booking"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></span><div><small>BOOKING RECORD</small><h3 id="bookingDrawerTitle">Booking details</h3><p>Complete reservation and payment information</p></div></div><button type="button" data-close-drawer aria-label="Close booking details">×</button></header><div class="drawer-content" id="bookingDetailBody"></div><footer><button type="button" class="drawer-close-button" data-close-drawer>Close</button></footer></aside></div>
 <div class="payout-drawer" id="settlementRecordDrawer" aria-hidden="true"><div class="drawer-backdrop" data-close-drawer></div><aside role="dialog" aria-modal="true" aria-labelledby="settlementRecordTitle"><header><div><span class="drawer-icon"><svg viewBox="0 0 24 24"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z"/><path d="M9 8h6M9 12h6"/></svg></span><div><small>SETTLEMENT RECORD</small><h3 id="settlementRecordTitle">Payout settlement</h3><p>Recorded provider disbursement</p></div></div><button type="button" data-close-drawer aria-label="Close settlement record">×</button></header><div class="drawer-content" id="receiptBody"></div><footer><button type="button" class="drawer-close-button" data-close-drawer>Close</button></footer></aside></div>
-<script>window.payoutPageData=<?= json_encode(['labels'=>$monthLabels,'monthKeys'=>$monthKeys,'collections'=>$chartCollections,'settled'=>$chartSettled,'records'=>$pageRecords,'stakeholder'=>$stakeholderFilter,'provider'=>$providerFilter,'notice'=>$notice],JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;</script><script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script><script src="js/adearningsdisbursements.js?v=6"></script></body></html>
+<script>window.payoutPageData=<?= json_encode(['labels'=>$monthLabels,'monthKeys'=>$monthKeys,'collections'=>$chartCollections,'settled'=>$chartSettled,'records'=>$pageRecords,'stakeholder'=>$stakeholderFilter,'provider'=>$providerFilter,'notice'=>$notice],JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;</script><script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script><script src="js/adearningsdisbursements.js?v=7"></script></body></html>

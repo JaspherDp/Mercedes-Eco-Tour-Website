@@ -3518,9 +3518,11 @@ body.password-modal-open .main{overflow:hidden}
   }
   .cancellation-section .cancellation-booking-name{max-width:none;white-space:normal}
   .cancellation-section .cancellation-cell-note{white-space:normal}
-  .cancellation-section .cancellation-row-actions{width:100%;min-width:0;gap:7px}
+  .cancellation-section .cancellation-row-actions{display:flex;width:100%;min-width:0;gap:7px}
+  .cancellation-section .cancellation-row-actions .view-cancellation-reason{flex:0 0 auto;width:auto!important;min-width:0;min-height:32px}
   .cancellation-section .cancellation-row-actions .cancellation-details-btn,
-  .cancellation-section .cancellation-row-actions .view-cancellation-reason{width:100%;min-width:0;min-height:32px}
+  .cancellation-section .cancellation-row-actions .cancellation-reason-btn{flex:0 0 36px;width:36px!important;min-width:36px!important;min-height:36px}
+  .cancellation-section .cancellation-row-actions .refund-destination-button{flex-basis:100%;width:100%!important}
   :is(.cancellation-section,#history) .formal-table .table-empty-filter{flex-basis:100%;border-top-color:#90afa4}
   :is(.cancellation-section,#history) .formal-table .table-empty-filter td{display:block!important;padding:28px 16px!important;text-align:center!important}
   :is(.cancellation-section,#history) .formal-table .table-empty-filter td::before{display:none}
@@ -3808,11 +3810,13 @@ html[data-profile-tab="complaints"] .mobile-profile-nav a[data-section="complain
 .view-cancellation-reason{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-width:88px;height:29px;padding:6px 10px;border:1px solid #12604c;border-radius:7px;background:#17735b;color:#fff;font:inherit;font-size:.61rem;font-weight:800;line-height:1;white-space:nowrap;cursor:pointer;box-shadow:0 3px 8px rgba(18,96,76,.16);transition:.18s ease}
 .view-cancellation-reason:hover{border-color:#0b4939;background:#105a47;transform:translateY(-1px)}
 .view-cancellation-reason svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2}
-.cancellation-row-actions{display:grid;grid-template-columns:1fr;gap:5px;min-width:96px}
-.cancellation-row-actions .cancellation-details-btn,.cancellation-row-actions .view-cancellation-reason{width:100%;min-width:96px;height:28px;padding:5px 8px;font-size:.58rem;font-weight:800}
-.cancellation-row-actions .cancellation-details-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;border:1px solid #24745c;border-radius:7px;background:#2e7d66;color:#fff;box-shadow:0 3px 8px rgba(18,96,76,.14)}
+.cancellation-row-actions{display:flex;align-items:center;flex-wrap:wrap;gap:6px;min-width:max-content}
+.cancellation-row-actions .cancellation-details-btn,.cancellation-row-actions .view-cancellation-reason{width:auto;height:34px;padding:5px 8px;font-size:.58rem;font-weight:800}
+.cancellation-row-actions .cancellation-details-btn,.cancellation-row-actions .cancellation-reason-btn{display:inline-flex;flex:0 0 34px;width:34px!important;min-width:34px!important;align-items:center;justify-content:center;padding:0!important}
+.cancellation-row-actions .cancellation-details-btn{border:1px solid #24745c;border-radius:7px;background:#2e7d66;color:#fff;box-shadow:0 3px 8px rgba(18,96,76,.14)}
 .cancellation-row-actions .cancellation-details-btn:hover{background:#205e4c;transform:translateY(-1px)}
-.cancellation-row-actions .cancellation-details-btn svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2}
+.cancellation-row-actions .cancellation-details-btn svg,.cancellation-row-actions .cancellation-reason-btn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2}
+.cancellation-row-actions .refund-destination-button{flex-basis:100%}
 .cancellation-reason-modal-text{color:#455b53!important;font-size:.82rem!important;line-height:1.65!important;text-align:left!important;white-space:pre-wrap!important}
 .profile-billing-overlay{position:fixed;inset:0;z-index:12000;display:none;align-items:center;justify-content:center;padding:22px;background:rgba(8,31,27,.64);backdrop-filter:blur(4px)}
 .profile-billing-overlay.show{display:flex}.profile-billing-overlay.receipt-layer{z-index:12020}
@@ -4691,6 +4695,7 @@ document.addEventListener("DOMContentLoaded", function () {
             <th>Type</th>
             <th>Guests</th>
             <th>Details</th>
+            <th class="table-col-payment">Payment Status</th>
             <th>Status</th>
             <th>Action</th>
           </tr>
@@ -4702,6 +4707,7 @@ document.addEventListener("DOMContentLoaded", function () {
             $pax      = (int)($b['pax'] ?? ($adults + $children));
             $amountPaid = max(0, (float)($b['payment_amount'] ?? 0));
             $remainingBalance = max(0, (float)($b['remaining_balance'] ?? 0));
+            $paymentStatus = $remainingBalance <= 0.009 ? 'Paid' : ($amountPaid > 0 ? 'Partial' : 'Unpaid');
             $cancellationPolicy = bookingCancellationRefundPolicy(
               (string)$b['booking_date'],
               max((float)($b['grand_total'] ?? 0), $amountPaid + $remainingBalance),
@@ -4746,6 +4752,9 @@ document.addEventListener("DOMContentLoaded", function () {
     View Details
   </button>
 </td>
+            <td class="table-col-payment">
+              <span class="profile-bill-status <?= strtolower($paymentStatus) ?>"><?= $paymentStatus ?></span>
+            </td>
             <td><span class="status-pill pending">Pending</span></td>
             <td>
               <button type="button" class="cancel-booking-btn" data-booking-domain="tour" data-booking-id="<?= (int)$b['booking_id'] ?>" data-booking-reference="<?= htmlspecialchars((string)($b['booking_reference'] ?? ('BOOKING-' . $b['booking_id'])), ENT_QUOTES, 'UTF-8') ?>" data-service-date="<?= htmlspecialchars((string)$b['booking_date'], ENT_QUOTES, 'UTF-8') ?>" data-refund-policy="<?= htmlspecialchars(bookingCancellationPolicyLabel($cancellationPolicy['refund_policy']), ENT_QUOTES, 'UTF-8') ?>" data-refund-policy-code="<?= htmlspecialchars((string)$cancellationPolicy['refund_policy'], ENT_QUOTES, 'UTF-8') ?>" data-refund-amount="<?= htmlspecialchars(number_format((float)$cancellationPolicy['refundable_amount'], 2, '.', ''), ENT_QUOTES, 'UTF-8') ?>">
@@ -4932,7 +4941,21 @@ document.addEventListener("DOMContentLoaded", function () {
               <td><span class="refund-eligibility <?= $policyClass ?>"><?= htmlspecialchars(bookingCancellationPolicyLabel($policyCode)) ?></span><small class="cancellation-cell-note"><?= $policyCode === 'full_refund' ? 'Cancelled at least 3 days before' : ($policyCode === 'partial_refund' ? '20% booking deposit retained' : '') ?></small></td>
               <td><strong class="refund-amount">₱<?= number_format($refundAmount, 2) ?></strong><small class="cancellation-cell-note">of ₱<?= number_format((float)$request['amount_paid'], 2) ?> paid</small></td>
               <td><span class="refund-status <?= $refundStatusClass ?>"><?= htmlspecialchars(bookingCancellationRefundStatusLabel($refundStatus, $refundAmount)) ?></span><?php if (!empty($request['refund_updated_at'])): ?><small class="cancellation-cell-note">Updated <?= htmlspecialchars(date('M j, Y', strtotime((string)$request['refund_updated_at']))) ?></small><?php endif; ?></td>
-              <td><div class="cancellation-row-actions"><button type="button" class="btn-details-user booking-btn-user cancellation-details-btn" data-booking='<?= htmlspecialchars(json_encode($request['_booking_detail'], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8') ?>'><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg>View details</button><button type="button" class="view-cancellation-reason" data-booking-reference="<?= htmlspecialchars((string)($request['booking_reference'] ?: ('#' . $request['booking_id'])), ENT_QUOTES, 'UTF-8') ?>" data-cancellation-reason="<?= htmlspecialchars((string)$request['cancellation_reason'], ENT_QUOTES, 'UTF-8') ?>" data-admin-note="<?= htmlspecialchars((string)($request['admin_note'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z"></path><path d="M8 9h8M8 13h8M8 17h5"></path></svg>View reason</button><?php if ($policyCode === 'partial_refund' && !in_array($refundStatus, ['processing','completed','refunded'], true)): ?><button type="button" class="view-cancellation-reason refund-destination-button" data-cancellation-request-id="<?= (int)$request['cancellation_request_id'] ?>" data-current-institution="<?= htmlspecialchars((string)($request['refund_destination_institution'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-current-last4="<?= htmlspecialchars((string)($request['refund_destination_last4'] ?? ''), ENT_QUOTES, 'UTF-8') ?>"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v10H4z"></path><path d="M7 11h5M16 10v2"></path></svg><?= empty($request['refund_destination_verified_at']) ? 'Add refund account' : 'Update refund account' ?></button><?php endif; ?></div></td>
+              <td>
+                <div class="cancellation-row-actions">
+                  <button type="button" class="btn-details-user booking-btn-user cancellation-details-btn" data-booking='<?= htmlspecialchars(json_encode($request['_booking_detail'], JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG | JSON_HEX_AMP), ENT_QUOTES, 'UTF-8') ?>' aria-label="View booking details" title="View booking details">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"></path><circle cx="12" cy="12" r="2.5"></circle></svg>
+                  </button>
+                  <button type="button" class="view-cancellation-reason cancellation-reason-btn" data-booking-reference="<?= htmlspecialchars((string)($request['booking_reference'] ?: ('#' . $request['booking_id'])), ENT_QUOTES, 'UTF-8') ?>" data-cancellation-reason="<?= htmlspecialchars((string)$request['cancellation_reason'], ENT_QUOTES, 'UTF-8') ?>" data-admin-note="<?= htmlspecialchars((string)($request['admin_note'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" aria-label="View cancellation reason" title="View cancellation reason">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v14H4z"></path><path d="M8 9h8M8 13h8M8 17h5"></path></svg>
+                  </button>
+                  <?php if ($policyCode === 'partial_refund' && !in_array($refundStatus, ['processing','completed','refunded'], true)): ?>
+                    <button type="button" class="view-cancellation-reason refund-destination-button" data-cancellation-request-id="<?= (int)$request['cancellation_request_id'] ?>" data-current-institution="<?= htmlspecialchars((string)($request['refund_destination_institution'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" data-current-last4="<?= htmlspecialchars((string)($request['refund_destination_last4'] ?? ''), ENT_QUOTES, 'UTF-8') ?>">
+                      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v10H4z"></path><path d="M7 11h5M16 10v2"></path></svg><?= empty($request['refund_destination_verified_at']) ? 'Add refund account' : 'Update refund account' ?>
+                    </button>
+                  <?php endif; ?>
+                </div>
+              </td>
             </tr>
           <?php endforeach; ?>
           </tbody>

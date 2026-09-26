@@ -3,6 +3,7 @@ require_once __DIR__ . '/Ho_common.php';
 require_once __DIR__ . '/php/activity_logger.php';
 require_once __DIR__ . '/php/input_validation.php';
 require_once __DIR__ . '/php/project_path_helper.php';
+require_once __DIR__ . '/php/secure_upload_helper.php';
 
 $hoAdmin = HoRequireHotelAdmin($pdo);
 $hoHotelResortId = (int)$hoAdmin['hotel_resort_id'];
@@ -26,30 +27,11 @@ function HoEnsureContentUploadDirectory(): array
 
 function HoSaveUploadedContentImage(?array $file, string $absoluteDir, string $relativeDir): ?string
 {
-    if (!$file || !isset($file['error']) || (int)$file['error'] !== UPLOAD_ERR_OK) {
-        return null;
-    }
-    if (empty($file['tmp_name']) || !is_uploaded_file((string)$file['tmp_name'])) {
-        return null;
-    }
-    if ((int)($file['size'] ?? 0) < 1 || (int)$file['size'] > 8 * 1024 * 1024) return null;
-
-    $mime = (string)(mime_content_type((string)$file['tmp_name']) ?: '');
-    $allowed = [
-        'image/jpeg' => 'jpg',
-        'image/png' => 'png',
-        'image/webp' => 'webp',
-        'image/gif' => 'gif',
-    ];
-    if (!isset($allowed[$mime])) {
-        return null;
-    }
-
-    $filename = 'content_' . date('YmdHis') . '_' . bin2hex(random_bytes(5)) . '.' . $allowed[$mime];
+    if (!$file || (int)($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) return null;
+    $validated = ItourSecureValidateUploadedImage($file, 40 * 1024 * 1024, 40000000, 12000, 12000);
+    $filename = 'content_' . date('YmdHis') . '_' . bin2hex(random_bytes(5)) . '.' . $validated['extension'];
     $targetAbs = $absoluteDir . DIRECTORY_SEPARATOR . $filename;
-    if (!move_uploaded_file((string)$file['tmp_name'], $targetAbs)) {
-        return null;
-    }
+    ItourSecureOptimizeUploadedImage($validated, $targetAbs, 2400);
     return $relativeDir . '/' . $filename;
 }
 
@@ -67,18 +49,25 @@ function HoSaveUploadedContentImagesIndexed(?array $files, string $absoluteDir, 
 
     $saved = [];
     $count = count($files['name']);
-    for ($i = 0; $i < $count; $i++) {
-        $entry = [
-            'name' => $files['name'][$i] ?? '',
-            'type' => $files['type'][$i] ?? '',
-            'tmp_name' => $files['tmp_name'][$i] ?? '',
-            'error' => $files['error'][$i] ?? UPLOAD_ERR_NO_FILE,
-            'size' => $files['size'][$i] ?? 0,
-        ];
-        $path = HoSaveUploadedContentImage($entry, $absoluteDir, $relativeDir);
-        if ($path) {
-            $saved[$i] = $path;
+    try {
+        for ($i = 0; $i < $count; $i++) {
+            $entry = [
+                'name' => $files['name'][$i] ?? '',
+                'type' => $files['type'][$i] ?? '',
+                'tmp_name' => $files['tmp_name'][$i] ?? '',
+                'error' => $files['error'][$i] ?? UPLOAD_ERR_NO_FILE,
+                'size' => $files['size'][$i] ?? 0,
+            ];
+            $path = HoSaveUploadedContentImage($entry, $absoluteDir, $relativeDir);
+            if ($path) $saved[$i] = $path;
         }
+    } catch (Throwable $exception) {
+        foreach ($saved as $newPath) {
+            $basename = basename((string)$newPath);
+            $absolute = $absoluteDir . DIRECTORY_SEPARATOR . $basename;
+            if ($basename !== '' && is_file($absolute)) @unlink($absolute);
+        }
+        throw $exception;
     }
     return $saved;
 }
@@ -266,7 +255,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['content_action'])) {
             );
             $flash = 'Property content updated successfully.';
         } catch (Throwable $e) {
-            $error = 'Failed to update property content. Please try again.';
+            $error = $e instanceof InvalidArgumentException
+                ? $e->getMessage()
+                : 'Failed to update property content. Please try again.';
         }
     }
 }
@@ -835,6 +826,7 @@ $contentCompletionPercent = (int)round(($completedContentSections / max(1, $tota
     </div>
   </div>
 
+  <script src="js/image-upload-optimizer.js?v=1"></script>
   <script>
     (function () {
       const toggle = document.getElementById('hoNotifToggle');
@@ -1116,21 +1108,24 @@ $contentCompletionPercent = (int)round(($completedContentSections / max(1, $tota
         propertyImageModal.setAttribute('aria-hidden', 'false');
       };
 
-      const selectPropertyImage = file => {
+      const selectPropertyImage = async file => {
         if (!file) return;
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-        if (!allowedTypes.includes(file.type) || file.size > 8 * 1024 * 1024) {
-          window.alert('Choose a JPG, PNG, or WebP image no larger than 8 MB.');
-          return;
+        if (propertyImageApply) propertyImageApply.disabled = true;
+        if (propertyImageName) propertyImageName.textContent = 'Optimizing image...';
+        try {
+          const optimizedFile = await ItourImageOptimizer.optimizeSource(file, 2400);
+          if (propertyImagePreviewUrl) URL.revokeObjectURL(propertyImagePreviewUrl);
+          propertyImagePendingFile = optimizedFile;
+          propertyImagePreviewUrl = URL.createObjectURL(optimizedFile);
+          if (propertyImagePreview) propertyImagePreview.src = propertyImagePreviewUrl;
+          if (propertyImageName) propertyImageName.textContent = optimizedFile.name;
+          if (propertyImageDropzone) propertyImageDropzone.hidden = true;
+          if (propertyImageSelected) propertyImageSelected.hidden = false;
+          if (propertyImageApply) propertyImageApply.disabled = false;
+        } catch (error) {
+          if (propertyImageName) propertyImageName.textContent = '';
+          window.alert(error.message || 'The image could not be processed. Please try another photo.');
         }
-        if (propertyImagePreviewUrl) URL.revokeObjectURL(propertyImagePreviewUrl);
-        propertyImagePendingFile = file;
-        propertyImagePreviewUrl = URL.createObjectURL(file);
-        if (propertyImagePreview) propertyImagePreview.src = propertyImagePreviewUrl;
-        if (propertyImageName) propertyImageName.textContent = file.name;
-        if (propertyImageDropzone) propertyImageDropzone.hidden = true;
-        if (propertyImageSelected) propertyImageSelected.hidden = false;
-        if (propertyImageApply) propertyImageApply.disabled = false;
       };
 
       document.addEventListener('click', event => {

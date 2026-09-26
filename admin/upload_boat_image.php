@@ -69,12 +69,19 @@ try {
     }
 
     if (!isset($_FILES['file']) || !is_array($_FILES['file'])) throw new InvalidArgumentException('No file uploaded.');
-    $validatedImage = ItourSecureValidateUploadedImage($_FILES['file'], 8 * 1024 * 1024);
+    $validatedImage = ItourSecureValidateUploadedImage($_FILES['file'], 40 * 1024 * 1024, 40000000, 12000, 12000);
 
-    $filename = "boat_{$boat_id}_img{$imgIndex}.png";
+    $currentPath = trim((string)($_POST['current_path'] ?? ''));
+    $outputMime = (string)$validatedImage['mime'];
+    $filename = "boat_{$boat_id}_img{$imgIndex}." . $validatedImage['extension'];
+    $expectedPattern = '#^uploads/boat_' . preg_quote($boat_id, '#') . '_img' . $imgIndex . '\.(jpg|png|webp)$#D';
+    if ($currentPath !== '' && preg_match($expectedPattern, $currentPath, $pathMatch)) {
+        $filename = basename($currentPath);
+        $outputMime = ['jpg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp'][$pathMatch[1]];
+    }
     $path = $uploadDir . DIRECTORY_SEPARATOR . $filename;
 
-    ItourSecureReencodeImageFile($validatedImage, $path, 'image/png');
+    ItourSecureOptimizeUploadedImage($validatedImage, $path, 1920, $outputMime);
 
     createSearchCardThumbnail($path, 'uploads/' . $filename);
 

@@ -249,6 +249,8 @@ function bookingCancellationRefundStatusLabel(string $status, float $refundableA
     return match (strtolower($status)) {
         'pending' => 'Refund pending',
         'processing' => 'Refund processing',
+        'partial' => 'Partially refunded — requires attention',
+        'failed' => 'Refund failed — requires attention',
         'completed', 'refunded' => 'Refund completed',
         'rejected', 'declined' => 'Refund declined',
         default => 'Awaiting approval',

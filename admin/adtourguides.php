@@ -42,18 +42,27 @@ if(isset($_POST['action']) && $_POST['action'] === 'upload_image_guide'){
 
     if(isset($_FILES['file']) && $_FILES['file']['error'] === UPLOAD_ERR_OK){
         try {
-            $validatedImage = ItourSecureValidateUploadedImage($_FILES['file'], 5 * 1024 * 1024);
+            $validatedImage = ItourSecureValidateUploadedImage($_FILES['file'], 40 * 1024 * 1024, 40000000, 12000, 12000);
         } catch (InvalidArgumentException $exception) {
             header('Content-Type: application/json; charset=utf-8');
-            echo json_encode(['success'=>false, 'error'=>'invalid_image']);
+            echo json_encode(['success'=>false, 'error'=>$exception->getMessage()]);
             exit;
         }
         $ext = (string)$validatedImage['extension'];
         $fileKey = $guide_id > 0 ? (string)$guide_id : 'new_' . bin2hex(random_bytes(16));
         $filename = "guide{$fileKey}.".$ext;
+        $outputMime = (string)$validatedImage['mime'];
+        $currentPath = trim((string)($_POST['current_path'] ?? ''));
+        $guidePathPattern = $guide_id > 0
+            ? '#^uploads/guide' . $guide_id . '\.(jpg|png|webp)$#D'
+            : '#^uploads/guidenew_[a-f0-9]{32}\.(jpg|png|webp)$#D';
+        if ($currentPath !== '' && preg_match($guidePathPattern, $currentPath, $pathMatch)) {
+            $filename = basename($currentPath);
+            $outputMime = ['jpg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp'][$pathMatch[1]];
+        }
         $path = $uploadDir . DIRECTORY_SEPARATOR . $filename;
         try {
-            ItourSecureReencodeImageFile($validatedImage, $path);
+            ItourSecureOptimizeUploadedImage($validatedImage, $path, 600, $outputMime);
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode(['success'=>true, 'filename'=>$filename, 'url'=>'uploads/' . $filename]);
         } catch (Throwable $exception) {
@@ -572,12 +581,15 @@ try {
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.5.13/dist/cropper.min.js"></script>
+<script src="js/image-upload-optimizer.js?v=1"></script>
 <script>
 // ------------------------------
 // Variables
 // ------------------------------
 let jg_currentGuide = null;
 let jg_cropper = null;
+let jg_uploadMime = 'image/jpeg';
+let jg_sourceUrl = '';
 
 // ------------------------------
 // Edit Buttons & Add New
@@ -682,11 +694,16 @@ jg_fileInput.addEventListener('change', () => {
 // ------------------------------
 // Handle File
 // ------------------------------
-function jg_handleUploadFile(file) {
-  const reader = new FileReader();
-  reader.onload = function(ev){
+async function jg_handleUploadFile(file) {
+  const doneButton = document.getElementById('jg_guide_upload_done');
+  doneButton.disabled = true;doneButton.textContent = 'Optimizing image...';
+  try {
+    const optimizedFile = await ItourImageOptimizer.optimizeSource(file, 4096);
+    jg_uploadMime = optimizedFile.type;
+    if (jg_sourceUrl) URL.revokeObjectURL(jg_sourceUrl);
+    jg_sourceUrl = URL.createObjectURL(optimizedFile);
     const img = document.getElementById('jg_guide_upload_crop_image');
-    img.src = ev.target.result;
+    img.src = jg_sourceUrl;
     img.onload = function(){
       document.getElementById('jg_guide_upload_crop_container').style.display = 'block';
       jg_dragArea.style.display = 'none';
@@ -699,8 +716,11 @@ function jg_handleUploadFile(file) {
         background:false
       });
     }
+  } catch (error) {
+    alert(error.message || 'The image could not be processed. Please try another photo.');
+  } finally {
+    doneButton.disabled = false;doneButton.textContent = 'Done';
   }
-  reader.readAsDataURL(file);
 }
 
 // ------------------------------
@@ -708,6 +728,7 @@ function jg_handleUploadFile(file) {
 // ------------------------------
 function jg_closeUploadModal() {
   if(jg_cropper){ jg_cropper.destroy(); jg_cropper = null; }
+  if(jg_sourceUrl){ URL.revokeObjectURL(jg_sourceUrl);jg_sourceUrl = ''; }
   document.getElementById('jg_guide_upload_modal').style.display = 'none';
   if (document.getElementById('jg_guide_edit_modal').style.display !== 'flex') document.body.classList.remove('modal-open');
   jg_dragArea.style.display = 'flex';
@@ -718,22 +739,26 @@ document.getElementById('jg_guide_upload_close').addEventListener('click', jg_cl
 // ------------------------------
 // Done / Upload
 // ------------------------------
-document.getElementById('jg_guide_upload_done').addEventListener('click', () => {
+document.getElementById('jg_guide_upload_done').addEventListener('click', async () => {
   if(!jg_cropper) return;
-  jg_cropper.getCroppedCanvas({width:600, height:600}).toBlob(function(blob){
+  const doneButton = document.getElementById('jg_guide_upload_done');
+  doneButton.disabled = true;doneButton.textContent = 'Uploading image...';
+  try {
+    const blob = await ItourImageOptimizer.exportCrop(jg_cropper, jg_uploadMime, {maxWidth:600, maxHeight:600});
     const fd = new FormData();
     fd.append('csrf_token', <?= json_encode($adminGuideCsrf, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>);
     fd.append('action','upload_image_guide');
     fd.append('guide_id', jg_currentGuide ? jg_currentGuide.guide_id : 0);
-    fd.append('file', blob, 'guide_profile.png');
+    fd.append('current_path', document.getElementById('jg_guide_profile_picture_current').value || '');
+    const extension = blob.type === 'image/jpeg' ? 'jpg' : blob.type.split('/')[1];
+    fd.append('file', blob, `guide_profile.${extension}`);
 
-    fetch('admin/adtourguides.php', {
+    const response = await fetch('admin/adtourguides.php', {
         method:'POST',
         body: fd
-    })
-      .then(r=>r.json())
-      .then(data=>{
-        if(data.success){
+    });
+    const data = await response.json();
+    if(data.success){
           const url = data.url;
 
           // Update modal only
@@ -741,12 +766,14 @@ document.getElementById('jg_guide_upload_done').addEventListener('click', () => 
           document.getElementById('jg_guide_profile_picture_current').value = url;
 
           jg_closeUploadModal();
-        } else {
-          alert('Upload failed');
-        }
-      })
-      .catch(()=> alert('Upload error'));
-  }, 'image/png');
+    } else {
+      throw new Error(data.error || 'Upload failed');
+    }
+  } catch (error) {
+    alert(error.message || 'Upload error');
+  } finally {
+    doneButton.disabled = false;doneButton.textContent = 'Done';
+  }
 });
 
 // ------------------------------

@@ -757,6 +757,7 @@ for ($imageIndex = 1; $imageIndex <= 5; $imageIndex++) {
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.5.13/dist/cropper.min.js"></script>
+<script src="js/image-upload-optimizer.js?v=1"></script>
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
@@ -766,6 +767,8 @@ console.log("BOAT SCRIPT LOADED");
 let currentBoatBoat = null;
 let currentImgIndexBoat = null;
 let cropperBoat = null;
+let boatUploadMime = 'image/jpeg';
+let boatSourceUrl = '';
 
 /* ---------------- GLOBAL ERROR DEBUG ---------------- */
 window.addEventListener("error", (e) => {
@@ -895,10 +898,14 @@ el('boat-cancel-upload')?.addEventListener('click', () => {
         cropperBoat.destroy();
         cropperBoat = null;
     }
+    if (boatSourceUrl) {
+        URL.revokeObjectURL(boatSourceUrl);
+        boatSourceUrl = '';
+    }
 });
 
 /* ---------------- DONE UPLOAD (FIXED JSON CRASH) ---------------- */
-el('boat-done-upload')?.addEventListener('click', () => {
+el('boat-done-upload')?.addEventListener('click', async () => {
 
     if (!cropperBoat) {
         alert("Cropper not ready");
@@ -908,72 +915,49 @@ el('boat-done-upload')?.addEventListener('click', () => {
     let boatId = el('boat-id-field').value;
     if (!boatId || boatId === "undefined") boatId = <?= json_encode('temp_' . $boatTempUploadToken) ?>;
 
-    const canvas = cropperBoat.getCroppedCanvas({
-        imageSmoothingEnabled: true,
-        imageSmoothingQuality: 'high'
-    });
-
-    if (!canvas) {
-        alert("Crop failed");
-        return;
-    }
-
-    canvas.toBlob((blob) => {
-
-        if (!blob) {
-            alert("Blob failed");
-            return;
-        }
+    const doneButton = el('boat-done-upload');
+    doneButton.disabled = true;
+    doneButton.textContent = 'Optimizing image...';
+    try {
+        const blob = await ItourImageOptimizer.exportCrop(cropperBoat, boatUploadMime, {maxWidth: 1920, maxHeight: 1080});
 
         const formData = new FormData();
         formData.append('action', 'upload_image_boat');
         formData.append('boat_id', boatId);
         formData.append('imageIndex', currentImgIndexBoat);
+        formData.append('current_path', el('boat-image' + currentImgIndexBoat + '_current')?.value || '');
         formData.append('csrf_token', <?= json_encode($boatUploadCsrf, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>);
-        formData.append('file', blob, `boat.png`);
+        const extension = blob.type === 'image/jpeg' ? 'jpg' : blob.type.split('/')[1];
+        formData.append('file', blob, `boat.${extension}`);
 
-        fetch('admin/upload_boat_image.php', {
+        const res = await fetch('admin/upload_boat_image.php', {
             method: 'POST',
-            headers: {
-                'Accept': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            },
+            headers: {'Accept': 'application/json','X-Requested-With': 'XMLHttpRequest'},
             body: formData
-        })
-        .then(async (res) => {
-
-            const text = await res.text();
-            console.log("RAW RESPONSE:", text);
-
-            let data;
-
-            try {
-                data = JSON.parse(text);
-            } catch (e) {
-                console.error("INVALID JSON:", text);
-                alert("Server returned invalid response");
-                return;
-            }
-
-            if (!data.success) {
-                alert(data.error || "Upload failed");
-                return;
-            }
-
-            const imgEl = el('boat-img-' + currentImgIndexBoat);
-            if (imgEl) imgEl.src = data.url + '?t=' + Date.now();
-
-            const hidden = el('boat-image' + currentImgIndexBoat + '_current');
-            if (hidden) hidden.value = data.url;
-
-            el('boat-upload-modal').style.display = 'none';
-            if (el('boat-edit-modal').style.display !== 'flex') document.body.classList.remove('modal-open');
-
-            cropperBoat.destroy();
-            cropperBoat = null;
         });
 
-    }, "image/png");
+        const text = await res.text();
+        let data;
+        try { data = JSON.parse(text); }
+        catch (_error) { throw new Error('The server returned an invalid upload response.'); }
+        if (!res.ok || !data.success) throw new Error(data.error || 'The image could not be uploaded.');
+
+        const imgEl = el('boat-img-' + currentImgIndexBoat);
+        if (imgEl) imgEl.src = data.url + '?t=' + Date.now();
+
+        const hidden = el('boat-image' + currentImgIndexBoat + '_current');
+        if (hidden) hidden.value = data.url;
+
+        el('boat-upload-modal').style.display = 'none';
+        if (el('boat-edit-modal').style.display !== 'flex') document.body.classList.remove('modal-open');
+
+        cropperBoat.destroy();cropperBoat = null;
+        if (boatSourceUrl) { URL.revokeObjectURL(boatSourceUrl);boatSourceUrl = ''; }
+    } catch (error) {
+        alert(error.message || 'The image could not be processed. Please try another photo.');
+    } finally {
+        doneButton.disabled = false;doneButton.textContent = 'Done';
+    }
 });
 
 /* ---------------- FILE INPUT + DRAG DROP ---------------- */
@@ -999,7 +983,7 @@ if (uploadBox && fileInput) {
 }
 
 /* ---------------- HANDLE FILE ---------------- */
-function handleFile(file) {
+async function handleFile(file) {
 
     const modal = el('boat-upload-modal');
     const img = el('boat-crop-image');
@@ -1012,8 +996,20 @@ function handleFile(file) {
 
     if (cropperBoat) cropperBoat.destroy();
 
-    const url = URL.createObjectURL(file);
-    img.src = url;
+    const doneButton = el('boat-done-upload');
+    doneButton.disabled = true;doneButton.textContent = 'Optimizing image...';
+    try {
+      const optimizedFile = await ItourImageOptimizer.optimizeSource(file, 4096);
+      boatUploadMime = optimizedFile.type;
+      if (boatSourceUrl) URL.revokeObjectURL(boatSourceUrl);
+      boatSourceUrl = URL.createObjectURL(optimizedFile);
+      img.src = boatSourceUrl;
+    } catch (error) {
+      dragArea.style.display = 'flex';cropContainer.style.display = 'none';
+      alert(error.message || 'The image could not be processed. Please try another photo.');
+      doneButton.disabled = false;doneButton.textContent = 'Done';
+      return;
+    }
 
     img.onload = () => {
 
@@ -1023,6 +1019,7 @@ function handleFile(file) {
                 viewMode: 1,
                 autoCropArea: 1
             });
+            doneButton.disabled = false;doneButton.textContent = 'Done';
         }, 50);
 
     };

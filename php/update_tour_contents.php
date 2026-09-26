@@ -6,6 +6,7 @@ require_once __DIR__ . '/activity_logger.php';
 require_once __DIR__ . '/admin_auth_helper.php';
 require_once __DIR__ . '/input_validation.php';
 require_once __DIR__ . '/project_path_helper.php';
+require_once __DIR__ . '/secure_upload_helper.php';
 
 // ✅ Session Authentication Check
 AdminRequireLogin();
@@ -25,6 +26,7 @@ if (!AppVerifyCsrf('admin', 'catalog_content', $_POST['csrf_token'] ?? null)) {
 $uploadDir = ItourEnsureProjectDirectory('php/upload');
 
 $response = ['success' => false, 'message' => ''];
+$createdUploadPaths = [];
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
@@ -58,19 +60,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $uploadFields = ['package_image','package_image2','package_image3','package_image4','location_image','route_image'];
-        $allowedMimes = ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'];
         $validatedUploads = [];
         foreach ($uploadFields as $field) {
             if (!isset($_FILES[$field]) || (int)($_FILES[$field]['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) continue;
             $file = $_FILES[$field];
-            if (!is_array($file) || (int)($file['error'] ?? -1) !== UPLOAD_ERR_OK
-                || (int)($file['size'] ?? 0) < 1 || (int)$file['size'] > 5 * 1024 * 1024
-                || !is_uploaded_file((string)($file['tmp_name'] ?? ''))) {
-                throw new InvalidArgumentException('A package image is invalid or exceeds 5 MB.');
-            }
-            $mime = (new finfo(FILEINFO_MIME_TYPE))->file((string)$file['tmp_name']);
-            if (!isset($allowedMimes[$mime])) throw new InvalidArgumentException('Package images must be JPEG, PNG, or WebP files.');
-            $validatedUploads[$field] = ['file' => $file, 'extension' => $allowedMimes[$mime]];
+            if (!is_array($file)) throw new InvalidArgumentException('A package image upload is invalid.');
+            $validatedUploads[$field] = ItourSecureValidateUploadedImage($file, 40 * 1024 * 1024, 40000000, 12000, 12000);
         }
 
 
@@ -82,9 +77,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $ext = $validatedUploads[$imgKey]['extension'];
                 $filename = uniqid($imgKey.'_').'.'.$ext;
                 $targetFile = $uploadDir . DIRECTORY_SEPARATOR . $filename;
-                if (move_uploaded_file($validatedUploads[$imgKey]['file']['tmp_name'], $targetFile)) {
-                    $imageUpdates[$imgKey] = 'php/upload/' . $filename;
-                } else throw new RuntimeException('A package image could not be saved.');
+                ItourSecureOptimizeUploadedImage($validatedUploads[$imgKey], $targetFile, 1920);
+                $createdUploadPaths[] = $targetFile;
+                $imageUpdates[$imgKey] = 'php/upload/' . $filename;
             }
         }
 
@@ -96,9 +91,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $ext = $validatedUploads[$field]['extension'];
                 $filename = uniqid($field.'_').'.'.$ext;
                 $targetFile = $uploadDir . DIRECTORY_SEPARATOR . $filename;
-                if (move_uploaded_file($validatedUploads[$field]['file']['tmp_name'], $targetFile)) {
-                    $generalUpdate[$field] = 'php/upload/' . $filename;
-                } else throw new RuntimeException('A package image could not be saved.');
+                ItourSecureOptimizeUploadedImage($validatedUploads[$field], $targetFile, 1920);
+                $createdUploadPaths[] = $targetFile;
+                $generalUpdate[$field] = 'php/upload/' . $filename;
             }
         }
 
@@ -183,6 +178,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         $pdo->commit();
+        $createdUploadPaths = [];
         $response['success'] = true;
         $response['message'] = 'Package saved successfully!';
         logActivity(
@@ -198,6 +194,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
+        foreach ($createdUploadPaths as $createdUploadPath) {
+            if (is_file($createdUploadPath)) @unlink($createdUploadPath);
+        }
         if ($e instanceof InvalidArgumentException) http_response_code(422);
         $response['success'] = false;
         $response['message'] = $e->getMessage();

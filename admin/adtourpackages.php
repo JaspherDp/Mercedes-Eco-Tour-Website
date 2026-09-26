@@ -1117,6 +1117,7 @@ function getPackageCardImagePath($imgField) {
 
 
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.5.13/dist/cropper.min.js"></script>
+<script src="js/image-upload-optimizer.js?v=1"></script>
 
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script>
@@ -1215,6 +1216,8 @@ let cropper = null;
 let currentField = null;
 let currentPackageId = null;
 let currentImgElement = null;
+let currentUploadMime = 'image/jpeg';
+let currentUploadUrl = '';
 const packageEditorSteps = ['information', 'media', 'itinerary'];
 
 function switchPackageEditorPane(name) {
@@ -1482,6 +1485,10 @@ function resetImageModal() {
         cropper.destroy();
         cropper = null;
     }
+    if (currentUploadUrl) {
+        URL.revokeObjectURL(currentUploadUrl);
+        currentUploadUrl = '';
+    }
 
     imageInput.value = "";
 }
@@ -1512,12 +1519,15 @@ imageInput.addEventListener("change", () => {
 // ===============================
 // HANDLE SELECTED FILE AND INIT CROPPER
 // ===============================
-function handleFile(file) {
+async function handleFile(file) {
     if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = function(e) {
-        cropImage.src = e.target.result;
+    doneBtn.disabled = true;doneBtn.textContent = 'Optimizing image...';
+    try {
+        const optimizedFile = await ItourImageOptimizer.optimizeSource(file, 4096);
+        currentUploadMime = optimizedFile.type;
+        if (currentUploadUrl) URL.revokeObjectURL(currentUploadUrl);
+        currentUploadUrl = URL.createObjectURL(optimizedFile);
+        cropImage.src = currentUploadUrl;
 
         document.querySelector(".custum-file-upload").style.display = "none";
         cropContainer.style.display = "block";
@@ -1532,17 +1542,25 @@ function handleFile(file) {
             viewMode: 1,
             autoCropArea: 0.9
         });
-    };
-    reader.readAsDataURL(file);
+    } catch (error) {
+        alert(error.message || 'The image could not be processed. Please try another photo.');
+    } finally {
+        doneBtn.disabled = false;doneBtn.textContent = 'Done';
+    }
 }
 
 // ===============================
 // DONE BUTTON
 // ===============================
-doneBtn.addEventListener("click", () => {
+doneBtn.addEventListener("click", async () => {
     if (!cropper) return;
-
-    cropper.getCroppedCanvas().toBlob((blob) => {
+    doneBtn.disabled = true;doneBtn.textContent = 'Optimizing image...';
+    try {
+        const isWide = currentField === 'location_image' || currentField === 'route_image';
+        const blob = await ItourImageOptimizer.exportCrop(cropper, currentUploadMime, {
+            maxWidth: isWide ? 1920 : 1600,
+            maxHeight: isWide ? 1080 : 1200
+        });
         // Store temporarily
         croppedFiles[currentField] = blob;
 
@@ -1551,7 +1569,11 @@ doneBtn.addEventListener("click", () => {
         currentImgElement.src = previewURL;
 
         closeImageModal();
-    });
+    } catch (error) {
+        alert(error.message || 'The cropped image could not be prepared.');
+    } finally {
+        doneBtn.disabled = false;doneBtn.textContent = 'Done';
+    }
 });
 
 // ===============================
@@ -1573,7 +1595,9 @@ document.getElementById('editPackageForm').addEventListener('submit', function(e
 
     // Append cropped images
     for (let field in croppedFiles){
-        formData.append(field, croppedFiles[field], field + '.png');
+        const blob = croppedFiles[field];
+        const extension = blob.type === 'image/jpeg' ? 'jpg' : blob.type.split('/')[1];
+        formData.append(field, blob, field + '.' + extension);
     }
 
     fetch('php/update_tour_contents.php', {

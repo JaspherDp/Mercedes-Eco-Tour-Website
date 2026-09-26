@@ -73,6 +73,16 @@ function ensureBookingRefundsTable(PDO $pdo): void
     if (!isset($indexes['uq_refund_provider_transfer'])) {
         $pdo->exec('ALTER TABLE booking_refunds ADD UNIQUE KEY uq_refund_provider_transfer (provider_transfer_id)');
     }
+
+    $pdo->exec("
+        CREATE TABLE IF NOT EXISTS paymongo_webhook_events (
+            event_id VARCHAR(100) PRIMARY KEY,
+            event_type VARCHAR(100) NOT NULL,
+            payload_hash CHAR(64) NOT NULL,
+            processed_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_paymongo_webhook_processed (processed_at)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    ");
 }
 
 function bookingRefundDestinationKey(): string
@@ -136,15 +146,43 @@ function bookingRefundDecryptAccountNumber(string $encoded): string
     throw new RuntimeException('The saved refund destination could not be opened.');
 }
 
-function bookingRefundNormalizeProviderStatus(string $status): string
+function bookingRefundRecognizedProviderStatus(string $status): ?string
 {
     return match (strtolower(trim($status))) {
         'succeeded', 'success', 'completed', 'refunded' => 'succeeded',
         'processing', 'refunding' => 'processing',
-        'pending', 'initiating' => strtolower(trim($status)) ?: 'pending',
+        'pending' => 'pending',
+        'initiating' => 'initiating',
         'failed', 'cancelled', 'canceled' => 'failed',
-        default => 'pending',
+        default => null,
     };
+}
+
+function bookingRefundNormalizeProviderStatus(string $status): string
+{
+    $localStatus = strtolower(trim($status));
+    if (in_array($localStatus, ['partial', 'ready'], true)) return $localStatus;
+    return bookingRefundRecognizedProviderStatus($localStatus) ?? 'unknown';
+}
+
+function bookingRefundProviderResponseDisposition(string $status): string
+{
+    return match (bookingRefundRecognizedProviderStatus($status)) {
+        'pending', 'processing', 'succeeded' => 'submitted',
+        'failed' => 'failed',
+        default => 'unexpected',
+    };
+}
+
+function bookingRefundMonotonicProviderStatus(string $localStatus, string $providerStatus): string
+{
+    $local = bookingRefundRecognizedProviderStatus($localStatus) ?? strtolower(trim($localStatus));
+    $provider = bookingRefundRecognizedProviderStatus($providerStatus);
+    if ($provider === null) throw new UnexpectedValueException('The provider refund status is invalid.');
+    if ($local === 'succeeded') return 'succeeded';
+    if ($local === 'failed' && $provider !== 'succeeded') return 'failed';
+    $rank = ['initiating' => 0, 'pending' => 1, 'processing' => 2, 'failed' => 3, 'succeeded' => 4];
+    return ($rank[$provider] ?? 0) < ($rank[$local] ?? 0) ? $local : $provider;
 }
 
 function bookingRefundStatusLabel(string $status): string
@@ -152,9 +190,13 @@ function bookingRefundStatusLabel(string $status): string
     return match (bookingRefundNormalizeProviderStatus($status)) {
         'succeeded' => 'Refunded',
         'processing' => 'Processing',
+        'pending' => 'Pending',
         'initiating' => 'Submitting',
-        'failed' => 'Needs attention',
-        default => 'Ready / pending',
+        'ready' => 'Ready to refund',
+        'partial' => 'Partially refunded / requires attention',
+        'failed' => 'Failed / requires attention',
+        'unknown' => 'Requires attention',
+        default => 'Ready to refund',
     };
 }
 
@@ -193,6 +235,20 @@ function bookingRefundSupportsAutomaticPayMongoRefund(string $method): bool
     ], true);
 }
 
+function bookingRefundSupportsPartialPayMongoRefund(string $method): bool
+{
+    $method = strtolower(trim($method));
+    return in_array($method, ['qrph', 'qr_code'], true);
+}
+
+function bookingRefundAutomaticAllocation(string $method, int $remainingMinor, int $availableMinor): int
+{
+    if (!bookingRefundSupportsAutomaticPayMongoRefund($method)) return 0;
+    if ($remainingMinor < 100 || $availableMinor < 100) return 0;
+    if ($remainingMinor < $availableMinor && !bookingRefundSupportsPartialPayMongoRefund($method)) return 0;
+    return min($remainingMinor, $availableMinor);
+}
+
 function bookingRefundWindowDays(string $method): ?int
 {
     return match (strtolower(trim($method))) {
@@ -215,10 +271,10 @@ function bookingRefundTimeline(string $method, int $amountMinor = 0): array
         ],
         'qrph', 'qr_code' => $amountMinor < 5000000 ? [
             'short' => 'Usually real time',
-            'detail' => 'A full QR Ph refund below PHP 50,000 is normally posted in real time, subject to the receiving bank.',
+            'detail' => 'A QR Ph refund below PHP 50,000 is normally posted in real time, subject to the receiving bank.',
         ] : [
             'short' => 'Next banking day',
-            'detail' => 'A full QR Ph refund of PHP 50,000 or more normally posts on the next banking day.',
+            'detail' => 'A QR Ph refund of PHP 50,000 or more normally posts on the next banking day.',
         ],
         'bpi' => [
             'short' => 'At least 3 banking days',
@@ -243,18 +299,109 @@ function bookingRefundTimeline(string $method, int $amountMinor = 0): array
     };
 }
 
-/** @return array{id:string,status:string,amount_minor:int,payment_id:string,transfer_link:string} */
+/** @return array{id:string,status:string,amount_minor:int,payment_id:string,currency:string,livemode:bool,transfer_link:string} */
 function bookingRefundParsePayMongoResponse(array $response): array
 {
     $data = is_array($response['data'] ?? null) ? $response['data'] : [];
     $attributes = is_array($data['attributes'] ?? null) ? $data['attributes'] : [];
     return [
         'id' => trim((string)($data['id'] ?? '')),
-        'status' => bookingRefundNormalizeProviderStatus((string)($attributes['status'] ?? 'pending')),
+        'status' => bookingRefundNormalizeProviderStatus((string)($attributes['status'] ?? '')),
         'amount_minor' => max(0, (int)($attributes['amount'] ?? 0)),
         'payment_id' => trim((string)($attributes['payment_id'] ?? '')),
+        'currency' => strtoupper(trim((string)($attributes['currency'] ?? ''))),
+        'livemode' => ($attributes['livemode'] ?? false) === true,
         'transfer_link' => filter_var((string)($attributes['transfer_link'] ?? ''), FILTER_VALIDATE_URL) ? trim((string)$attributes['transfer_link']) : '',
     ];
+}
+
+
+/** @return list<array{refund_id:string,amount_minor:int,claim_url:string}> */
+function bookingRefundClaimActions(array $submitted): array
+{
+    $actions = [];
+    foreach ($submitted as $refund) {
+        if (!is_array($refund)) continue;
+        $url = trim((string)($refund['claim_url'] ?? ''));
+        if (!filter_var($url, FILTER_VALIDATE_URL)) continue;
+        $actions[] = [
+            'refund_id' => trim((string)($refund['provider_refund_id'] ?? '')),
+            'amount_minor' => max(0, (int)($refund['amount_minor'] ?? 0)),
+            'claim_url' => $url,
+        ];
+    }
+    return $actions;
+}
+
+/** @return array{state:string,requires_attention:bool} */
+function bookingRefundOperationOutcome(array $submitted, array $failures): array
+{
+    if ($submitted !== [] && $failures !== []) return ['state' => 'partial', 'requires_attention' => true];
+    if ($submitted !== []) return ['state' => 'submitted', 'requires_attention' => false];
+    return ['state' => 'failed', 'requires_attention' => true];
+}
+
+/** @return list<array{id:string,payment_id:string,amount_minor:int,currency:string,status:string}> */
+function bookingRefundRemoteRefundResources(array $paymentResource): array
+{
+    $paymentId = trim((string)($paymentResource['id'] ?? ''));
+    $attributes = is_array($paymentResource['attributes'] ?? null) ? $paymentResource['attributes'] : [];
+    $paymentCurrency = strtoupper(trim((string)($attributes['currency'] ?? '')));
+    if (!preg_match('/^pay_[A-Za-z0-9]+$/', $paymentId) || $paymentCurrency !== 'PHP') return [];
+    $resources = [];
+    foreach ((array)($attributes['refunds'] ?? []) as $refundResource) {
+        if (!is_array($refundResource)) continue;
+        if (is_array($refundResource['data'] ?? null)) $refundResource = $refundResource['data'];
+        $refundAttributes = is_array($refundResource['attributes'] ?? null) ? $refundResource['attributes'] : $refundResource;
+        $refundId = trim((string)($refundResource['id'] ?? $refundAttributes['id'] ?? ''));
+        $refundPaymentId = trim((string)($refundAttributes['payment_id'] ?? $paymentId));
+        $amountMinor = is_numeric($refundAttributes['amount'] ?? null) ? (int)$refundAttributes['amount'] : 0;
+        $currency = strtoupper(trim((string)($refundAttributes['currency'] ?? $paymentCurrency)));
+        $status = bookingRefundRecognizedProviderStatus((string)($refundAttributes['status'] ?? ''));
+        if (!preg_match('/^ref_[A-Za-z0-9]+$/', $refundId)
+            || !hash_equals($paymentId, $refundPaymentId)
+            || $amountMinor < 1 || $currency !== 'PHP' || $status === null) {
+            continue;
+        }
+        $resources[$refundId] = [
+            'id' => $refundId,
+            'payment_id' => $refundPaymentId,
+            'amount_minor' => $amountMinor,
+            'currency' => $currency,
+            'status' => $status,
+        ];
+    }
+    return array_values($resources);
+}
+
+function bookingRefundWebhookEventProcessed(PDO $pdo, string $eventId): bool
+{
+    if (!preg_match('/^evt_[A-Za-z0-9]+$/', $eventId)) return false;
+    $statement = $pdo->prepare('SELECT 1 FROM paymongo_webhook_events WHERE event_id=? LIMIT 1');
+    $statement->execute([$eventId]);
+    return (bool)$statement->fetchColumn();
+}
+
+function bookingRefundRecordWebhookEvent(PDO $pdo, string $eventId, string $eventType, string $rawBody): bool
+{
+    if (!preg_match('/^evt_[A-Za-z0-9]+$/', $eventId)) return false;
+    try {
+        $statement = $pdo->prepare('INSERT INTO paymongo_webhook_events (event_id,event_type,payload_hash,processed_at) VALUES (?,?,?,NOW())');
+        $statement->execute([$eventId, mb_substr(trim($eventType), 0, 100), hash('sha256', $rawBody)]);
+        return true;
+    } catch (PDOException $exception) {
+        if ((string)$exception->getCode() === '23000') return false;
+        throw $exception;
+    }
+}
+
+function bookingRefundAggregateStatus(int $targetMinor, int $succeededMinor, int $activeMinor, int $failedCount): string
+{
+    if ($targetMinor <= 0) return 'not_applicable';
+    if ($succeededMinor >= $targetMinor) return 'completed';
+    if ($activeMinor > 0) return 'processing';
+    if ($succeededMinor > 0) return 'partial';
+    return $failedCount > 0 ? 'failed' : 'pending';
 }
 
 function bookingRefundSyncCancellationStatus(PDO $pdo, int $cancellationRequestId): string
@@ -266,15 +413,16 @@ function bookingRefundSyncCancellationStatus(PDO $pdo, int $cancellationRequestI
     $totals = $pdo->prepare("
         SELECT
           COALESCE(SUM(CASE WHEN status='succeeded' THEN amount_minor ELSE 0 END),0) succeeded_minor,
-          COALESCE(SUM(CASE WHEN status IN ('initiating','pending','processing') THEN amount_minor ELSE 0 END),0) active_minor
+          COALESCE(SUM(CASE WHEN status IN ('initiating','pending','processing') THEN amount_minor ELSE 0 END),0) active_minor,
+          COALESCE(SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END),0) failed_count
         FROM booking_refunds WHERE cancellation_request_id=?
     ");
     $totals->execute([$cancellationRequestId]);
     $row = $totals->fetch(PDO::FETCH_ASSOC) ?: [];
     $succeeded = (int)($row['succeeded_minor'] ?? 0);
     $active = (int)($row['active_minor'] ?? 0);
-    $next = $targetMinor <= 0 ? 'not_applicable'
-        : ($succeeded >= $targetMinor ? 'completed' : (($succeeded + $active) > 0 ? 'processing' : 'pending'));
+    $failed = (int)($row['failed_count'] ?? 0);
+    $next = bookingRefundAggregateStatus($targetMinor, $succeeded, $active, $failed);
     $update = $pdo->prepare('UPDATE booking_cancellation_requests SET refund_status=?, refund_updated_at=NOW() WHERE cancellation_request_id=?');
     $update->execute([$next, $cancellationRequestId]);
     return $next;

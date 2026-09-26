@@ -2042,6 +2042,10 @@ body {
 .filter-search input[type="search"]::-webkit-search-decoration,.filter-search input[type="search"]::-webkit-search-cancel-button,.filter-search input[type="search"]::-webkit-search-results-button,.filter-search input[type="search"]::-webkit-search-results-decoration{display:none}
 @media(max-width:1180px){.admin-payment-insights{grid-template-columns:1fr 1fr}.admin-collection-card{grid-column:1/-1}.refund-insight-card,.admin-payment-insights .receivables-card{min-height:270px}}@media(max-width:720px){.admin-payment-insights{grid-template-columns:1fr}.admin-collection-card{grid-column:auto}.refund-insight-card h3{white-space:normal}}
 
+.refund-state.partial{color:#975f09;background:#fff0cf}
+.refund-attempt-detail{padding:10px 0;border-top:1px solid #e5eeea}
+.refund-attempt-detail:first-of-type{border-top:0}
+
 /* Transaction statuses use the same uppercase treatment as booking statuses. */
 .transaction-table .status-badge,
 .transaction-panel .status-badge,

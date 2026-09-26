@@ -31,6 +31,11 @@
   function openRefundDrawer(refund) {
     if (!refundDrawer || !refundDetailBody) return;
     const detail = (label, value) => `<div class="drawer-detail"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value || '—')}</strong></div>`;
+    const attempts = Array.isArray(refund.attempts) ? refund.attempts : [];
+    const attemptDetails = attempts.length ? `<section class="drawer-section"><h4>Individual refund attempts</h4>${attempts.map(attempt => `
+      <div class="refund-attempt-detail">
+        ${detail('Payment transaction', attempt.transaction)}${detail('Refund amount', attempt.amount)}${detail('Payment method', attempt.method)}${detail('Status', attempt.status)}${detail('Provider refund reference', attempt.reference || 'Not assigned')}${attempt.claim_required ? detail('Customer action', 'Secure claim link issued by email') : ''}${attempt.failure ? detail('Failure', attempt.failure) : ''}
+      </div>`).join('')}</section>` : '';
     refundDetailBody.innerHTML = `
       <section class="drawer-summary refund-drawer-summary">
         <div class="drawer-summary-top"><span>REFUND REQUEST #${Number(refund.request_id)}</span><span class="status-badge ${escapeHtml(refund.status_class)}"><i></i>${escapeHtml(refund.status)}</span></div>
@@ -47,9 +52,10 @@
       <section class="refund-routing-card"><header><span>↩</span><div><small>RETURN ROUTE</small><strong>${escapeHtml(refund.route || 'Original payment method')}</strong></div></header>
         ${detail('Original payment channel', refund.method)}${detail('Destination', refund.destination)}${detail('Payment provider', refund.provider)}${detail('Original payment ID', refund.payment_reference)}${detail('Merchant reference', refund.merchant_reference)}${detail('Payment date', refund.payment_date)}${detail('Refund reference', refund.provider_refund_id || 'Created after submission')}${refund.manual_refund_channel ? detail('Manual refund channel', refund.manual_refund_channel) : ''}${refund.manual_sender_account ? detail('Admin source account', refund.manual_sender_account) : ''}${refund.manual_refund_note ? detail('Administrator note', refund.manual_refund_note) : ''}
       </section>
+      ${attemptDetails}
       <section class="refund-timeline-note"><strong>${escapeHtml(refund.timeline)}</strong><p>${escapeHtml(refund.timeline_detail)}</p></section>
       ${refund.failure_message ? `<section class="drawer-error"><strong>Latest PayMongo error${refund.failure_code ? ` (${escapeHtml(refund.failure_code)})` : ''}</strong><br>${escapeHtml(refund.failure_message)}</section>` : ''}
-      <p class="refund-privacy-note">Full refunds are submitted through PayMongo's API. Partial refunds are recorded only after an administrator confirms the transfer to the tourist's verified account and supplies the provider reference.</p>`;
+      <p class="refund-privacy-note">Eligible full and partial refunds are returned through PayMongo when the original payment supports API refunds. Any manual refund is recorded only after an administrator confirms the transfer and provider reference.</p>`;
     refundDrawer.classList.add('open');
     refundDrawer.setAttribute('aria-hidden', 'false');
     setPageLock(true);
@@ -915,7 +921,7 @@
     if (!window.Swal) { if (window.confirm('Send this refund to the original payment method?')) form.submit(); return; }
     const result = await Swal.fire({
       icon: 'warning', title: 'Process this refund?',
-      html: '<p style="line-height:1.55">PayMongo will return the eligible amount to the original payment method. QR Ph refunds are submitted only when the complete original Payment amount is eligible.</p>',
+      html: '<p style="line-height:1.55">PayMongo will return only the approved eligible amount to the original payment method. If the booking has multiple payments, each Payment ID is processed separately.</p>',
       showCancelButton: true, confirmButtonText: 'Yes, process refund', cancelButtonText: 'Cancel',
       confirmButtonColor: '#176b55', cancelButtonColor: '#687b75', focusCancel: true
     });

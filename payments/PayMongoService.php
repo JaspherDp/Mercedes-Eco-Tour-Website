@@ -31,7 +31,6 @@ final class PayMongoException extends RuntimeException
 final class PayMongoService
 {
     private const API_BASE_URL = 'https://api.paymongo.com';
-    private const QRPH_REFUNDS_API_BASE_URL = 'https://refunds-api.paymongo.com';
     private int $lastHttpStatus = 0;
 
     public function __construct(
@@ -221,7 +220,7 @@ final class PayMongoService
         }
         $attributes = ['payment_id' => $paymentId, 'amount' => $amountMinor, 'reason' => $reason];
         if (trim($notes) !== '') $attributes['notes'] = mb_substr(trim($notes), 0, 255);
-        return $this->request('POST', '/v1/refunds', ['data' => ['attributes' => $attributes]], $idempotencyKey, self::QRPH_REFUNDS_API_BASE_URL);
+        return $this->request('POST', '/v1/refunds', ['data' => ['attributes' => $attributes]], $idempotencyKey);
     }
 
     /** @return array<string, mixed> */
@@ -239,14 +238,8 @@ final class PayMongoService
     {
         $refundId = trim($refundId);
         if (!preg_match('/^ref_[A-Za-z0-9]+$/', $refundId)) throw new InvalidArgumentException('PayMongo Refund ID is invalid.');
-        $payment = $this->retrievePayment($paymentId);
-        $refunds = is_array($payment['data']['attributes']['refunds'] ?? null) ? $payment['data']['attributes']['refunds'] : [];
-        foreach ($refunds as $refund) {
-            if (is_array($refund) && trim((string)($refund['id'] ?? '')) === $refundId) {
-                return ['data' => $refund];
-            }
-        }
-        throw new PayMongoException('PayMongo did not return this QR Ph refund on its Payment resource.', 404, $payment);
+        if (!preg_match('/^pay_[A-Za-z0-9]+$/', trim($paymentId))) throw new InvalidArgumentException('PayMongo Payment ID is invalid.');
+        return $this->retrieveRefund($refundId);
     }
 
     /** @return array<string, mixed> */
@@ -286,6 +279,35 @@ final class PayMongoService
 
         return $this->request('POST', '/v1/webhooks', [
             'data' => ['attributes' => ['url' => $url, 'events' => $events]],
+        ]);
+    }
+
+    /**
+     * Updates an existing webhook endpoint. At least one attribute is required.
+     * This method is intentionally not called during normal application requests.
+     *
+     * @param list<string>|null $events
+     * @return array<string, mixed>
+     */
+    public function updateWebhook(string $webhookId, ?string $url = null, ?array $events = null): array
+    {
+        $webhookId = trim($webhookId);
+        if (!preg_match('/^hook_[A-Za-z0-9]+$/', $webhookId)) {
+            throw new InvalidArgumentException('PayMongo Webhook ID is invalid.');
+        }
+        $attributes = [];
+        if ($url !== null) {
+            $attributes['url'] = PaymentHelper::publicHttpsUrl($url);
+        }
+        if ($events !== null) {
+            $events = array_values(array_unique(array_filter(array_map('trim', $events))));
+            if ($events === []) throw new InvalidArgumentException('At least one webhook event is required.');
+            $attributes['events'] = $events;
+        }
+        if ($attributes === []) throw new InvalidArgumentException('A webhook URL or event list is required.');
+
+        return $this->request('PUT', '/v1/webhooks/' . rawurlencode($webhookId), [
+            'data' => ['attributes' => $attributes],
         ]);
     }
 
@@ -422,7 +444,7 @@ final class PayMongoService
         if ($this->dnsServers !== '') {
             $options[CURLOPT_DNS_SERVERS] = $this->dnsServers;
         }
-        if (!in_array($apiBaseUrl, [self::API_BASE_URL, self::QRPH_REFUNDS_API_BASE_URL], true)) {
+        if ($apiBaseUrl !== self::API_BASE_URL) {
             throw new InvalidArgumentException('The PayMongo API host is not allowed.');
         }
         $apiHost = (string)parse_url($apiBaseUrl, PHP_URL_HOST);
