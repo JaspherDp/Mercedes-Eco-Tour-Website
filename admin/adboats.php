@@ -18,6 +18,8 @@ require_once __DIR__ . '/../php/search_thumbnail_helper.php';
 require_once __DIR__ . '/../php/input_validation.php';
 
 AdminRequireLogin();
+header('Cache-Control: private, no-store, no-cache, must-revalidate, max-age=0');
+header('Pragma: no-cache');
 
 $boatUploadCsrf = (string)($_SESSION['boat_upload_csrf'] ?? '');
 if ($boatUploadCsrf === '') {
@@ -757,7 +759,7 @@ for ($imageIndex = 1; $imageIndex <= 5; $imageIndex++) {
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.5.13/dist/cropper.min.js"></script>
-<script src="js/image-upload-optimizer.js?v=1"></script>
+<script src="js/image-upload-optimizer.js?v=<?= (int)@filemtime(__DIR__ . '/../js/image-upload-optimizer.js') ?>"></script>
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
