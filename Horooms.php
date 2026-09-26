@@ -2168,7 +2168,7 @@ $hoTopbarViewToggle = [
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  <script src="js/image-upload-optimizer.js?v=<?= (int)@filemtime(__DIR__ . '/js/image-upload-optimizer.js') ?>"></script>
+  <script src="js/image-upload-optimizer-v2.js?v=<?= (int)@filemtime(__DIR__ . '/js/image-upload-optimizer-v2.js') ?>"></script>
   <script>
     (function () {
       const flashMessage = <?= json_encode($flash, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;

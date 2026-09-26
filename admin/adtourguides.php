@@ -575,7 +575,7 @@ try {
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.5.13/dist/cropper.min.js"></script>
-<script src="js/image-upload-optimizer.js?v=<?= (int)@filemtime(__DIR__ . '/../js/image-upload-optimizer.js') ?>"></script>
+<script src="js/image-upload-optimizer-v2.js?v=<?= (int)@filemtime(__DIR__ . '/../js/image-upload-optimizer-v2.js') ?>"></script>
 <script>
 // ------------------------------
 // Variables

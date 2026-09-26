@@ -832,7 +832,7 @@ $contentCompletionPercent = (int)round(($completedContentSections / max(1, $tota
     </div>
   </div>
 
-  <script src="js/image-upload-optimizer.js?v=<?= (int)@filemtime(__DIR__ . '/js/image-upload-optimizer.js') ?>"></script>
+  <script src="js/image-upload-optimizer-v2.js?v=<?= (int)@filemtime(__DIR__ . '/js/image-upload-optimizer-v2.js') ?>"></script>
   <script>
     (function () {
       const toggle = document.getElementById('hoNotifToggle');

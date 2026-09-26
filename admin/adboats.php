@@ -72,7 +72,20 @@ if (isset($_POST['saveBoat'])) {
     $longDescription = ItourValidationText($_POST['long_description'] ?? '', 'Long description', 5000);
     $imagePaths = [];
     for ($imageIndex = 1; $imageIndex <= 5; $imageIndex++) {
-        $imagePaths[] = ItourValidationMediaPath($_POST['image' . $imageIndex . '_current'] ?? '', 'Boat image');
+        $imagePath = ItourValidationMediaPath(
+            $_POST['image' . $imageIndex . '_current'] ?? '',
+            'Boat image ' . $imageIndex
+        );
+        if (str_starts_with($imagePath, 'uploads/')) {
+            $absoluteImagePath = ItourProjectPath($imagePath);
+            $imageSize = is_file($absoluteImagePath) ? @filesize($absoluteImagePath) : false;
+            if ($imageSize === false || $imageSize < 1 || !is_readable($absoluteImagePath)) {
+                throw new InvalidArgumentException(
+                    'Boat image ' . $imageIndex . ' was not stored successfully. Upload it again before saving.'
+                );
+            }
+        }
+        $imagePaths[] = $imagePath;
     }
     if ($isBoatUpdate) {
         $boatCheck = $pdo->prepare('SELECT 1 FROM boats WHERE boat_id = ? LIMIT 1');
@@ -715,7 +728,8 @@ for ($imageIndex = 1; $imageIndex <= 5; $imageIndex++) {
       </div>
       <div class="boat-modal-actions">
           <button type="button" class="boat-cancel-btn" onclick="closeEditModalBoat()">Cancel</button>
-          <button type="submit" name="saveBoat" class="boat-done-btn">Save boat</button>
+          <input type="hidden" name="saveBoat" value="1">
+          <button type="submit" class="boat-done-btn">Save boat</button>
       </div>
     </form>
   </div>
@@ -759,7 +773,7 @@ for ($imageIndex = 1; $imageIndex <= 5; $imageIndex++) {
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.5.13/dist/cropper.min.js"></script>
-<script src="js/image-upload-optimizer.js?v=<?= (int)@filemtime(__DIR__ . '/../js/image-upload-optimizer.js') ?>"></script>
+<script src="js/image-upload-optimizer-v2.js?v=<?= (int)@filemtime(__DIR__ . '/../js/image-upload-optimizer-v2.js') ?>"></script>
 
 <script>
 document.addEventListener("DOMContentLoaded", () => {
@@ -768,6 +782,21 @@ console.log("BOAT SCRIPT LOADED");
 
 let currentBoatBoat = null;
 let currentImgIndexBoat = null;
+
+const boatEditForm = document.getElementById('boat-edit-form');
+const boatSaveButton = boatEditForm?.querySelector('.boat-done-btn');
+boatEditForm?.addEventListener('submit', () => {
+    ItourImageOptimizer.setButtonBusy(
+        boatSaveButton,
+        true,
+        currentBoatBoat ? 'Updating boat...' : 'Adding boat...'
+    );
+});
+window.addEventListener('pageshow', () => {
+    if (boatSaveButton?.getAttribute('aria-busy') === 'true') {
+        ItourImageOptimizer.setButtonBusy(boatSaveButton, false);
+    }
+});
 let cropperBoat = null;
 let boatUploadMime = 'image/jpeg';
 let boatSourceUrl = '';
