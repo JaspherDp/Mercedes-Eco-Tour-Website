@@ -1521,7 +1521,7 @@ imageInput.addEventListener("change", () => {
 // ===============================
 async function handleFile(file) {
     if (!file) return;
-    doneBtn.disabled = true;doneBtn.textContent = 'Optimizing image...';
+    ItourImageOptimizer.setButtonBusy(doneBtn, true, 'Optimizing image...');
     try {
         const optimizedFile = await ItourImageOptimizer.optimizeSource(file, 4096);
         currentUploadMime = optimizedFile.type;
@@ -1545,7 +1545,7 @@ async function handleFile(file) {
     } catch (error) {
         alert(error.message || 'The image could not be processed. Please try another photo.');
     } finally {
-        doneBtn.disabled = false;doneBtn.textContent = 'Done';
+        ItourImageOptimizer.setButtonBusy(doneBtn, false);
     }
 }
 
@@ -1554,7 +1554,7 @@ async function handleFile(file) {
 // ===============================
 doneBtn.addEventListener("click", async () => {
     if (!cropper) return;
-    doneBtn.disabled = true;doneBtn.textContent = 'Optimizing image...';
+    ItourImageOptimizer.setButtonBusy(doneBtn, true, 'Optimizing image...');
     try {
         const isWide = currentField === 'location_image' || currentField === 'route_image';
         const blob = await ItourImageOptimizer.exportCrop(cropper, currentUploadMime, {
@@ -1572,7 +1572,7 @@ doneBtn.addEventListener("click", async () => {
     } catch (error) {
         alert(error.message || 'The cropped image could not be prepared.');
     } finally {
-        doneBtn.disabled = false;doneBtn.textContent = 'Done';
+        ItourImageOptimizer.setButtonBusy(doneBtn, false);
     }
 });
 
@@ -1600,6 +1600,8 @@ document.getElementById('editPackageForm').addEventListener('submit', function(e
         formData.append(field, blob, field + '.' + extension);
     }
 
+    const saveButton = document.getElementById('packageSave');
+    ItourImageOptimizer.setButtonBusy(saveButton, true, Object.keys(croppedFiles).length ? 'Uploading images...' : 'Saving package...');
     fetch('php/update_tour_contents.php', {
             method: 'POST',
             body: formData
@@ -1630,7 +1632,8 @@ document.getElementById('editPackageForm').addEventListener('submit', function(e
                 text: 'Unexpected error occurred.',
                 confirmButtonColor: '#e74c3c'
             });
-        });
+        })
+        .finally(() => ItourImageOptimizer.setButtonBusy(saveButton, false));
 
 });
 

@@ -79,6 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $targetFile = $uploadDir . DIRECTORY_SEPARATOR . $filename;
                 ItourSecureOptimizeUploadedImage($validatedUploads[$imgKey], $targetFile, 1920);
                 $createdUploadPaths[] = $targetFile;
+                ItourAssertPublicMediaFile($targetFile);
                 $imageUpdates[$imgKey] = 'php/upload/' . $filename;
             }
         }
@@ -93,6 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $targetFile = $uploadDir . DIRECTORY_SEPARATOR . $filename;
                 ItourSecureOptimizeUploadedImage($validatedUploads[$field], $targetFile, 1920);
                 $createdUploadPaths[] = $targetFile;
+                ItourAssertPublicMediaFile($targetFile);
                 $generalUpdate[$field] = 'php/upload/' . $filename;
             }
         }

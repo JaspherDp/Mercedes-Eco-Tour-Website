@@ -49,24 +49,18 @@ if(isset($_POST['action']) && $_POST['action'] === 'upload_image_guide'){
             exit;
         }
         $ext = (string)$validatedImage['extension'];
-        $fileKey = $guide_id > 0 ? (string)$guide_id : 'new_' . bin2hex(random_bytes(16));
-        $filename = "guide{$fileKey}.".$ext;
+        $fileKey = $guide_id > 0 ? (string)$guide_id : 'new';
+        $filename = 'guide_' . $fileKey . '_' . bin2hex(random_bytes(12)) . '.' . $ext;
         $outputMime = (string)$validatedImage['mime'];
-        $currentPath = trim((string)($_POST['current_path'] ?? ''));
-        $guidePathPattern = $guide_id > 0
-            ? '#^uploads/guide' . $guide_id . '\.(jpg|png|webp)$#D'
-            : '#^uploads/guidenew_[a-f0-9]{32}\.(jpg|png|webp)$#D';
-        if ($currentPath !== '' && preg_match($guidePathPattern, $currentPath, $pathMatch)) {
-            $filename = basename($currentPath);
-            $outputMime = ['jpg' => 'image/jpeg', 'png' => 'image/png', 'webp' => 'image/webp'][$pathMatch[1]];
-        }
         $path = $uploadDir . DIRECTORY_SEPARATOR . $filename;
         try {
             ItourSecureOptimizeUploadedImage($validatedImage, $path, 600, $outputMime);
+            ItourAssertPublicMediaFile($path);
             header('Content-Type: application/json; charset=utf-8');
             echo json_encode(['success'=>true, 'filename'=>$filename, 'url'=>'uploads/' . $filename]);
         } catch (Throwable $exception) {
-            echo json_encode(['success'=>false, 'error'=>'move_failed']);
+            if (is_file($path)) @unlink($path);
+            echo json_encode(['success'=>false, 'error'=>$exception->getMessage()]);
         }
     } else {
         echo json_encode(['success'=>false, 'error'=>'no_file_or_id']);
@@ -696,7 +690,7 @@ jg_fileInput.addEventListener('change', () => {
 // ------------------------------
 async function jg_handleUploadFile(file) {
   const doneButton = document.getElementById('jg_guide_upload_done');
-  doneButton.disabled = true;doneButton.textContent = 'Optimizing image...';
+  ItourImageOptimizer.setButtonBusy(doneButton, true, 'Optimizing image...');
   try {
     const optimizedFile = await ItourImageOptimizer.optimizeSource(file, 4096);
     jg_uploadMime = optimizedFile.type;
@@ -719,7 +713,7 @@ async function jg_handleUploadFile(file) {
   } catch (error) {
     alert(error.message || 'The image could not be processed. Please try another photo.');
   } finally {
-    doneButton.disabled = false;doneButton.textContent = 'Done';
+    ItourImageOptimizer.setButtonBusy(doneButton, false);
   }
 }
 
@@ -742,7 +736,7 @@ document.getElementById('jg_guide_upload_close').addEventListener('click', jg_cl
 document.getElementById('jg_guide_upload_done').addEventListener('click', async () => {
   if(!jg_cropper) return;
   const doneButton = document.getElementById('jg_guide_upload_done');
-  doneButton.disabled = true;doneButton.textContent = 'Uploading image...';
+  ItourImageOptimizer.setButtonBusy(doneButton, true, 'Optimizing image...');
   try {
     const blob = await ItourImageOptimizer.exportCrop(jg_cropper, jg_uploadMime, {maxWidth:600, maxHeight:600});
     const fd = new FormData();
@@ -753,6 +747,7 @@ document.getElementById('jg_guide_upload_done').addEventListener('click', async 
     const extension = blob.type === 'image/jpeg' ? 'jpg' : blob.type.split('/')[1];
     fd.append('file', blob, `guide_profile.${extension}`);
 
+    ItourImageOptimizer.setButtonBusy(doneButton, true, 'Uploading image...');
     const response = await fetch('admin/adtourguides.php', {
         method:'POST',
         body: fd
@@ -760,9 +755,11 @@ document.getElementById('jg_guide_upload_done').addEventListener('click', async 
     const data = await response.json();
     if(data.success){
           const url = data.url;
+          const imageCheck = await fetch(url + '?v=' + Date.now(), {method:'HEAD', cache:'no-store', credentials:'same-origin'});
+          if (!imageCheck.ok) throw new Error('The image was processed but is not publicly readable. Check the production uploads directory.');
 
           // Update modal only
-          document.getElementById('jg_guide_profile_preview').src = url;
+          document.getElementById('jg_guide_profile_preview').src = url + '?v=' + Date.now();
           document.getElementById('jg_guide_profile_picture_current').value = url;
 
           jg_closeUploadModal();
@@ -772,7 +769,7 @@ document.getElementById('jg_guide_upload_done').addEventListener('click', async 
   } catch (error) {
     alert(error.message || 'Upload error');
   } finally {
-    doneButton.disabled = false;doneButton.textContent = 'Done';
+    ItourImageOptimizer.setButtonBusy(doneButton, false);
   }
 });
 

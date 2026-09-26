@@ -7,6 +7,44 @@
   const PREFERRED_BYTES = 4 * 1024 * 1024;
   const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
 
+  function ensureBusyButtonStyles() {
+    if (document.getElementById('itour-image-button-styles')) return;
+    const style = document.createElement('style');
+    style.id = 'itour-image-button-styles';
+    style.textContent = `
+      .itour-image-button-busy{display:inline-flex!important;align-items:center;justify-content:center;gap:8px;cursor:wait!important}
+      .itour-image-button-spinner{width:15px;height:15px;flex:0 0 15px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:itourImageButtonSpin .7s linear infinite}
+      @keyframes itourImageButtonSpin{to{transform:rotate(360deg)}}
+      @media (prefers-reduced-motion:reduce){.itour-image-button-spinner{animation-duration:1.4s}}
+    `;
+    document.head.appendChild(style);
+  }
+
+  function setButtonBusy(button, busy, label = 'Processing image...', disabledWhenIdle = false) {
+    if (!(button instanceof HTMLElement)) return;
+    if (!button.dataset.itourImageIdleLabel) {
+      button.dataset.itourImageIdleLabel = button.textContent.trim() || 'Done';
+    }
+    if (!busy) {
+      button.classList.remove('itour-image-button-busy');
+      button.textContent = button.dataset.itourImageIdleLabel;
+      button.disabled = disabledWhenIdle;
+      button.removeAttribute('aria-busy');
+      return;
+    }
+    ensureBusyButtonStyles();
+    button.disabled = true;
+    button.classList.add('itour-image-button-busy');
+    button.setAttribute('aria-busy', 'true');
+    button.replaceChildren();
+    const spinner = document.createElement('span');
+    spinner.className = 'itour-image-button-spinner';
+    spinner.setAttribute('aria-hidden', 'true');
+    const text = document.createElement('span');
+    text.textContent = label;
+    button.append(spinner, text);
+  }
+
   function error(message, code) {
     const exception = new Error(message);
     exception.code = code;
@@ -107,6 +145,7 @@
     ABSOLUTE_MAX_EDGE,
     validateFile,
     optimizeSource,
-    exportCrop
+    exportCrop,
+    setButtonBusy
   });
 })();

@@ -68,7 +68,13 @@ function HoSaveUploadedRoomImage(?array $file, string $absoluteDir, string $rela
     $validated = ItourSecureValidateUploadedImage($file, 40 * 1024 * 1024, 40000000, 12000, 12000);
     $filename = 'room_' . date('YmdHis') . '_' . bin2hex(random_bytes(6)) . '.webp';
     $targetAbs = $absoluteDir . DIRECTORY_SEPARATOR . $filename;
-    ItourSecureOptimizeUploadedImage($validated, $targetAbs, 1600, 'image/webp');
+    try {
+        ItourSecureOptimizeUploadedImage($validated, $targetAbs, 1600, 'image/webp');
+        ItourAssertPublicMediaFile($targetAbs);
+    } catch (Throwable $exception) {
+        if (is_file($targetAbs)) @unlink($targetAbs);
+        throw $exception;
+    }
     return $relativeDir . '/' . $filename;
 }
 
@@ -2005,7 +2011,7 @@ $hoTopbarViewToggle = [
                 <div class="ho-room-image-control">
                   <input type="file" name="main_image_file" accept="image/*" data-room-image-input hidden />
                   <button type="button" class="ho-room-image-trigger" data-room-image-trigger>Update main image</button>
-                  <small>JPG, PNG, or WebP up to 8 MB</small>
+                  <small>JPG, PNG, or WebP up to 40 MB</small>
                 </div>
               </div>
             </div>
@@ -2106,7 +2112,7 @@ $hoTopbarViewToggle = [
               <div class="ho-room-image-control">
                 <input type="file" name="main_image_file" accept="image/*" data-room-image-input hidden />
                 <button type="button" class="ho-room-image-trigger" data-room-image-trigger>Choose main image</button>
-                <small>JPG, PNG, or WebP up to 8 MB</small>
+                <small>JPG, PNG, or WebP up to 40 MB</small>
               </div>
             </div>
           </div>
@@ -2145,7 +2151,7 @@ $hoTopbarViewToggle = [
             <svg viewBox="0 0 24 24"><path d="M10 1a1 1 0 0 0-.71.29l-6 6A1 1 0 0 0 3 8v12a3 3 0 0 0 3 3h1a1 1 0 1 0 0-2H6a1 1 0 0 1-1-1V9h5a1 1 0 0 0 1-1V3h7a1 1 0 0 1 1 1v5a1 1 0 1 0 2 0V4a3 3 0 0 0-3-3h-8ZM9 7H6.41L9 4.41V7Zm7.5 4a4.5 4.5 0 0 0-4.48 4.12A4 4 0 0 0 13 23h7a4 4 0 0 0 .98-7.88A4.5 4.5 0 0 0 16.5 11Zm0 2a2.5 2.5 0 0 1 2.5 2.5V17h1a2 2 0 1 1 0 4h-7a2 2 0 1 1 0-4h1v-1.5a2.5 2.5 0 0 1 2.5-2.5Z"/></svg>
           </span>
           <strong>Click or drag an image here</strong>
-          <small>JPG, PNG, or WebP · maximum 8 MB</small>
+          <small>JPG, PNG, or WebP · maximum 40 MB</small>
           <input type="file" id="hoRoomImagePicker" accept="image/jpeg,image/png,image/webp" hidden />
         </label>
         <div class="ho-room-image-selected" id="hoRoomImageSelected" hidden>
@@ -2403,7 +2409,7 @@ $hoTopbarViewToggle = [
         if (roomImageName) roomImageName.textContent = '';
         if (roomImageSelected) roomImageSelected.hidden = true;
         if (roomImageDropzone) roomImageDropzone.hidden = false;
-        if (roomImageApply) roomImageApply.disabled = true;
+        ItourImageOptimizer.setButtonBusy(roomImageApply, false, '', true);
       };
 
       const closeRoomImageUpload = () => {
@@ -2423,7 +2429,7 @@ $hoTopbarViewToggle = [
 
       const selectRoomImage = async (file) => {
         if (!file) return;
-        if (roomImageApply) roomImageApply.disabled = true;
+        ItourImageOptimizer.setButtonBusy(roomImageApply, true, 'Optimizing image...');
         if (roomImageName) roomImageName.textContent = 'Optimizing image...';
         try {
           const optimizedFile = await ItourImageOptimizer.optimizeSource(file, 2400);
@@ -2434,9 +2440,10 @@ $hoTopbarViewToggle = [
           if (roomImageName) roomImageName.textContent = optimizedFile.name;
           if (roomImageDropzone) roomImageDropzone.hidden = true;
           if (roomImageSelected) roomImageSelected.hidden = false;
-          if (roomImageApply) roomImageApply.disabled = false;
+          ItourImageOptimizer.setButtonBusy(roomImageApply, false);
         } catch (error) {
           if (roomImageName) roomImageName.textContent = '';
+          ItourImageOptimizer.setButtonBusy(roomImageApply, false, '', true);
           Swal.fire({ icon: 'error', title: 'Image could not be processed', text: error.message || 'Please try another photo.' });
         }
       };
@@ -2484,6 +2491,18 @@ $hoTopbarViewToggle = [
           mainPreview.classList.remove('is-empty');
         }
         closeRoomImageUpload();
+      });
+
+      document.querySelectorAll('form.ho-room-form[enctype="multipart/form-data"]').forEach(form => {
+        form.addEventListener('submit', event => {
+          const hasImageUpload = Array.from(form.querySelectorAll('input[type="file"]')).some(input => input.files?.length);
+          if (!hasImageUpload || form.dataset.imageSubmitting === 'true') return;
+          event.preventDefault();
+          form.dataset.imageSubmitting = 'true';
+          const submitButton = form.querySelector('button[type="submit"]');
+          ItourImageOptimizer.setButtonBusy(submitButton, true, 'Uploading images...');
+          requestAnimationFrame(() => form.submit());
+        });
       });
 
       document.addEventListener('click', (e) => {

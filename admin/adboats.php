@@ -918,8 +918,7 @@ el('boat-done-upload')?.addEventListener('click', async () => {
     if (!boatId || boatId === "undefined") boatId = <?= json_encode('temp_' . $boatTempUploadToken) ?>;
 
     const doneButton = el('boat-done-upload');
-    doneButton.disabled = true;
-    doneButton.textContent = 'Optimizing image...';
+    ItourImageOptimizer.setButtonBusy(doneButton, true, 'Optimizing image...');
     try {
         const blob = await ItourImageOptimizer.exportCrop(cropperBoat, boatUploadMime, {maxWidth: 1920, maxHeight: 1080});
 
@@ -932,6 +931,7 @@ el('boat-done-upload')?.addEventListener('click', async () => {
         const extension = blob.type === 'image/jpeg' ? 'jpg' : blob.type.split('/')[1];
         formData.append('file', blob, `boat.${extension}`);
 
+        ItourImageOptimizer.setButtonBusy(doneButton, true, 'Uploading image...');
         const res = await fetch('admin/upload_boat_image.php', {
             method: 'POST',
             headers: {'Accept': 'application/json','X-Requested-With': 'XMLHttpRequest'},
@@ -944,8 +944,14 @@ el('boat-done-upload')?.addEventListener('click', async () => {
         catch (_error) { throw new Error('The server returned an invalid upload response.'); }
         if (!res.ok || !data.success) throw new Error(data.error || 'The image could not be uploaded.');
 
+        const imageUrl = data.url + '?v=' + Date.now();
+        const imageCheck = await fetch(imageUrl, {method:'HEAD', cache:'no-store', credentials:'same-origin'});
+        if (!imageCheck.ok) {
+            throw new Error('The image was processed but is not publicly readable. Check the production uploads directory.');
+        }
+
         const imgEl = el('boat-img-' + currentImgIndexBoat);
-        if (imgEl) imgEl.src = data.url + '?t=' + Date.now();
+        if (imgEl) imgEl.src = imageUrl;
 
         const hidden = el('boat-image' + currentImgIndexBoat + '_current');
         if (hidden) hidden.value = data.url;
@@ -958,7 +964,7 @@ el('boat-done-upload')?.addEventListener('click', async () => {
     } catch (error) {
         alert(error.message || 'The image could not be processed. Please try another photo.');
     } finally {
-        doneButton.disabled = false;doneButton.textContent = 'Done';
+        ItourImageOptimizer.setButtonBusy(doneButton, false);
     }
 });
 
@@ -999,7 +1005,7 @@ async function handleFile(file) {
     if (cropperBoat) cropperBoat.destroy();
 
     const doneButton = el('boat-done-upload');
-    doneButton.disabled = true;doneButton.textContent = 'Optimizing image...';
+    ItourImageOptimizer.setButtonBusy(doneButton, true, 'Optimizing image...');
     try {
       const optimizedFile = await ItourImageOptimizer.optimizeSource(file, 4096);
       boatUploadMime = optimizedFile.type;
@@ -1009,7 +1015,7 @@ async function handleFile(file) {
     } catch (error) {
       dragArea.style.display = 'flex';cropContainer.style.display = 'none';
       alert(error.message || 'The image could not be processed. Please try another photo.');
-      doneButton.disabled = false;doneButton.textContent = 'Done';
+      ItourImageOptimizer.setButtonBusy(doneButton, false);
       return;
     }
 
@@ -1021,7 +1027,7 @@ async function handleFile(file) {
                 viewMode: 1,
                 autoCropArea: 1
             });
-            doneButton.disabled = false;doneButton.textContent = 'Done';
+            ItourImageOptimizer.setButtonBusy(doneButton, false);
         }, 50);
 
     };

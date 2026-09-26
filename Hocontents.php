@@ -31,7 +31,13 @@ function HoSaveUploadedContentImage(?array $file, string $absoluteDir, string $r
     $validated = ItourSecureValidateUploadedImage($file, 40 * 1024 * 1024, 40000000, 12000, 12000);
     $filename = 'content_' . date('YmdHis') . '_' . bin2hex(random_bytes(5)) . '.' . $validated['extension'];
     $targetAbs = $absoluteDir . DIRECTORY_SEPARATOR . $filename;
-    ItourSecureOptimizeUploadedImage($validated, $targetAbs, 2400);
+    try {
+        ItourSecureOptimizeUploadedImage($validated, $targetAbs, 2400);
+        ItourAssertPublicMediaFile($targetAbs);
+    } catch (Throwable $exception) {
+        if (is_file($targetAbs)) @unlink($targetAbs);
+        throw $exception;
+    }
     return $relativeDir . '/' . $filename;
 }
 
@@ -749,7 +755,7 @@ $contentCompletionPercent = (int)round(($completedContentSections / max(1, $tota
               <div class="ho-room-image-control">
                 <input type="file" name="main_image_file" accept="image/*" data-room-image-input hidden />
                 <button type="button" class="ho-room-image-trigger" data-room-image-trigger>Update cover image</button>
-                <small>JPG, PNG, or WebP up to 8 MB</small>
+                <small>JPG, PNG, or WebP up to 40 MB</small>
               </div>
             </div>
           </div>
@@ -810,7 +816,7 @@ $contentCompletionPercent = (int)round(($completedContentSections / max(1, $tota
             <svg viewBox="0 0 24 24"><path d="M10 1a1 1 0 0 0-.71.29l-6 6A1 1 0 0 0 3 8v12a3 3 0 0 0 3 3h1a1 1 0 1 0 0-2H6a1 1 0 0 1-1-1V9h5a1 1 0 0 0 1-1V3h7a1 1 0 0 1 1 1v5a1 1 0 1 0 2 0V4a3 3 0 0 0-3-3h-8ZM9 7H6.41L9 4.41V7Zm7.5 4a4.5 4.5 0 0 0-4.48 4.12A4 4 0 0 0 13 23h7a4 4 0 0 0 .98-7.88A4.5 4.5 0 0 0 16.5 11Zm0 2a2.5 2.5 0 0 1 2.5 2.5V17h1a2 2 0 1 1 0 4h-7a2 2 0 1 1 0-4h1v-1.5a2.5 2.5 0 0 1 2.5-2.5Z"/></svg>
           </span>
           <strong>Click or drag an image here</strong>
-          <small>JPG, PNG, or WebP · maximum 8 MB</small>
+          <small>JPG, PNG, or WebP · maximum 40 MB</small>
           <input type="file" id="hoRoomImagePicker" accept="image/jpeg,image/png,image/webp" hidden />
         </label>
         <div class="ho-room-image-selected" id="hoRoomImageSelected" hidden>
@@ -1090,7 +1096,7 @@ $contentCompletionPercent = (int)round(($completedContentSections / max(1, $tota
         if (propertyImageName) propertyImageName.textContent = '';
         if (propertyImageSelected) propertyImageSelected.hidden = true;
         if (propertyImageDropzone) propertyImageDropzone.hidden = false;
-        if (propertyImageApply) propertyImageApply.disabled = true;
+        ItourImageOptimizer.setButtonBusy(propertyImageApply, false, '', true);
       };
 
       const closePropertyImageUpload = () => {
@@ -1110,7 +1116,7 @@ $contentCompletionPercent = (int)round(($completedContentSections / max(1, $tota
 
       const selectPropertyImage = async file => {
         if (!file) return;
-        if (propertyImageApply) propertyImageApply.disabled = true;
+        ItourImageOptimizer.setButtonBusy(propertyImageApply, true, 'Optimizing image...');
         if (propertyImageName) propertyImageName.textContent = 'Optimizing image...';
         try {
           const optimizedFile = await ItourImageOptimizer.optimizeSource(file, 2400);
@@ -1121,9 +1127,10 @@ $contentCompletionPercent = (int)round(($completedContentSections / max(1, $tota
           if (propertyImageName) propertyImageName.textContent = optimizedFile.name;
           if (propertyImageDropzone) propertyImageDropzone.hidden = true;
           if (propertyImageSelected) propertyImageSelected.hidden = false;
-          if (propertyImageApply) propertyImageApply.disabled = false;
+          ItourImageOptimizer.setButtonBusy(propertyImageApply, false);
         } catch (error) {
           if (propertyImageName) propertyImageName.textContent = '';
+          ItourImageOptimizer.setButtonBusy(propertyImageApply, false, '', true);
           window.alert(error.message || 'The image could not be processed. Please try another photo.');
         }
       };
@@ -1156,6 +1163,18 @@ $contentCompletionPercent = (int)round(($completedContentSections / max(1, $tota
         propertyImageTargetInput.files = transfer.files;
         propertyImageTargetInput.dispatchEvent(new Event('change', { bubbles: true }));
         closePropertyImageUpload();
+      });
+
+      document.querySelectorAll('form[enctype="multipart/form-data"]').forEach(form => {
+        form.addEventListener('submit', event => {
+          const hasImageUpload = Array.from(form.querySelectorAll('input[type="file"]')).some(input => input.files?.length);
+          if (!hasImageUpload || form.dataset.imageSubmitting === 'true') return;
+          event.preventDefault();
+          form.dataset.imageSubmitting = 'true';
+          const submitButton = form.querySelector('button[type="submit"]');
+          ItourImageOptimizer.setButtonBusy(submitButton, true, 'Uploading images...');
+          requestAnimationFrame(() => form.submit());
+        });
       });
 
       document.addEventListener('click', (e) => {

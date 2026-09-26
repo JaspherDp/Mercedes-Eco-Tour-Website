@@ -87,3 +87,24 @@ function ItourEnsureProjectDirectory(string $relativeDirectory, int $mode = 0755
     return $resolvedDirectory;
 }
 
+/**
+ * Confirm that newly generated media is readable and lives below the web
+ * document root. This prevents an upload handler from reporting success when
+ * a deployment points runtime storage at a non-public release directory.
+ */
+function ItourAssertPublicMediaFile(string $absolutePath): void
+{
+    $resolvedFile = realpath($absolutePath);
+    $size = $resolvedFile !== false ? @filesize($resolvedFile) : false;
+    if ($resolvedFile === false || !is_file($resolvedFile) || !is_readable($resolvedFile)
+        || $size === false || $size < 1) {
+        throw new RuntimeException('The optimized image could not be verified after saving.');
+    }
+
+    if (PHP_SAPI === 'cli') return;
+    $documentRootValue = trim((string)($_SERVER['DOCUMENT_ROOT'] ?? ''));
+    $documentRoot = $documentRootValue !== '' ? realpath($documentRootValue) : false;
+    if ($documentRoot === false || !ItourPathIsInside($resolvedFile, $documentRoot)) {
+        throw new RuntimeException('The image storage directory is not publicly available on this server.');
+    }
+}
