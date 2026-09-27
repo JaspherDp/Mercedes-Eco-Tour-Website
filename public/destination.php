@@ -360,13 +360,13 @@ destinationHeaderReady
     swalScript.src = "https://cdn.jsdelivr.net/npm/sweetalert2@11";
     swalScript.onload = () => {
       // Now load logsign modal
-      fetch("logsign-modal.html?v=15")
+      fetch("logsign-modal.html?v=16")
         .then(res => res.text())
         .then(html => {
           document.getElementById("loginModal").innerHTML = html;
 
           const logsignScript = document.createElement("script");
-          logsignScript.src = "logsign.js?v=16";
+          logsignScript.src = "logsign.js?v=17";
           logsignScript.onload = () => {
             if (typeof initLogSignEvents === "function") initLogSignEvents();
           };

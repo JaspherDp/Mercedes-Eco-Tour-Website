@@ -48,7 +48,7 @@ function showToast(message, type = 'success') {
   const toastContainer = document.getElementById('toastContainer') || (() => {
     const container = document.createElement('div');
     container.id = 'toastContainer';
-    container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 10001; pointer-events: none;';
+    container.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 2147483644; pointer-events: none;';
     document.body.appendChild(container);
     return container;
   })();
@@ -95,7 +95,7 @@ if (!document.getElementById('toastStyles')) {
 if (!document.getElementById('logsignSwalLayerFix')) {
   const swalLayerFix = document.createElement('style');
   swalLayerFix.id = 'logsignSwalLayerFix';
-  swalLayerFix.textContent = '.swal2-container{z-index:20000 !important;}';
+  swalLayerFix.textContent = '.swal2-container{z-index:2147483646 !important;}';
   document.head.appendChild(swalLayerFix);
 }
 
@@ -182,7 +182,7 @@ function initLogSignEvents() {
   if (!toastContainer) {
     toastContainer = document.createElement('div');
     toastContainer.id = 'toastContainer';
-    toastContainer.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 10001; pointer-events: none;';
+    toastContainer.style.cssText = 'position: fixed; top: 20px; right: 20px; z-index: 2147483644; pointer-events: none;';
     document.body.appendChild(toastContainer);
   }
 

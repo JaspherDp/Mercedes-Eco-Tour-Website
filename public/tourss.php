@@ -570,7 +570,7 @@ document.addEventListener("DOMContentLoaded", () => {
       const modalContainer = document.getElementById("loginModal");
       if (!modalContainer) return console.error("loginModal container not found");
 
-      fetch("logsign-modal.html?v=14")
+      fetch("logsign-modal.html?v=16")
         .then(res => res.text())
         .then(modalHtml => {
           modalContainer.innerHTML = modalHtml;
@@ -587,7 +587,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
           function loadLogSign() {
             const logsignScript = document.createElement("script");
-            logsignScript.src = "logsign.js?v=15";
+            logsignScript.src = "logsign.js?v=17";
             logsignScript.onload = () => {
               if (typeof initLogSignEvents === "function") initLogSignEvents();
               else console.error("initLogSignEvents not found in logsign.js");
@@ -684,13 +684,13 @@ function initHomepageScrollEffect() {
 
 /* ------------------ LOGIN MODAL LOADING ------------------ */
 function loadLoginModal() {
-  fetch("logsign-modal.html?v=14")
+  fetch("logsign-modal.html?v=16")
     .then(res => res.text())
     .then(html => {
       document.getElementById("loginModal").innerHTML = html;
 
       const script = document.createElement("script");
-      script.src = "logsign.js?v=15";
+      script.src = "logsign.js?v=17";
       script.onload = () => {
         if (typeof initLogSignEvents === "function") initLogSignEvents();
       };

@@ -12,7 +12,7 @@
     const container = document.getElementById("loginModal");
     if (!container) return;
 
-    fetch("logsign-modal.html?v=15")
+    fetch("logsign-modal.html?v=16")
       .then((response) => {
         if (!response.ok) throw new Error("Unable to load the login form.");
         return response.text();
@@ -21,7 +21,7 @@
         container.innerHTML = html;
         const loadAuthScript = () => {
           const script = document.createElement("script");
-          script.src = "logsign.js?v=16";
+          script.src = "logsign.js?v=17";
           script.onload = () => {
           if (typeof window.initLogSignEvents === "function") window.initLogSignEvents();
           const params = new URLSearchParams(window.location.search);

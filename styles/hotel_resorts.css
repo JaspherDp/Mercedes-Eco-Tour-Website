@@ -6693,3 +6693,247 @@ body.hotel-map-open {
     padding-top: 0;
   }
 }
+
+/* Unified discovery cards: hotels, packages, boats, guides, and recent items. */
+.hotel-featured-grid,
+.carousel-scroll,
+.recently-viewed-track {
+  align-items: flex-start;
+}
+
+.carousel-card,
+.hotel-featured-card,
+.recently-viewed-track .recently-viewed-card {
+  height: auto;
+  min-height: 0;
+  align-self: flex-start;
+  border: 1px solid #dfe9e4;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 6px 18px rgba(16, 52, 31, .07);
+  font-family: "Inter", sans-serif;
+}
+
+.carousel-card:hover,
+.hotel-featured-card:hover,
+.recently-viewed-track .recently-viewed-card:hover {
+  transform: translateY(-1px);
+  border-color: #cfdfd7;
+  box-shadow: 0 12px 26px rgba(16, 52, 31, .11);
+}
+
+.carousel-card-img,
+.hotel-featured-img-wrap {
+  flex: 0 0 180px;
+  overflow: hidden;
+  border-radius: 13px 13px 0 0;
+  background: #eef5f1;
+}
+
+.carousel-card-img img,
+.hotel-featured-img {
+  height: 180px;
+  display: block;
+}
+
+.carousel-card-badge,
+.hotel-featured-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 5px 9px;
+  border-radius: 7px;
+  background: rgba(24, 121, 91, .95);
+  box-shadow: 0 4px 12px rgba(7, 57, 43, .14);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .025em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.carousel-card-content,
+.hotel-featured-info,
+.recently-viewed-track .recently-viewed-card .hotel-featured-info {
+  flex: 1;
+  min-width: 0;
+  padding: 14px;
+  gap: 8px;
+}
+
+.carousel-card-title,
+.hotel-featured-title {
+  min-height: 20px;
+  color: #173826;
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.card-context-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.card-inline-icon {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.card-context-line > .card-inline-icon {
+  width: 13px;
+  height: 13px;
+  flex: 0 0 13px;
+  color: #298269;
+}
+
+.card-context-line span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.carousel-card-location,
+.carousel-card-meta,
+.hotel-featured-location {
+  min-height: 17px;
+  color: #5f6b6d;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.carousel-card-rating,
+.hotel-featured-reviews {
+  min-height: 22px;
+  margin: 0;
+}
+
+.service-card-facts {
+  display: flex;
+  align-content: flex-start;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-height: 0;
+  margin: 2px 0 4px;
+}
+
+.service-card-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: min(100%, 160px);
+  height: 23px;
+  padding: 0 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eef5f1;
+  color: #245344;
+  font-size: 9px;
+  font-weight: 650;
+  line-height: 1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.service-card-chip .card-inline-icon {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 auto;
+  color: #298269;
+  stroke-width: 2;
+}
+
+.hotel-featured-amenities {
+  align-content: flex-start;
+  min-height: 0;
+  margin: 2px 0 4px;
+}
+
+.carousel-card-price,
+.hotel-featured-price-wrap,
+.recently-viewed-track .recently-viewed-card .hotel-featured-price-wrap {
+  margin-top: 8px;
+}
+
+.carousel-card-price {
+  min-height: 0;
+}
+
+.carousel-card-price .price-label {
+  display: block;
+  margin: 0 0 1px;
+}
+
+.carousel-card-price .price,
+.hotel-featured-price {
+  color: #111;
+  font-size: 18px;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.carousel-card-btn,
+.hotel-featured-btn {
+  min-height: 38px;
+  height: 38px;
+  box-sizing: border-box;
+  margin-top: 8px;
+  padding: 0 12px;
+  border-radius: 10px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+@media (max-width: 600px) {
+  .carousel-card,
+  .hotel-featured-card,
+  .recently-viewed-track .recently-viewed-card {
+    height: auto;
+    min-height: 0;
+  }
+
+  .carousel-card-img,
+  .hotel-featured-img-wrap {
+    flex-basis: 116px;
+  }
+
+  .carousel-card-img img,
+  .hotel-featured-img {
+    height: 116px;
+  }
+
+  .service-card-facts,
+  .hotel-featured-amenities {
+    min-height: 0;
+    gap: 4px;
+  }
+
+  .service-card-chip {
+    height: 19px;
+    padding: 0 6px;
+    font-size: .49rem;
+  }
+
+  .service-card-chip .card-inline-icon {
+    width: 9px;
+    height: 9px;
+  }
+
+  .card-context-line > .card-inline-icon {
+    width: 11px;
+    height: 11px;
+    flex-basis: 11px;
+  }
+}

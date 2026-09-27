@@ -1296,9 +1296,16 @@ include 'footer.php';
           </div>
           <div class="hotel-featured-info">
             <h3 class="hotel-featured-title">${escapeHtml(item.name)}</h3>
-            <p class="hotel-featured-location">${escapeHtml(item.subtitle || recentlyViewedTypeLabel(type))}</p>
+            <p class="hotel-featured-location card-context-line">
+              ${renderCardIcon("location")}
+              <span>${escapeHtml(item.subtitle || recentlyViewedTypeLabel(type))}</span>
+            </p>
             <div class="hotel-featured-reviews">
               ${renderStars(itemRating, itemReviewCount, "featured")}
+            </div>
+            <div class="service-card-facts" aria-label="Item details">
+              <span class="service-card-chip">${renderCardIcon("clock")} Recently viewed</span>
+              <span class="service-card-chip">${renderCardIcon("tag")} ${escapeHtml(recentlyViewedTypeLabel(type))}</span>
             </div>
             <div class="hotel-featured-price-wrap">
               <span class="hotel-featured-price-label">${priceLabel}</span>
@@ -2219,7 +2226,7 @@ include 'footer.php';
         }
         updateIslandFieldState();
 
-        fetch("logsign-modal.html?v=15")
+        fetch("logsign-modal.html?v=16")
           .then(res => res.text())
           .then(html => {
             const modalContainer = document.getElementById("loginModal");
@@ -2230,7 +2237,7 @@ include 'footer.php';
             swalScript.src = "https://cdn.jsdelivr.net/npm/sweetalert2@11";
             swalScript.onload = () => {
               const logsignScript = document.createElement("script");
-              logsignScript.src = "logsign.js?v=16";
+              logsignScript.src = "logsign.js?v=17";
               logsignScript.onload = () => {
                 if (typeof initLogSignEvents === "function") initLogSignEvents();
                 else console.error("initLogSignEvents not found in logsign.js");
@@ -3001,7 +3008,10 @@ document.querySelectorAll(".filter").forEach(cb => {
         </div>
         <div class="hotel-featured-info">
           <h3 class="hotel-featured-title">${hotelName}</h3>
-          <p class="hotel-featured-location">${hotelIsland}</p>
+          <p class="hotel-featured-location card-context-line">
+            ${renderCardIcon("location")}
+            <span>${hotelIsland}</span>
+          </p>
           <div class="hotel-featured-reviews">
             ${renderStars(h.rating, Number(h.total_reviews ?? 0), "featured")}
           </div>
@@ -3079,6 +3089,23 @@ document.querySelectorAll(".filter").forEach(cb => {
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#39;");
+  }
+
+  function renderCardIcon(name) {
+    const icons = {
+      location: '<path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>',
+      clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+      tag: '<path d="M20 13 13 20l-9-9V4h7l9 9Z"/><circle cx="8.5" cy="8.5" r="1"/>',
+      operator: '<path d="M4 21V6l8-3 8 3v15M8 9h1m6 0h1M8 13h1m6 0h1M9 21v-4h6v4"/>',
+      route: '<circle cx="6" cy="18" r="2"/><circle cx="18" cy="6" r="2"/><path d="M8 18h3a3 3 0 0 0 0-6h2a3 3 0 0 0 3-3V8"/>',
+      boat: '<path d="m3 15 2 5h14l2-5-9-3-9 3Z"/><path d="M12 12V4l5 6h-5M4 22c2 1 4 1 6 0 2 1 4 1 6 0 2 1 4 1 6 0"/>',
+      guests: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+      size: '<path d="m16 3 5 5L8 21H3v-5L16 3Z"/><path d="m13 6 5 5M6 15l3 3"/>',
+      compass: '<circle cx="12" cy="12" r="9"/><path d="m16 8-2.5 5.5L8 16l2.5-5.5L16 8Z"/>',
+      language: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
+      award: '<circle cx="12" cy="8" r="5"/><path d="m8.5 12-1 9 4.5-2 4.5 2-1-9"/>'
+    };
+    return `<svg class="card-inline-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">${icons[name] || icons.tag}</svg>`;
   }
 
   function getFallbackImage(type) {
@@ -3539,7 +3566,7 @@ function displayCarouselItems(elementId, items, type) {
                         : "hotel_resorts.php?tab=tours";
 
                 cardHtml = `
-                    <div class="carousel-card">
+                    <div class="carousel-card service-card service-card--package">
 
                         <div class="carousel-card-img">
                             <img
@@ -3551,42 +3578,42 @@ function displayCarouselItems(elementId, items, type) {
                                 onerror="this.onerror=null;this.src='${getFallbackImage("package")}'">
 
                             <span class="carousel-card-badge">
-                                ${packageDuration}
+                                Tour Package
                             </span>
                         </div>
 
                         <div class="carousel-card-content">
 
-                            <div class="carousel-card-heading">
-                                <h4 class="carousel-card-title package-title">
-                                    ${packageName}
-                                </h4>
+                            <h4 class="carousel-card-title package-title">
+                                ${packageName}
+                            </h4>
 
-                                <span class="carousel-card-type-pill">
-                                    ${packageTypePill}
-                                </span>
-                            </div>
-
-                            <p class="carousel-card-location">
-                                ${packageLocation}
-                            </p>
-
-                            <p class="carousel-card-meta">
-                                <strong>Operator:</strong> ${packageOperator}
+                            <p class="carousel-card-location card-context-line">
+                                ${renderCardIcon("location")}
+                                <span>${packageLocation}</span>
                             </p>
 
                             <div class="carousel-card-rating">
                                 ${renderStars(item.rating || 0, item.total_reviews || 0, "carousel")}
                             </div>
 
+                            <p class="carousel-card-meta card-context-line">
+                                ${renderCardIcon("operator")}
+                                <span><strong>Operator:</strong> ${packageOperator}</span>
+                            </p>
+
+                            <div class="service-card-facts" aria-label="Package details">
+                                <span class="service-card-chip">${renderCardIcon("clock")} ${packageDuration}</span>
+                                <span class="service-card-chip">${renderCardIcon("route")} ${packageTypePill}</span>
+                            </div>
+
                             <div class="carousel-card-price">
+                                <span class="price-label">From</span>
                                 <span class="price">
                                     ₱${packagePrice}
                                 </span>
 
-                                <span class="price-label">
-                                    /pax
-                                </span>
+                                <span class="price-unit">/pax</span>
                             </div>
 
                             <a
@@ -3609,7 +3636,7 @@ function displayCarouselItems(elementId, items, type) {
                 const boatPrice = item.price || 0;
 
                 cardHtml = `
-                    <div class="carousel-card">
+                    <div class="carousel-card service-card service-card--boat">
 
                         <div class="carousel-card-img">
                             <img
@@ -3631,12 +3658,18 @@ function displayCarouselItems(elementId, items, type) {
                                 ${boatName}
                             </h4>
 
-                            <p class="carousel-card-location">
-                                Available for Tours
+                            <p class="carousel-card-location card-context-line">
+                                ${renderCardIcon("boat")}
+                                <span>Available for tours</span>
                             </p>
 
                             <div class="carousel-card-rating">
                                 ${renderStars(item.rating || 0, item.total_reviews || 0, "carousel")}
+                            </div>
+
+                            <div class="service-card-facts" aria-label="Boat details">
+                                <span class="service-card-chip">${renderCardIcon("guests")} Up to ${boatCapacity} guests</span>
+                                ${item.size ? `<span class="service-card-chip">${renderCardIcon("size")} ${escapeHtml(item.size)}</span>` : ""}
                             </div>
 
                             <div class="carousel-card-price">
@@ -3666,9 +3699,11 @@ function displayCarouselItems(elementId, items, type) {
                 const guideImg = escapeHtml(normalizeImagePath(item.img, "guide"));
                 const guideName = escapeHtml(item.name || "Tour Guide");
                 const guidePrice = item.price || 0;
+                const guideSpecialization = escapeHtml(item.specialization || "Local tours");
+                const guideExperience = Number(item.experience) || 0;
 
                 cardHtml = `
-                    <div class="carousel-card">
+                    <div class="carousel-card service-card service-card--guide">
 
                         <div class="carousel-card-img">
                             <img
@@ -3680,7 +3715,7 @@ function displayCarouselItems(elementId, items, type) {
                                 onerror="this.onerror=null;this.src='${getFallbackImage("guide")}'">
 
                             <span class="carousel-card-badge">
-                                Tour Guide
+                                Local Guide
                             </span>
                         </div>
 
@@ -3690,12 +3725,18 @@ function displayCarouselItems(elementId, items, type) {
                                 ${guideName}
                             </h4>
 
-                            <p class="carousel-card-location">
-                                Tour Guide
+                            <p class="carousel-card-location card-context-line">
+                                ${renderCardIcon("compass")}
+                                <span>${guideSpecialization}</span>
                             </p>
 
                             <div class="carousel-card-rating">
                                 ${renderStars(item.rating || 0, item.total_reviews || 0, "carousel")}
+                            </div>
+
+                            <div class="service-card-facts" aria-label="Guide details">
+                                <span class="service-card-chip">${renderCardIcon("language")} Local guide</span>
+                                ${guideExperience > 0 ? `<span class="service-card-chip">${renderCardIcon("award")} ${guideExperience} yr${guideExperience === 1 ? "" : "s"} experience</span>` : ""}
                             </div>
 
                             <div class="carousel-card-price">
