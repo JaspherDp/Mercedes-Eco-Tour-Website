@@ -247,7 +247,7 @@ body.about-gallery-modal-open { overflow: hidden; }
                 <p>Changes will appear on the public About page after saving.</p>
                 <div>
                 <button type="button" class="btn-cancel-unique" data-bs-dismiss="modal">Cancel</button>
-                <button type="button" class="btn-save-unique" onclick="saveModalChangesUnique(<?= $item['id'] ?>, this)">Save Changes</button>
+                <button type="button" class="btn-save-unique" id="saveChangesUnique<?= $item['id'] ?>" onclick="saveModalChangesUnique(<?= $item['id'] ?>, this)">Save Changes</button>
                 </div>
               </div>
             </div>
@@ -323,6 +323,7 @@ body.about-gallery-modal-open { overflow: hidden; }
       const fileInputUnique<?= $item['id'] ?> = document.getElementById('fileInputUnique<?= $item['id'] ?>');
       const cropperContainerUnique<?= $item['id'] ?> = document.getElementById('cropperContainerUnique<?= $item['id'] ?>');
       const cropperImageUnique<?= $item['id'] ?> = document.getElementById('cropperImageUnique<?= $item['id'] ?>');
+      const saveChangesUnique<?= $item['id'] ?> = document.getElementById('saveChangesUnique<?= $item['id'] ?>');
       let cropSourceUrlUnique<?= $item['id'] ?> = '';
       window.aboutGalleryCroppedFiles = window.aboutGalleryCroppedFiles || new Map();
       window.aboutGalleryPreviewUrls = window.aboutGalleryPreviewUrls || new Map();
@@ -335,6 +336,8 @@ body.about-gallery-modal-open { overflow: hidden; }
         }
         cropperContainerUnique<?= $item['id'] ?>.style.display = 'block';
         dragAreaUnique<?= $item['id'] ?>.style.display = 'none';
+        saveChangesUnique<?= $item['id'] ?>.disabled = true;
+        saveChangesUnique<?= $item['id'] ?>.setAttribute('aria-disabled', 'true');
         window.ItourImageOptimizer.setButtonBusy(doneButton, true, 'Optimizing...');
         try {
           const optimizedFile = await window.ItourImageOptimizer.optimizeSource(file, 4096);
@@ -356,6 +359,8 @@ body.about-gallery-modal-open { overflow: hidden; }
           cropperContainerUnique<?= $item['id'] ?>.style.display = 'none';
           dragAreaUnique<?= $item['id'] ?>.style.display = 'flex';
           fileInputUnique<?= $item['id'] ?>.value = '';
+          saveChangesUnique<?= $item['id'] ?>.disabled = false;
+          saveChangesUnique<?= $item['id'] ?>.removeAttribute('aria-disabled');
           Swal.fire({icon:'error',title:'Image not accepted',text:error?.message || 'The image could not be optimized.',confirmButtonColor:'#2b7a66'});
         } finally {
           window.ItourImageOptimizer.setButtonBusy(doneButton, false);
@@ -421,6 +426,8 @@ body.about-gallery-modal-open { overflow: hidden; }
           cropperContainerUnique<?= $item['id'] ?>.style.display = 'none';
           cropperUnique<?= $item['id'] ?>.destroy();
           cropperUnique<?= $item['id'] ?> = null;
+          saveChangesUnique<?= $item['id'] ?>.disabled = false;
+          saveChangesUnique<?= $item['id'] ?>.removeAttribute('aria-disabled');
         } catch (error) {
           Swal.fire({icon:'error',title:'Image processing failed',text:error?.message || 'The image could not be optimized.',confirmButtonColor:'#2b7a66'});
         } finally {
@@ -436,6 +443,8 @@ body.about-gallery-modal-open { overflow: hidden; }
         dragAreaUnique<?= $item['id'] ?>.style.display = 'flex';
         if (cropperUnique<?= $item['id'] ?>) cropperUnique<?= $item['id'] ?>.destroy();
         cropperUnique<?= $item['id'] ?> = null;
+        saveChangesUnique<?= $item['id'] ?>.disabled = false;
+        saveChangesUnique<?= $item['id'] ?>.removeAttribute('aria-disabled');
       });
       /* ===========================
         SAVE CHANGES (Edit)
@@ -601,6 +610,7 @@ const dragAreaNew = document.getElementById('dragAreaNew');
 const fileInputNew = document.getElementById('fileInputNew');
 const cropperContainerNew = document.getElementById('cropperContainerNew');
 const cropperImageNew = document.getElementById('cropperImageNew');
+const saveNewButton = document.getElementById('saveNewBtn');
 let cropperNew;
 let aboutNewSourceUrl = '';
 let aboutNewPreviewUrl = '';
@@ -617,6 +627,8 @@ async function handleNewFile(file) {
   }
   cropperContainerNew.style.display = 'block';
   dragAreaNew.style.display = 'none';
+  saveNewButton.disabled = true;
+  saveNewButton.setAttribute('aria-disabled', 'true');
   window.ItourImageOptimizer.setButtonBusy(doneButton, true, 'Optimizing...');
   try {
     const optimizedFile = await window.ItourImageOptimizer.optimizeSource(file, 4096);
@@ -634,6 +646,8 @@ async function handleNewFile(file) {
     cropperContainerNew.style.display = 'none';
     dragAreaNew.style.display = 'flex';
     if (fileInputNew) fileInputNew.value = '';
+    saveNewButton.disabled = false;
+    saveNewButton.removeAttribute('aria-disabled');
     Swal.fire({icon:'error',title:'Image not accepted',text:error?.message || 'The image could not be optimized.',confirmButtonColor:'#2b7a66'});
   } finally {
     window.ItourImageOptimizer.setButtonBusy(doneButton, false);
@@ -707,6 +721,10 @@ function openNewAboutGalleryItemModal() {
   if (aboutNewPreviewUrl) URL.revokeObjectURL(aboutNewPreviewUrl);
   aboutNewSourceUrl = '';
   aboutNewPreviewUrl = '';
+  if (saveNewButton) {
+    saveNewButton.disabled = false;
+    saveNewButton.removeAttribute('aria-disabled');
+  }
 
   // Show modal
   openAboutGalleryModal(addModal);
@@ -737,6 +755,8 @@ document.getElementById('cropDoneNew')?.addEventListener('click', async () => {
     cropperContainerNew.style.display = 'none';
     cropperNew.destroy();
     cropperNew = null;
+    saveNewButton.disabled = false;
+    saveNewButton.removeAttribute('aria-disabled');
   } catch (error) {
     Swal.fire({icon:'error',title:'Image processing failed',text:error?.message || 'The image could not be optimized.',confirmButtonColor:'#2b7a66'});
   } finally {
@@ -750,6 +770,8 @@ document.getElementById('cropCancelNew')?.addEventListener('click', () => {
   dragAreaNew.querySelectorAll('.icon-unique, .text-unique').forEach(element => element.style.display = 'flex');
   if (cropperNew) cropperNew.destroy();
   cropperNew = null;
+  saveNewButton.disabled = false;
+  saveNewButton.removeAttribute('aria-disabled');
 });
 
 
