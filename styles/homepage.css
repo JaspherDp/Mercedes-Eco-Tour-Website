@@ -1762,7 +1762,7 @@ img { max-width: 100%; }
   }
   .mobile-floating-book {
     position: fixed;
-    right: 74px;
+    right: 70px;
     bottom: 16px;
     z-index: 1199;
     min-height: 48px;
@@ -1778,9 +1778,10 @@ img { max-width: 100%; }
     font-size: .7rem;
     font-weight: 800;
     text-decoration: none;
-    opacity: 1;
-    visibility: visible;
-    transform: none;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateY(12px) scale(.94);
     transition: right .24s ease, opacity .22s ease, visibility .22s ease, transform .24s ease;
   }
   .mobile-floating-book svg {
@@ -1791,6 +1792,12 @@ img { max-width: 100%; }
     stroke-width: 1.8;
     stroke-linecap: round;
     stroke-linejoin: round;
+  }
+  .homepage.mobile-quick-nav-docked .mobile-floating-book {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: none;
   }
   .hero-visual { display: none; }
   .hero-route-map { min-height: 432px; border-radius: 22px; }

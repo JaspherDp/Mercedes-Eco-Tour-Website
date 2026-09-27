@@ -1338,6 +1338,7 @@ html {
 
 .head-nav-mobile-toggle, .head-nav-login-icon, .head-nav-menu-backdrop, .head-nav-drawer-account, .head-nav-drawer-guest, .head-nav-drawer-section-title, .head-nav-drawer-utility, .head-nav-drawer-logout, .head-nav-page-icon, .head-nav-page-arrow { display: none; }
 @media (max-width: 980px) {
+  body.mobile-nav-open .head-nav-main-header { z-index: 10050; }
   .head-nav-main-header .head-nav-container { height: 100%; padding: 0 10px !important; gap: 8px; }
   .head-nav-main-header .head-nav-left { min-width: 0; flex: 1; margin: 0 !important; gap: 7px !important; }
   .head-nav-main-header .head-nav-logo { flex: 0 0 36px; width: 36px !important; height: 36px !important; margin: 0; }

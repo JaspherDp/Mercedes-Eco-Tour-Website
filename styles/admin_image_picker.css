@@ -1,0 +1,137 @@
+/* Shared image picker used by tour guides, boats, and tour packages. */
+.catalog-page .admin-image-dropzone {
+  width: min(550px, 100%) !important;
+  height: 270px !important;
+  min-height: 270px !important;
+  box-sizing: border-box;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 14px !important;
+  margin: 0 auto !important;
+  padding: 24px !important;
+  border: 2px dashed #9fc6b8 !important;
+  border-radius: 10px !important;
+  background: #f8fbfa !important;
+  box-shadow: none !important;
+  color: #35564b !important;
+  text-align: center !important;
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+
+.catalog-page .admin-image-dropzone:hover,
+.catalog-page .admin-image-dropzone.drag-over {
+  border-color: #5e9f89 !important;
+  background: #edf7f3 !important;
+}
+
+.catalog-page .admin-image-dropzone.drag-over { transform: translateY(-1px); }
+
+.catalog-page .admin-image-dropzone__icon {
+  width: 68px;
+  height: 68px;
+  flex: 0 0 68px;
+  display: grid !important;
+  place-items: center;
+  pointer-events: none;
+}
+
+.catalog-page .admin-image-dropzone__icon svg {
+  width: 64px !important;
+  height: 64px !important;
+  display: block;
+  fill: #4b5563 !important;
+  stroke: none !important;
+}
+
+.catalog-page .admin-image-dropzone__copy {
+  width: 100%;
+  display: grid !important;
+  justify-items: center;
+  gap: 4px;
+  color: #65766f;
+  text-align: center;
+  pointer-events: none;
+}
+
+.catalog-page .admin-image-dropzone__copy strong,
+.catalog-page .admin-image-dropzone__copy span,
+.catalog-page .admin-image-dropzone__copy small {
+  display: block;
+  max-width: 100%;
+  margin: 0;
+  text-align: center;
+}
+
+.catalog-page .admin-image-dropzone__copy strong { color: #294b40; font-size: 13px; font-weight: 750; }
+.catalog-page .admin-image-dropzone__copy span { color: #65766f; font-size: 11px; font-weight: 500; }
+.catalog-page .admin-image-dropzone__copy small { margin-top: 5px; color: #82918b; font-size: 9px; font-weight: 500; }
+.catalog-page .admin-image-dropzone input[type="file"] { display: none !important; }
+
+.catalog-page .admin-image-crop-stage {
+  width: min(550px, 100%) !important;
+  height: min(350px, 42vh) !important;
+  min-height: 250px;
+  box-sizing: border-box;
+  margin: 0 auto !important;
+  overflow: hidden !important;
+  border: 1px solid #d7e3df !important;
+  border-radius: 10px !important;
+  background: #15241f !important;
+}
+
+.catalog-page .admin-image-crop-stage > img:not(.cropper-hidden) {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  display: block !important;
+  object-fit: contain !important;
+}
+
+.catalog-page .admin-image-picker-actions {
+  width: 100%;
+  min-height: 66px;
+  box-sizing: border-box;
+  display: flex !important;
+  align-items: center;
+  justify-content: flex-end !important;
+  gap: 10px !important;
+  margin: 0 !important;
+  padding: 14px 22px !important;
+  border-top: 1px solid #e1ebe7;
+  background: #fff;
+}
+
+.catalog-page .admin-image-picker-actions button {
+  min-width: 82px;
+  min-height: 38px;
+  margin: 0 !important;
+  border-radius: 9px !important;
+  font-weight: 750;
+}
+
+.catalog-page .admin-image-picker-actions button:last-child {
+  border: 1px solid #d4e0dc !important;
+  background: #fff !important;
+  color: #30473f !important;
+}
+
+.catalog-page .admin-image-picker-actions button:last-child:hover { background: #f3f7f5 !important; }
+
+@media (max-width: 600px) {
+  .catalog-page .admin-image-dropzone {
+    height: 240px !important;
+    min-height: 240px !important;
+    padding: 18px !important;
+  }
+
+  .catalog-page .admin-image-crop-stage {
+    height: min(320px, 44vh) !important;
+    min-height: 220px;
+  }
+
+  .catalog-page .admin-image-picker-actions { padding: 12px 14px !important; }
+}

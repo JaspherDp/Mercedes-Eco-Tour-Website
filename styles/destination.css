@@ -526,10 +526,12 @@
   .destination-page .des_intro-visual { display: none; }
   .destination-page .des_mobile-floating-book {
     position: fixed;
-    right: 14px;
+    right: 70px;
     bottom: 16px;
     z-index: 4300;
-    min-height: 50px;
+    width: auto;
+    height: 48px;
+    min-height: 48px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -547,7 +549,6 @@
     transition: right .34s cubic-bezier(.22,.75,.25,1), transform .2s ease, box-shadow .2s ease;
     -webkit-tap-highlight-color: transparent;
   }
-  .destination-page.back-to-top-visible .des_mobile-floating-book { right: 70px; }
   .destination-page .des_mobile-floating-book:hover,
   .destination-page .des_mobile-floating-book:focus-visible {
     transform: translateY(-2px);

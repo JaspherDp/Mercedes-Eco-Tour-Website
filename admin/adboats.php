@@ -580,7 +580,8 @@ body {
 
 
 </style>
-<link rel="stylesheet" href="styles/admin_catalog_pages.css?v=20260920-1" />
+<link rel="stylesheet" href="styles/admin_catalog_pages.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/admin_catalog_pages.css') ?>" />
+<link rel="stylesheet" href="styles/admin_image_picker.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/admin_image_picker.css') ?>" />
 <link rel="stylesheet" href="styles/admin_resource_calendar.css?v=20260813-1" />
 </head>
 <body class="catalog-page">
@@ -744,24 +745,26 @@ for ($imageIndex = 1; $imageIndex <= 5; $imageIndex++) {
       <p>Choose an image and adjust the crop before applying it.</p>
     </div>
     <div class="boat-upload-body">
-      <div class="boat-custum-file-upload" id="boat-drag-area">
-          <div class="icon">
+      <div class="boat-custum-file-upload admin-image-dropzone" id="boat-drag-area" role="button" tabindex="0" aria-label="Upload a boat image">
+          <div class="icon admin-image-dropzone__icon">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" aria-hidden="true">
               <path d="M10 1C9.73478 1 9.48043 1.10536 9.29289 1.29289L3.29289 7.29289C3.10536 7.48043 3 7.73478 3 8V20C3 21.6569 4.34315 23 6 23H7C7.55228 23 8 22.5523 8 22C8 21.4477 7.55228 21 7 21H6C5.44772 21 5 20.5523 5 20V9H10C10.5523 9 11 8.55228 11 8V3H18C18.5523 3 19 3.44772 19 4V9C19 9.55228 19.4477 10 20 10C20.5523 10 21 9.55228 21 9V4C21 2.34315 19.6569 1 18 1H10ZM9 7H6.41421L9 4.41421V7ZM14 15.5C14 14.1193 15.1193 13 16.5 13C17.8807 13 19 14.1193 19 15.5V17H20C21.1046 17 22 17.8954 22 19C22 20.1046 21.1046 21 20 21H13C11.8954 21 11 20.1046 11 19C11 17.8954 11.8954 17 13 17H14V15.5ZM16.5 11C14.142 11 12.2076 12.8136 12.0156 15.122C10.2825 15.5606 9 17.1305 9 19C9 21.2091 10.7909 23 13 23H20C22.2091 23 24 21.2091 24 19C24 17.1305 22.7175 15.5606 20.9844 15.122C20.7924 12.8136 18.858 11 16.5 11Z"></path>
             </svg>
           </div>
-          <div class="boat-text">
-              <span>Click to upload image</span>
+          <div class="boat-text admin-image-dropzone__copy">
+              <strong>Drag and drop a boat image here</strong>
+              <span>or click to choose an image</span>
+              <small>JPG, PNG, or WebP up to 40 MB</small>
           </div>
 
       </div>
 
-      <input type="file" id="boat-file-input" accept="image/*" hidden>
-        <div class="boat-crop-container" id="boat-crop-container" style="display:none;">
+      <input type="file" id="boat-file-input" accept="image/jpeg,image/png,image/webp" hidden>
+        <div class="boat-crop-container admin-image-crop-stage" id="boat-crop-container" style="display:none;">
             <img id="boat-crop-image" class="boat-cropper-img" src="">
         </div>
     </div>
-    <div class="boat-upload-actions">
+    <div class="boat-upload-actions admin-image-picker-actions">
       <button type="button" class="boat-done-btn" id="boat-done-upload">Done</button>
       <button type="button" class="boat-cancel-btn" id="boat-cancel-upload">Cancel</button>
     </div>
@@ -811,6 +814,17 @@ function el(id) {
     return document.getElementById(id);
 }
 
+function updateBoatModalTitle() {
+    const title = el('boat-modal-title');
+    if (!title) return;
+    if (!currentBoatBoat) {
+        title.textContent = 'Add boat';
+        return;
+    }
+    const boatName = el('boat-name-field')?.value.trim() || currentBoatBoat.name || 'Unnamed boat';
+    title.textContent = `Edit boat — ${boatName}`;
+}
+
 /* ---------------- EDIT BOAT ---------------- */
 document.querySelectorAll('.boat-edit-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
@@ -827,9 +841,6 @@ document.querySelectorAll('.boat-edit-btn').forEach(btn => {
 
         const formBtn = document.querySelector('#boat-edit-form .boat-done-btn');
         if (formBtn) formBtn.textContent = "Update boat";
-        const modalTitle = el('boat-modal-title');
-        if (modalTitle) modalTitle.textContent = "Edit boat";
-
         for (let i = 1; i <= 5; i++) {
             const imgBtn = el('boat-img-' + i)?.nextElementSibling;
             if (imgBtn) {
@@ -845,6 +856,7 @@ document.querySelectorAll('.boat-edit-btn').forEach(btn => {
         el('boat-number').value = currentBoatBoat.boat_number || "";
         el('boat-short-description').value = currentBoatBoat.short_description || "";
         el('boat-long-description').value = currentBoatBoat.long_description || "";
+        updateBoatModalTitle();
 
         for (let i = 1; i <= 5; i++) {
             let url = currentBoatBoat['image' + i] || 'img/sampleimage.png';
@@ -868,6 +880,7 @@ window.closeEditModalBoat = function() {
     if (el('boat-edit-modal').style.display !== 'flex') document.body.classList.remove('modal-open');
 };
 el('boat-edit-close')?.addEventListener('click', closeEditModalBoat);
+el('boat-name-field')?.addEventListener('input', updateBoatModalTitle);
 
 /* ---------------- ADD BOAT ---------------- */
 el('add-boat-btn')?.addEventListener('click', () => {
@@ -877,8 +890,7 @@ el('add-boat-btn')?.addEventListener('click', () => {
     el('boat-edit-modal').style.display = 'flex';
     document.body.classList.add('modal-open');
 
-    const title = el('boat-modal-title');
-    if (title) title.textContent = "Add boat";
+    updateBoatModalTitle();
     const formBtn = document.querySelector('#boat-edit-form .boat-done-btn');
     if (formBtn) formBtn.textContent = "Add boat";
 
@@ -1004,13 +1016,30 @@ const fileInput = el("boat-file-input");
 if (uploadBox && fileInput) {
 
     uploadBox.addEventListener("click", () => fileInput.click());
+    uploadBox.addEventListener("keydown", event => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        fileInput.click();
+    });
 
     fileInput.addEventListener("change", e => {
         if (e.target.files?.length) handleFile(e.target.files[0]);
     });
 
-    ["dragenter","dragover","dragleave","drop"].forEach(evt => {
-        uploadBox.addEventListener(evt, e => e.preventDefault());
+    ["dragenter","dragover"].forEach(evt => {
+        uploadBox.addEventListener(evt, e => {
+            e.preventDefault();
+            e.stopPropagation();
+            uploadBox.classList.add("drag-over");
+        });
+    });
+
+    ["dragleave","drop"].forEach(evt => {
+        uploadBox.addEventListener(evt, e => {
+            e.preventDefault();
+            e.stopPropagation();
+            uploadBox.classList.remove("drag-over");
+        });
     });
 
     uploadBox.addEventListener("drop", e => {
@@ -1054,7 +1083,9 @@ async function handleFile(file) {
             cropperBoat = new Cropper(img, {
                 aspectRatio: 16 / 9,
                 viewMode: 1,
-                autoCropArea: 1
+                autoCropArea: 1,
+                responsive: true,
+                background: false
             });
             ItourImageOptimizer.setButtonBusy(doneButton, false);
         }, 50);

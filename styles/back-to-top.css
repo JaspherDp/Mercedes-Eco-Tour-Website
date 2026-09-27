@@ -389,6 +389,16 @@ body.back-to-top-visible .itour-ai-launcher { right: calc(clamp(18px, 3vw, 36px)
     bottom: 76px;
     max-height: calc(100dvh - 94px);
   }
+  body.mobile-nav-open .back-to-top,
+  body.mobile-nav-open .itour-ai-launcher,
+  body.mobile-nav-open .mobile-floating-book,
+  body.mobile-nav-open .about-mobile-floating-book,
+  body.mobile-nav-open .des_mobile-floating-book,
+  body.mobile-nav-open .mobile-floating-reserve {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+  }
 }
 
 @media (max-width: 360px) {

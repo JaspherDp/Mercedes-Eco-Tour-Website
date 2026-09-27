@@ -436,10 +436,12 @@
 
   .about-page .about-mobile-floating-book {
     position: fixed;
-    right: 14px;
+    right: 70px;
     bottom: 16px;
     z-index: 1199;
-    min-height: 50px;
+    width: auto;
+    height: 48px;
+    min-height: 48px;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -457,7 +459,6 @@
     transition: right .34s cubic-bezier(.22,.75,.25,1), transform .2s ease, box-shadow .2s ease;
     -webkit-tap-highlight-color: transparent;
   }
-  .about-page.back-to-top-visible .about-mobile-floating-book { right: 70px; }
   .about-page .about-mobile-floating-book:hover,
   .about-page .about-mobile-floating-book:focus-visible { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(4,45,35,.36); }
   .about-page .about-mobile-floating-book:focus-visible { outline: 3px solid rgba(86,201,164,.34); outline-offset: 3px; }

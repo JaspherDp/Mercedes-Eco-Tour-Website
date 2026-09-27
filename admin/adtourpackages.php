@@ -582,7 +582,13 @@ section {
     overflow: hidden;
 }
 #editModal .modal-content { display: grid; grid-template-rows: auto minmax(0, 1fr); height: min(90vh, 820px); max-height: min(90vh, 820px); }
-#imageModal .modal-content { display: grid; grid-template-rows: auto minmax(0, 1fr) auto; max-height: min(88vh, 720px); }
+#imageModal .modal-content {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    justify-content: stretch;
+    align-items: stretch;
+    max-height: min(88vh, 720px);
+}
 #editModal .af-modal-header, #imageModal .af-modal-header {
     display: grid;
     gap: 5px;
@@ -622,9 +628,28 @@ section {
 #packageImagesContainer img, #generalImagesContainer img { width: 138px !important; height: 92px !important; border-radius: 8px !important; }
 #imageModal .custum-file-upload { border-color: #9fc6b8; background: #f8fbfa; box-shadow: none; }
 #imageModal h3 { color: #173d32 !important; font-size: 19px; }
-#imageModal .image-modal-body { min-height: 0; overflow-y: auto; padding: 18px 22px; }
+#imageModal .af-modal-header {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 15px 56px 12px 18px !important;
+}
+#imageModal .image-modal-body {
+    width: 100%;
+    min-height: 0;
+    box-sizing: border-box;
+    overflow-y: auto;
+    padding: 16px 18px;
+}
 #imageModal .custum-file-upload, #imageModal #cropContainer { margin: 0 auto; }
-#imageModal .modal-content > div:last-child { margin: 0 !important; padding: 14px 22px; border-top: 1px solid #e1ebe7; background: #fff; }
+#imageModal .admin-image-picker-actions {
+    width: 100%;
+    min-height: 58px;
+    box-sizing: border-box;
+    margin: 0 !important;
+    padding: 10px 18px !important;
+    border-top: 1px solid #e1ebe7;
+    background: #fff;
+}
 #editModal .close, #imageModal .close { position: absolute; top: 13px; right: 14px; width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 50%; background: #f1f6f4; color: #3e554d; font-size: 23px; cursor: pointer; z-index: 5; }
 body.modal-open { overflow: hidden; }
 
@@ -757,6 +782,7 @@ body.modal-open { overflow: hidden; }
 .package-editor-header > div { min-width: 0; }
 #editModal .package-editor-header small { display: block; color: #34806c; font-size: 8px; font-weight: 700; letter-spacing: .12em; }
 #editModal .package-editor-header strong { display: block; margin: 2px 0; color: #17251f !important; font-size: 17px !important; line-height: 1.2; }
+#editModal #af-media-modal-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #editModal .package-editor-header p { color: #7a8882; font-size: 10px; }
 #editModal .close { top: 16px; right: 20px; width: 32px; height: 32px; border-radius: 8px; font-size: 21px; }
 
@@ -841,6 +867,7 @@ body.modal-open { overflow: hidden; }
   #editModal .package-editor-pane[data-package-pane="media"] > #generalImagesContainer { grid-template-columns: 1fr; }
 }
 </style>
+<link rel="stylesheet" href="styles/admin_image_picker.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/admin_image_picker.css') ?>">
 </head>
 
 <body class="catalog-page">
@@ -1087,30 +1114,32 @@ function getPackageCardImagePath($imgField) {
 
         <div class="image-modal-body">
         <!-- Custom Drag Area -->
-        <label class="custum-file-upload" for="imageInput">
-            <div class="icon">
+        <label class="custum-file-upload admin-image-dropzone" for="imageInput" role="button" tabindex="0">
+            <div class="icon admin-image-dropzone__icon">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="" viewBox="0 0 24 24">
                     <path fill="" d="M10 1C9.73478 1 9.48043 1.10536 9.29289 1.29289L3.29289 7.29289C3.10536 7.48043 3 7.73478 3 8V20C3 21.6569 4.34315 23 6 23H7C7.55228 23 8 22.5523 8 22C8 21.4477 7.55228 21 7 21H6C5.44772 21 5 20.5523 5 20V9H10C10.5523 9 11 8.55228 11 8V3H18C18.5523 3 19 3.44772 19 4V9C19 9.55228 19.4477 10 20 10C20.5523 10 21 9.55228 21 9V4C21 2.34315 19.6569 1 18 1H10ZM9 7H6.41421L9 4.41421V7ZM14 15.5C14 14.1193 15.1193 13 16.5 13C17.8807 13 19 14.1193 19 15.5V16V17H20C21.1046 17 22 17.8954 22 19C22 20.1046 21.1046 21 20 21H13C11.8954 21 11 20.1046 11 19C11 17.8954 11.8954 17 13 17H14V16V15.5ZM16.5 11C14.142 11 12.2076 12.8136 12.0156 15.122C10.2825 15.5606 9 17.1305 9 19C9 21.2091 10.7909 23 13 23H20C22.2091 23 24 21.2091 24 19C24 17.1305 22.7175 15.5606 20.9844 15.122C20.7924 12.8136 18.858 11 16.5 11Z"></path>
                 </svg>
             </div>
-            <div class="text">
-                <span>Click to upload image</span>
+            <div class="text admin-image-dropzone__copy">
+                <strong>Drag and drop an image here</strong>
+                <span>or click to choose an image</span>
+                <small>JPG, PNG, or WebP up to 40 MB</small>
             </div>
-            <input type="file" id="imageInput" accept="image/*">
+            <input type="file" id="imageInput" accept="image/jpeg,image/png,image/webp">
         </label>
 
         <!-- Cropper Container -->
-        <div id="cropContainer" style="display:none; margin-top:20px; text-align:center;">
-            <div style="width:100%; max-width:500px; height:350px; margin:0 auto; border:1px solid #ddd; border-radius:5px; overflow:hidden;">
-                <img id="cropImage" style="width:100%; height:100%; object-fit:contain;">
+        <div id="cropContainer" style="display:none;">
+            <div class="admin-image-crop-stage">
+                <img id="cropImage">
             </div>
         </div>
         </div>
 
         <!-- Controls -->
-        <div style="margin-top:10px; display:flex; gap:10px; justify-content:center;">
-            <button id="doneBtn" class="btn btn-green" style="display:none;">Done</button>
-            <button id="cancelBtn" class="btn btn-red" style="display:none;">Cancel</button>
+        <div class="admin-image-picker-actions">
+            <button type="button" id="doneBtn" class="btn btn-green" disabled>Done</button>
+            <button type="button" id="cancelBtn" class="btn btn-red">Cancel</button>
         </div>
     </div>
 </div>
@@ -1220,6 +1249,22 @@ let currentUploadMime = 'image/jpeg';
 let currentUploadUrl = '';
 const packageEditorSteps = ['information', 'media', 'itinerary'];
 
+function updatePackageModalTitle() {
+    const title = document.getElementById('af-media-modal-title');
+    if (!title) return;
+    if (editModal.dataset.mode !== 'edit') {
+        title.textContent = 'Add tour package';
+        title.removeAttribute('title');
+        return;
+    }
+    const fallbackTitle = packagesData[currentPackageId]?.package_title || 'Untitled package';
+    const packageTitle = document.getElementById('package_title')?.value.trim() || fallbackTitle;
+    title.textContent = `Edit package — ${packageTitle}`;
+    title.title = packageTitle;
+}
+
+document.getElementById('package_title')?.addEventListener('input', updatePackageModalTitle);
+
 function switchPackageEditorPane(name) {
     const index = Math.max(0, packageEditorSteps.indexOf(name));
     const isAdd = editModal.dataset.mode === 'add';
@@ -1292,10 +1337,10 @@ function openModal(packageId) {
     editModal.dataset.mode = 'edit';
 
     document.getElementById('packageEditorEyebrow').textContent = 'PACKAGE EDITOR';
-    document.getElementById('af-media-modal-title').textContent = 'Edit package';
     document.getElementById('packageEditorSubtitle').textContent = 'Maintain package details, imagery, and itinerary information.';
     document.getElementById('package_id').value = packageId;
     document.getElementById('package_title').value = data.package_title;
+    updatePackageModalTitle();
     document.getElementById('price').value = data.price;
     document.getElementById('package_type').value = data.package_type || '';
     document.getElementById('package_range').value = data.package_range || '';
@@ -1348,7 +1393,7 @@ function openAddModal() {
     editModal.dataset.mode = 'add';
 
     document.getElementById('packageEditorEyebrow').textContent = 'NEW TOUR PACKAGE';
-    document.getElementById('af-media-modal-title').textContent = 'Add tour package';
+    updatePackageModalTitle();
     document.getElementById('packageEditorSubtitle').textContent = 'Complete the three steps to create a visitor-ready tour package.';
     document.getElementById('package_id').value = '';
     document.getElementById('package_title').value = '';
@@ -1478,8 +1523,9 @@ function resetImageModal() {
     cropContainer.style.display = "none";
     cropImage.src = "";
 
-    doneBtn.style.display = "none";
-    cancelBtn.style.display = "none";
+    doneBtn.style.display = "inline-flex";
+    doneBtn.disabled = true;
+    cancelBtn.style.display = "inline-flex";
 
     if (cropper) {
         cropper.destroy();
@@ -1498,16 +1544,26 @@ function resetImageModal() {
 // ===============================
 const dragArea = document.querySelector(".custum-file-upload");
 
+dragArea.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    imageInput.click();
+});
+
 dragArea.addEventListener("dragover", (e) => {
     e.preventDefault();
-    dragArea.style.background = "#e6fff2";
+    e.stopPropagation();
+    dragArea.classList.add("drag-over");
 });
-dragArea.addEventListener("dragleave", () => {
-    dragArea.style.background = "#fff";
+dragArea.addEventListener("dragleave", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragArea.classList.remove("drag-over");
 });
 dragArea.addEventListener("drop", (e) => {
     e.preventDefault();
-    dragArea.style.background = "#fff";
+    e.stopPropagation();
+    dragArea.classList.remove("drag-over");
     const file = e.dataTransfer.files[0];
     handleFile(file);
 });
@@ -1532,15 +1588,17 @@ async function handleFile(file) {
         document.querySelector(".custum-file-upload").style.display = "none";
         cropContainer.style.display = "block";
 
-        doneBtn.style.display = "inline-block";
-        cancelBtn.style.display = "inline-block";
+        doneBtn.style.display = "inline-flex";
+        cancelBtn.style.display = "inline-flex";
 
         if (cropper) cropper.destroy();
 
         cropper = new Cropper(cropImage, {
             aspectRatio: (currentField === "location_image" || currentField === "route_image") ? 16/9 : 4/3,
             viewMode: 1,
-            autoCropArea: 0.9
+            autoCropArea: 1,
+            responsive: true,
+            background: false
         });
     } catch (error) {
         alert(error.message || 'The image could not be processed. Please try another photo.');
@@ -1579,7 +1637,7 @@ doneBtn.addEventListener("click", async () => {
 // ===============================
 // CANCEL BUTTON
 // ===============================
-cancelBtn.addEventListener("click", resetImageModal);
+cancelBtn.addEventListener("click", closeImageModal);
 
 // ===============================
 // SUBMIT FORM WITH CROPPED FILES AND SWEETALERT2 FEEDBACK
