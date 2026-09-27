@@ -1114,7 +1114,7 @@ function getPackageCardImagePath($imgField) {
 
         <div class="image-modal-body">
         <!-- Custom Drag Area -->
-        <label class="custum-file-upload admin-image-dropzone" for="imageInput" role="button" tabindex="0">
+        <label class="custum-file-upload admin-image-dropzone" id="package-image-dropzone" for="imageInput" role="button" tabindex="0">
             <div class="icon admin-image-dropzone__icon">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="" viewBox="0 0 24 24">
                     <path fill="" d="M10 1C9.73478 1 9.48043 1.10536 9.29289 1.29289L3.29289 7.29289C3.10536 7.48043 3 7.73478 3 8V20C3 21.6569 4.34315 23 6 23H7C7.55228 23 8 22.5523 8 22C8 21.4477 7.55228 21 7 21H6C5.44772 21 5 20.5523 5 20V9H10C10.5523 9 11 8.55228 11 8V3H18C18.5523 3 19 3.44772 19 4V9C19 9.55228 19.4477 10 20 10C20.5523 10 21 9.55228 21 9V4C21 2.34315 19.6569 1 18 1H10ZM9 7H6.41421L9 4.41421V7ZM14 15.5C14 14.1193 15.1193 13 16.5 13C17.8807 13 19 14.1193 19 15.5V16V17H20C21.1046 17 22 17.8954 22 19C22 20.1046 21.1046 21 20 21H13C11.8954 21 11 20.1046 11 19C11 17.8954 11.8954 17 13 17H14V16V15.5ZM16.5 11C14.142 11 12.2076 12.8136 12.0156 15.122C10.2825 15.5606 9 17.1305 9 19C9 21.2091 10.7909 23 13 23H20C22.2091 23 24 21.2091 24 19C24 17.1305 22.7175 15.5606 20.9844 15.122C20.7924 12.8136 18.858 11 16.5 11Z"></path>
@@ -1129,7 +1129,7 @@ function getPackageCardImagePath($imgField) {
         </label>
 
         <!-- Cropper Container -->
-        <div id="cropContainer" style="display:none;">
+        <div id="cropContainer" class="admin-image-crop-panel" hidden>
             <div class="admin-image-crop-stage">
                 <img id="cropImage">
             </div>
@@ -1138,6 +1138,7 @@ function getPackageCardImagePath($imgField) {
 
         <!-- Controls -->
         <div class="admin-image-picker-actions">
+            <button type="button" id="chooseAnotherBtn" class="admin-image-picker-reset" hidden>Choose another</button>
             <button type="button" id="doneBtn" class="btn btn-green" disabled>Done</button>
             <button type="button" id="cancelBtn" class="btn btn-red">Cancel</button>
         </div>
@@ -1239,6 +1240,8 @@ let cropContainer = document.getElementById("cropContainer");
 let cropImage = document.getElementById("cropImage");
 let doneBtn = document.getElementById("doneBtn");
 let cancelBtn = document.getElementById("cancelBtn");
+let chooseAnotherBtn = document.getElementById("chooseAnotherBtn");
+let dragArea = document.getElementById("package-image-dropzone");
 
 let croppedFiles = {}; // temporary blobs
 let cropper = null;
@@ -1519,9 +1522,12 @@ function closeImageModal() {
 // RESET IMAGE MODAL
 // ===============================
 function resetImageModal() {
-    document.querySelector(".custum-file-upload").style.display = "flex";
-    cropContainer.style.display = "none";
-    cropImage.src = "";
+    dragArea.hidden = false;
+    cropContainer.hidden = true;
+    chooseAnotherBtn.hidden = true;
+    cropImage.onload = null;
+    cropImage.onerror = null;
+    cropImage.removeAttribute('src');
 
     doneBtn.style.display = "inline-flex";
     doneBtn.disabled = true;
@@ -1542,8 +1548,6 @@ function resetImageModal() {
 // ===============================
 // DRAG & DROP / FILE UPLOAD
 // ===============================
-const dragArea = document.querySelector(".custum-file-upload");
-
 dragArea.addEventListener("keydown", (event) => {
     if (event.key !== "Enter" && event.key !== " ") return;
     event.preventDefault();
@@ -1571,6 +1575,7 @@ imageInput.addEventListener("change", () => {
     const file = imageInput.files[0];
     handleFile(file);
 });
+chooseAnotherBtn.addEventListener("click", resetImageModal);
 
 // ===============================
 // HANDLE SELECTED FILE AND INIT CROPPER
@@ -1583,10 +1588,15 @@ async function handleFile(file) {
         currentUploadMime = optimizedFile.type;
         if (currentUploadUrl) URL.revokeObjectURL(currentUploadUrl);
         currentUploadUrl = URL.createObjectURL(optimizedFile);
-        cropImage.src = currentUploadUrl;
+        await new Promise((resolve, reject) => {
+            cropImage.onload = resolve;
+            cropImage.onerror = () => reject(new Error('The selected image could not be displayed.'));
+            cropImage.src = currentUploadUrl;
+        });
 
-        document.querySelector(".custum-file-upload").style.display = "none";
-        cropContainer.style.display = "block";
+        dragArea.hidden = true;
+        cropContainer.hidden = false;
+        chooseAnotherBtn.hidden = false;
 
         doneBtn.style.display = "inline-flex";
         cancelBtn.style.display = "inline-flex";
@@ -1600,10 +1610,13 @@ async function handleFile(file) {
             responsive: true,
             background: false
         });
+        doneBtn.disabled = false;
     } catch (error) {
+        resetImageModal();
         alert(error.message || 'The image could not be processed. Please try another photo.');
     } finally {
         ItourImageOptimizer.setButtonBusy(doneBtn, false);
+        doneBtn.disabled = !cropper;
     }
 }
 

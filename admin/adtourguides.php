@@ -561,12 +561,13 @@ try {
         <input type="file" id="jg_guide_upload_file_input" accept="image/jpeg,image/png,image/webp">
       </label>
 
-      <div class="jg_guide_upload_crop_container admin-image-crop-stage" id="jg_guide_upload_crop_container">
+      <div class="jg_guide_upload_crop_container admin-image-crop-stage" id="jg_guide_upload_crop_container" hidden>
         <img id="jg_guide_upload_crop_image" class="jg_guide_upload_crop_image" src="">
       </div>
 
       <div class="jg_guide-actions admin-image-picker-actions">
-        <button type="button" id="jg_guide_upload_done" class="jg_guide-save">Done</button>
+        <button type="button" id="jg_guide_upload_choose_another" class="admin-image-picker-reset" hidden>Choose another</button>
+        <button type="button" id="jg_guide_upload_done" class="jg_guide-save" disabled>Done</button>
         <button type="button" id="jg_guide_upload_cancel" class="jg_guide-cancel">Cancel</button>
       </div>
     </div>
@@ -653,8 +654,7 @@ document.getElementById('jg_guide_cancel_btn').addEventListener('click', jg_clos
 document.getElementById('jg_guide_update_image_btn').addEventListener('click', () => {
   document.getElementById('jg_guide_upload_modal').style.display = 'flex';
   document.body.classList.add('modal-open');
-  document.getElementById('jg_guide_upload_crop_container').style.display = 'none';
-  if(jg_cropper){ jg_cropper.destroy(); jg_cropper = null; }
+  jg_resetUploadSelection();
 });
 
 // ------------------------------
@@ -662,6 +662,31 @@ document.getElementById('jg_guide_update_image_btn').addEventListener('click', (
 // ------------------------------
 const jg_dragArea = document.getElementById('jg_guide_upload_drag_area');
 const jg_fileInput = document.getElementById('jg_guide_upload_file_input');
+const jg_cropContainer = document.getElementById('jg_guide_upload_crop_container');
+const jg_cropImage = document.getElementById('jg_guide_upload_crop_image');
+const jg_chooseAnotherButton = document.getElementById('jg_guide_upload_choose_another');
+const jg_doneButton = document.getElementById('jg_guide_upload_done');
+
+function jg_resetUploadSelection() {
+  if (jg_cropper) {
+    jg_cropper.destroy();
+    jg_cropper = null;
+  }
+  if (jg_sourceUrl) {
+    URL.revokeObjectURL(jg_sourceUrl);
+    jg_sourceUrl = '';
+  }
+  jg_fileInput.value = '';
+  jg_cropImage.onload = null;
+  jg_cropImage.onerror = null;
+  jg_cropImage.removeAttribute('src');
+  jg_dragArea.hidden = false;
+  jg_cropContainer.hidden = true;
+  jg_chooseAnotherButton.hidden = true;
+  jg_doneButton.disabled = true;
+}
+
+jg_chooseAnotherButton.addEventListener('click', jg_resetUploadSelection);
 
 jg_dragArea.addEventListener('keydown', event => {
   if (event.key !== 'Enter' && event.key !== ' ') return;
@@ -698,31 +723,37 @@ jg_fileInput.addEventListener('change', () => {
 // Handle File
 // ------------------------------
 async function jg_handleUploadFile(file) {
-  const doneButton = document.getElementById('jg_guide_upload_done');
+  const doneButton = jg_doneButton;
   ItourImageOptimizer.setButtonBusy(doneButton, true, 'Optimizing image...');
   try {
     const optimizedFile = await ItourImageOptimizer.optimizeSource(file, 4096);
     jg_uploadMime = optimizedFile.type;
     if (jg_sourceUrl) URL.revokeObjectURL(jg_sourceUrl);
     jg_sourceUrl = URL.createObjectURL(optimizedFile);
-    const img = document.getElementById('jg_guide_upload_crop_image');
-    img.src = jg_sourceUrl;
-    img.onload = function(){
-      document.getElementById('jg_guide_upload_crop_container').style.display = 'block';
-      jg_dragArea.style.display = 'none';
-      if(jg_cropper) jg_cropper.destroy();
-      jg_cropper = new Cropper(img, {
-        aspectRatio: 1,
-        viewMode:1,
-        autoCropArea:1,
-        responsive:true,
-        background:false
-      });
-    }
+    const img = jg_cropImage;
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = () => reject(new Error('The selected image could not be displayed.'));
+      img.src = jg_sourceUrl;
+    });
+    jg_dragArea.hidden = true;
+    jg_cropContainer.hidden = false;
+    jg_chooseAnotherButton.hidden = false;
+    if(jg_cropper) jg_cropper.destroy();
+    jg_cropper = new Cropper(img, {
+      aspectRatio: 1,
+      viewMode:1,
+      autoCropArea:1,
+      responsive:true,
+      background:false
+    });
+    doneButton.disabled = false;
   } catch (error) {
+    jg_resetUploadSelection();
     alert(error.message || 'The image could not be processed. Please try another photo.');
   } finally {
     ItourImageOptimizer.setButtonBusy(doneButton, false);
+    doneButton.disabled = !jg_cropper;
   }
 }
 
@@ -730,11 +761,9 @@ async function jg_handleUploadFile(file) {
 // Cancel / Close Upload
 // ------------------------------
 function jg_closeUploadModal() {
-  if(jg_cropper){ jg_cropper.destroy(); jg_cropper = null; }
-  if(jg_sourceUrl){ URL.revokeObjectURL(jg_sourceUrl);jg_sourceUrl = ''; }
+  jg_resetUploadSelection();
   document.getElementById('jg_guide_upload_modal').style.display = 'none';
   if (document.getElementById('jg_guide_edit_modal').style.display !== 'flex') document.body.classList.remove('modal-open');
-  jg_dragArea.style.display = 'flex';
 }
 document.getElementById('jg_guide_upload_cancel').addEventListener('click', jg_closeUploadModal);
 document.getElementById('jg_guide_upload_close').addEventListener('click', jg_closeUploadModal);

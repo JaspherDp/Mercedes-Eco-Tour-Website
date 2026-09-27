@@ -760,12 +760,13 @@ for ($imageIndex = 1; $imageIndex <= 5; $imageIndex++) {
       </div>
 
       <input type="file" id="boat-file-input" accept="image/jpeg,image/png,image/webp" hidden>
-        <div class="boat-crop-container admin-image-crop-stage" id="boat-crop-container" style="display:none;">
+        <div class="boat-crop-container admin-image-crop-stage" id="boat-crop-container" hidden>
             <img id="boat-crop-image" class="boat-cropper-img" src="">
         </div>
     </div>
     <div class="boat-upload-actions admin-image-picker-actions">
-      <button type="button" class="boat-done-btn" id="boat-done-upload">Done</button>
+      <button type="button" class="admin-image-picker-reset" id="boat-choose-another" hidden>Choose another</button>
+      <button type="button" class="boat-done-btn" id="boat-done-upload" disabled>Done</button>
       <button type="button" class="boat-cancel-btn" id="boat-cancel-upload">Cancel</button>
     </div>
   </div>
@@ -803,6 +804,30 @@ window.addEventListener('pageshow', () => {
 let cropperBoat = null;
 let boatUploadMime = 'image/jpeg';
 let boatSourceUrl = '';
+
+function resetBoatUploadSelection() {
+    if (cropperBoat) {
+        cropperBoat.destroy();
+        cropperBoat = null;
+    }
+    if (boatSourceUrl) {
+        URL.revokeObjectURL(boatSourceUrl);
+        boatSourceUrl = '';
+    }
+
+    const input = el('boat-file-input');
+    const image = el('boat-crop-image');
+    if (input) input.value = '';
+    if (image) {
+        image.onload = null;
+        image.onerror = null;
+        image.removeAttribute('src');
+    }
+    if (el('boat-drag-area')) el('boat-drag-area').hidden = false;
+    if (el('boat-crop-container')) el('boat-crop-container').hidden = true;
+    if (el('boat-choose-another')) el('boat-choose-another').hidden = true;
+    if (el('boat-done-upload')) el('boat-done-upload').disabled = true;
+}
 
 /* ---------------- GLOBAL ERROR DEBUG ---------------- */
 window.addEventListener("error", (e) => {
@@ -915,37 +940,19 @@ window.openUploadModalBoat = function(imgIndex) {
     currentImgIndexBoat = imgIndex;
 
     const modal = el('boat-upload-modal');
-    const dragArea = el('boat-drag-area');
-    const cropContainer = el('boat-crop-container');
-    const img = el('boat-crop-image');
-
     modal.style.display = 'flex';
     document.body.classList.add('modal-open');
-    dragArea.style.display = 'flex';
-    cropContainer.style.display = 'none';
-
-    img.src = "";
-
-    if (cropperBoat) {
-        cropperBoat.destroy();
-        cropperBoat = null;
-    }
+    resetBoatUploadSelection();
 };
 
 /* ---------------- CLOSE UPLOAD ---------------- */
 el('boat-cancel-upload')?.addEventListener('click', () => {
+    resetBoatUploadSelection();
     el('boat-upload-modal').style.display = 'none';
     if (el('boat-edit-modal').style.display !== 'flex') document.body.classList.remove('modal-open');
-
-    if (cropperBoat) {
-        cropperBoat.destroy();
-        cropperBoat = null;
-    }
-    if (boatSourceUrl) {
-        URL.revokeObjectURL(boatSourceUrl);
-        boatSourceUrl = '';
-    }
 });
+
+el('boat-choose-another')?.addEventListener('click', resetBoatUploadSelection);
 
 /* ---------------- DONE UPLOAD (FIXED JSON CRASH) ---------------- */
 el('boat-done-upload')?.addEventListener('click', async () => {
@@ -1000,8 +1007,7 @@ el('boat-done-upload')?.addEventListener('click', async () => {
         el('boat-upload-modal').style.display = 'none';
         if (el('boat-edit-modal').style.display !== 'flex') document.body.classList.remove('modal-open');
 
-        cropperBoat.destroy();cropperBoat = null;
-        if (boatSourceUrl) { URL.revokeObjectURL(boatSourceUrl);boatSourceUrl = ''; }
+        resetBoatUploadSelection();
     } catch (error) {
         alert(error.message || 'The image could not be processed. Please try another photo.');
     } finally {
@@ -1057,10 +1063,6 @@ async function handleFile(file) {
     const dragArea = el('boat-drag-area');
 
     modal.style.display = 'flex';
-    dragArea.style.display = 'none';
-    cropContainer.style.display = 'block';
-
-    if (cropperBoat) cropperBoat.destroy();
 
     const doneButton = el('boat-done-upload');
     ItourImageOptimizer.setButtonBusy(doneButton, true, 'Optimizing image...');
@@ -1069,28 +1071,28 @@ async function handleFile(file) {
       boatUploadMime = optimizedFile.type;
       if (boatSourceUrl) URL.revokeObjectURL(boatSourceUrl);
       boatSourceUrl = URL.createObjectURL(optimizedFile);
-      img.src = boatSourceUrl;
+      await new Promise((resolve, reject) => {
+          img.onload = resolve;
+          img.onerror = () => reject(new Error('The selected image could not be displayed.'));
+          img.src = boatSourceUrl;
+      });
+      dragArea.hidden = true;
+      cropContainer.hidden = false;
+      el('boat-choose-another').hidden = false;
+      cropperBoat = new Cropper(img, {
+          aspectRatio: 16 / 9,
+          viewMode: 1,
+          autoCropArea: 1,
+          responsive: true,
+          background: false
+      });
     } catch (error) {
-      dragArea.style.display = 'flex';cropContainer.style.display = 'none';
+      resetBoatUploadSelection();
       alert(error.message || 'The image could not be processed. Please try another photo.');
+    } finally {
       ItourImageOptimizer.setButtonBusy(doneButton, false);
-      return;
+      doneButton.disabled = !cropperBoat;
     }
-
-    img.onload = () => {
-
-        setTimeout(() => {
-            cropperBoat = new Cropper(img, {
-                aspectRatio: 16 / 9,
-                viewMode: 1,
-                autoCropArea: 1,
-                responsive: true,
-                background: false
-            });
-            ItourImageOptimizer.setButtonBusy(doneButton, false);
-        }, 50);
-
-    };
 }
 
 /* ---------------- CLOSE MODALS ---------------- */
@@ -1100,9 +1102,7 @@ el('boat-edit-modal')?.addEventListener('click', e => {
 
 el('boat-upload-modal')?.addEventListener('click', e => {
     if (e.target.id === 'boat-upload-modal') {
-        if (cropperBoat) cropperBoat.destroy();
-        el('boat-upload-modal').style.display = 'none';
-        if (el('boat-edit-modal').style.display !== 'flex') document.body.classList.remove('modal-open');
+        el('boat-cancel-upload')?.click();
     }
 });
 el('boat-upload-close')?.addEventListener('click', () => el('boat-cancel-upload')?.click());

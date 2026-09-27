@@ -70,6 +70,17 @@
 .catalog-page .admin-image-dropzone__copy small { margin-top: 5px; color: #82918b; font-size: 9px; font-weight: 500; }
 .catalog-page .admin-image-dropzone input[type="file"] { display: none !important; }
 
+.catalog-page .admin-image-dropzone[hidden],
+.catalog-page .admin-image-crop-stage[hidden],
+.catalog-page .admin-image-crop-panel[hidden] {
+  display: none !important;
+}
+
+.catalog-page .admin-image-crop-stage:not([hidden]),
+.catalog-page .admin-image-crop-panel:not([hidden]) {
+  display: block !important;
+}
+
 .catalog-page .admin-image-crop-stage {
   width: min(550px, 100%) !important;
   height: min(350px, 42vh) !important;
@@ -111,6 +122,18 @@
   margin: 0 !important;
   border-radius: 9px !important;
   font-weight: 750;
+}
+
+.catalog-page .admin-image-picker-actions .admin-image-picker-reset {
+  margin-right: auto !important;
+  border: 1px solid #bcd5cc !important;
+  background: #f4faf7 !important;
+  color: #1f6d57 !important;
+}
+
+.catalog-page .admin-image-picker-actions .admin-image-picker-reset:hover {
+  border-color: #8ebcab !important;
+  background: #eaf5f0 !important;
 }
 
 .catalog-page .admin-image-picker-actions button:last-child {
