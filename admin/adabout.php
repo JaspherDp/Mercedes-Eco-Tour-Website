@@ -43,11 +43,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         }
     }
 
-    $validatedImageExtension = null;
+    $validatedImage = null;
     if (isset($_FILES['image']) && (int)$_FILES['image']['error'] !== UPLOAD_ERR_NO_FILE) {
         try {
-            $validatedImage = ItourSecureValidateUploadedImage($_FILES['image'], 8 * 1024 * 1024);
-            $validatedImageExtension = (string)$validatedImage['extension'];
+            $validatedImage = ItourSecureValidateUploadedImage($_FILES['image'], 40 * 1024 * 1024, 40000000, 12000, 12000);
         } catch (InvalidArgumentException $exception) {
             http_response_code(422);
             header('Content-Type: application/json');
@@ -65,13 +64,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         $long_desc = $longDescriptionInput;
 
         $image_path = null;
-        if ($validatedImageExtension !== null) {
-            $filename = ItourSecureRandomFilename('about', $validatedImageExtension);
+        if ($validatedImage !== null) {
+            $filename = ItourSecureRandomFilename('about', (string)$validatedImage['extension']);
             $image_path = 'uploads/' . $filename;
             $uploadDirectory = ItourEnsureProjectDirectory('uploads');
-            if (!move_uploaded_file($_FILES['image']['tmp_name'], $uploadDirectory . DIRECTORY_SEPARATOR . $filename)) {
-                throw new RuntimeException('The uploaded image could not be saved.');
-            }
+            $absoluteTarget = $uploadDirectory . DIRECTORY_SEPARATOR . $filename;
+            ItourSecureOptimizeUploadedImage($validatedImage, $absoluteTarget, 1920);
+            ItourAssertPublicMediaFile($absoluteTarget);
         }
 
         if ($image_path) {
@@ -101,13 +100,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
             throw new InvalidArgumentException('The About gallery may contain at most 50 items.');
         }
         $image_path = 'img/default.jpg';
-        if ($validatedImageExtension !== null) {
-            $filename = ItourSecureRandomFilename('about', $validatedImageExtension);
+        if ($validatedImage !== null) {
+            $filename = ItourSecureRandomFilename('about', (string)$validatedImage['extension']);
             $image_path = 'uploads/' . $filename;
             $uploadDirectory = ItourEnsureProjectDirectory('uploads');
-            if (!move_uploaded_file($_FILES['image']['tmp_name'], $uploadDirectory . DIRECTORY_SEPARATOR . $filename)) {
-                throw new RuntimeException('The uploaded image could not be saved.');
-            }
+            $absoluteTarget = $uploadDirectory . DIRECTORY_SEPARATOR . $filename;
+            ItourSecureOptimizeUploadedImage($validatedImage, $absoluteTarget, 1920);
+            ItourAssertPublicMediaFile($absoluteTarget);
         }
         $stmt = $pdo->prepare("INSERT INTO about_gallery (title, short_desc, long_desc, image_path) VALUES (?,?,?,?)");
         $added = $stmt->execute([$title, $short_desc, $long_desc, $image_path]);
@@ -146,6 +145,9 @@ $showAboutInlineAddButton = $showAboutInlineAddButton ?? true;
 <?php endif; ?>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.5.13/cropper.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<?php if ($showAboutInlineAddButton): ?>
+<script src="js/image-upload-optimizer-v2.js?v=<?= (int)@filemtime('js/image-upload-optimizer-v2.js') ?>"></script>
+<?php endif; ?>
 <style>
 /* Self-contained dialog state prevents About editors leaking into sibling tabs. */
 .modal-unique {
@@ -167,6 +169,7 @@ $showAboutInlineAddButton = $showAboutInlineAddButton ?? true;
 }
 .modal-unique.is-open .modal-dialog { transform: none !important; }
 body.about-gallery-modal-open { overflow: hidden; }
+.swal2-container { z-index: 30000 !important; }
 </style>
 
 
@@ -219,7 +222,7 @@ body.about-gallery-modal-open { overflow: hidden; }
                       <div class="text-unique"><span>Click to upload image</span></div>
                       <input type="file" id="fileInputUnique<?= $item['id'] ?>" accept="image/png,image/jpeg,image/webp">
                   </label>
-                  <p class="about-gallery-upload-note">Recommended landscape image. PNG, JPG, or WEBP.</p>
+                  <p class="about-gallery-upload-note">PNG, JPG, or WEBP up to 40 MB · optimized before saving.</p>
 
                   <div class="about-gallery-cropper" id="cropperContainerUnique<?= $item['id'] ?>" style="display:none">
                     <img id="cropperImageUnique<?= $item['id'] ?>" class="img-fluid">
@@ -278,7 +281,7 @@ body.about-gallery-modal-open { overflow: hidden; }
                       <div class="text-unique"><span>Choose or drop an image</span><small>Browse files from your device</small></div>
                       <input type="file" id="fileInputNew" accept="image/png,image/jpeg,image/webp">
                   </label>
-                  <p class="about-gallery-upload-note">Recommended landscape image. PNG, JPG, or WEBP.</p>
+                  <p class="about-gallery-upload-note">PNG, JPG, or WEBP up to 40 MB · optimized before saving.</p>
 
                   <div class="about-gallery-cropper" id="cropperContainerNew" style="display:none">
                     <img id="cropperImageNew" class="img-fluid">
@@ -320,27 +323,52 @@ body.about-gallery-modal-open { overflow: hidden; }
       const fileInputUnique<?= $item['id'] ?> = document.getElementById('fileInputUnique<?= $item['id'] ?>');
       const cropperContainerUnique<?= $item['id'] ?> = document.getElementById('cropperContainerUnique<?= $item['id'] ?>');
       const cropperImageUnique<?= $item['id'] ?> = document.getElementById('cropperImageUnique<?= $item['id'] ?>');
+      let cropSourceUrlUnique<?= $item['id'] ?> = '';
+      window.aboutGalleryCroppedFiles = window.aboutGalleryCroppedFiles || new Map();
+      window.aboutGalleryPreviewUrls = window.aboutGalleryPreviewUrls || new Map();
+
+      async function prepareEditGalleryImageUnique<?= $item['id'] ?>(file) {
+        const doneButton = document.getElementById('cropDoneUnique<?= $item['id'] ?>');
+        if (!window.ItourImageOptimizer) {
+          Swal.fire({icon:'error',title:'Optimizer unavailable',text:'Refresh the page and try again.',confirmButtonColor:'#2b7a66'});
+          return;
+        }
+        cropperContainerUnique<?= $item['id'] ?>.style.display = 'block';
+        dragAreaUnique<?= $item['id'] ?>.style.display = 'none';
+        window.ItourImageOptimizer.setButtonBusy(doneButton, true, 'Optimizing...');
+        try {
+          const optimizedFile = await window.ItourImageOptimizer.optimizeSource(file, 4096);
+          if (cropSourceUrlUnique<?= $item['id'] ?>) URL.revokeObjectURL(cropSourceUrlUnique<?= $item['id'] ?>);
+          cropSourceUrlUnique<?= $item['id'] ?> = URL.createObjectURL(optimizedFile);
+          cropperImageUnique<?= $item['id'] ?>.src = cropSourceUrlUnique<?= $item['id'] ?>;
+          await new Promise((resolve, reject) => {
+            if (cropperImageUnique<?= $item['id'] ?>.complete && cropperImageUnique<?= $item['id'] ?>.naturalWidth) return resolve();
+            cropperImageUnique<?= $item['id'] ?>.onload = resolve;
+            cropperImageUnique<?= $item['id'] ?>.onerror = () => reject(new Error('The optimized image could not be previewed.'));
+          });
+          if (cropperUnique<?= $item['id'] ?>) cropperUnique<?= $item['id'] ?>.destroy();
+          cropperUnique<?= $item['id'] ?> = new Cropper(cropperImageUnique<?= $item['id'] ?>, {
+            aspectRatio: 1.5,
+            viewMode: 1,
+            autoCropArea: 1
+          });
+        } catch (error) {
+          cropperContainerUnique<?= $item['id'] ?>.style.display = 'none';
+          dragAreaUnique<?= $item['id'] ?>.style.display = 'flex';
+          fileInputUnique<?= $item['id'] ?>.value = '';
+          Swal.fire({icon:'error',title:'Image not accepted',text:error?.message || 'The image could not be optimized.',confirmButtonColor:'#2b7a66'});
+        } finally {
+          window.ItourImageOptimizer.setButtonBusy(doneButton, false);
+        }
+      }
 
       /* ===========================
         CLICK TO SELECT IMAGE
         =========================== */
-      fileInputUnique<?= $item['id'] ?>.addEventListener('change', e=>{
+      fileInputUnique<?= $item['id'] ?>.addEventListener('change', async e=>{
         if(e.target.files.length){
           const file = e.target.files[0];
-          if (!file.type.startsWith('image/')) {
-            e.target.value = '';
-            Swal.fire({ icon: 'warning', title: 'Invalid file', text: 'Please choose a PNG, JPG, or WEBP image.', confirmButtonColor: '#2b7a66' });
-            return;
-          }
-          const url = URL.createObjectURL(file);
-
-          cropperImageUnique<?= $item['id'] ?>.src = url;
-          cropperContainerUnique<?= $item['id'] ?>.style.display = 'block';
-          dragAreaUnique<?= $item['id'] ?>.style.display = 'none';
-
-          cropperUnique<?= $item['id'] ?> = new Cropper(cropperImageUnique<?= $item['id'] ?>, {
-              aspectRatio: 1.5  // 300w / 200h = landscape
-          });
+          await prepareEditGalleryImageUnique<?= $item['id'] ?>(file);
         }
       });
 
@@ -359,48 +387,45 @@ body.about-gallery-modal-open { overflow: hidden; }
         dragAreaUnique<?= $item['id'] ?>.style.backgroundColor = "#fff";
       });
 
-      dragAreaUnique<?= $item['id'] ?>.addEventListener("drop", (e) => {
+      dragAreaUnique<?= $item['id'] ?>.addEventListener("drop", async (e) => {
         e.preventDefault();
 
         dragAreaUnique<?= $item['id'] ?>.style.borderColor = "#cacaca";
         dragAreaUnique<?= $item['id'] ?>.style.backgroundColor = "#fff";
 
         if (e.dataTransfer.files.length > 0) {
-            fileInputUnique<?= $item['id'] ?>.files = e.dataTransfer.files;
-
-            const file = e.dataTransfer.files[0];
-            const url = URL.createObjectURL(file);
-
-            cropperImageUnique<?= $item['id'] ?>.src = url;
-            cropperContainerUnique<?= $item['id'] ?>.style.display = 'block';
-            dragAreaUnique<?= $item['id'] ?>.style.display = 'none';
-
-            cropperUnique<?= $item['id'] ?> = new Cropper(cropperImageUnique<?= $item['id'] ?>, {
-                aspectRatio: 1.5,  // Landscape: 300 / 200
-                viewMode: 1,
-                autoCropArea: 1
-            });
-
+            await prepareEditGalleryImageUnique<?= $item['id'] ?>(e.dataTransfer.files[0]);
         }
       });
 
       /* ===========================
         CROP DONE
         =========================== */
-      document.getElementById('cropDoneUnique<?= $item['id'] ?>').addEventListener('click', ()=>{
+      document.getElementById('cropDoneUnique<?= $item['id'] ?>').addEventListener('click', async ()=>{
         if (!cropperUnique<?= $item['id'] ?>) return;
-        const canvas = cropperUnique<?= $item['id'] ?>.getCroppedCanvas({
-            width: 300,
-            height: 200
-        });
-        const preview = document.getElementById('uploadPreviewUnique<?= $item['id'] ?>');
-        preview.src = canvas.toDataURL('image/png');
-        preview.hidden = false;
-        dragAreaUnique<?= $item['id'] ?>.querySelectorAll('.icon-unique, .text-unique').forEach(element => element.style.display = 'none');
-        dragAreaUnique<?= $item['id'] ?>.style.display = 'flex';
-        cropperContainerUnique<?= $item['id'] ?>.style.display = 'none';
-        cropperUnique<?= $item['id'] ?>.destroy();
-        cropperUnique<?= $item['id'] ?> = null;
+        const doneButton = document.getElementById('cropDoneUnique<?= $item['id'] ?>');
+        window.ItourImageOptimizer.setButtonBusy(doneButton, true, 'Optimizing...');
+        try {
+          const blob = await window.ItourImageOptimizer.exportCrop(cropperUnique<?= $item['id'] ?>, 'image/jpeg', {maxWidth:1920,maxHeight:1280});
+          const file = new File([blob], `about_<?= $item['id'] ?>_${Date.now()}.jpg`, {type:'image/jpeg'});
+          window.aboutGalleryCroppedFiles.set(String(<?= $item['id'] ?>), file);
+          const previousPreviewUrl = window.aboutGalleryPreviewUrls.get(String(<?= $item['id'] ?>));
+          if (previousPreviewUrl) URL.revokeObjectURL(previousPreviewUrl);
+          const previewUrl = URL.createObjectURL(file);
+          window.aboutGalleryPreviewUrls.set(String(<?= $item['id'] ?>), previewUrl);
+          const preview = document.getElementById('uploadPreviewUnique<?= $item['id'] ?>');
+          preview.src = previewUrl;
+          preview.hidden = false;
+          dragAreaUnique<?= $item['id'] ?>.querySelectorAll('.icon-unique, .text-unique').forEach(element => element.style.display = 'none');
+          dragAreaUnique<?= $item['id'] ?>.style.display = 'flex';
+          cropperContainerUnique<?= $item['id'] ?>.style.display = 'none';
+          cropperUnique<?= $item['id'] ?>.destroy();
+          cropperUnique<?= $item['id'] ?> = null;
+        } catch (error) {
+          Swal.fire({icon:'error',title:'Image processing failed',text:error?.message || 'The image could not be optimized.',confirmButtonColor:'#2b7a66'});
+        } finally {
+          window.ItourImageOptimizer.setButtonBusy(doneButton, false);
+        }
       });
 
       /* ===========================
@@ -421,7 +446,10 @@ body.about-gallery-modal-open { overflow: hidden; }
           Swal.fire({ icon: 'warning', title: 'Title required', text: 'Enter a gallery title before saving.', confirmButtonColor: '#2b7a66' });
           return;
         }
-        if (submitButton) submitButton.disabled = true;
+        const croppedFile = window.aboutGalleryCroppedFiles?.get(String(id));
+        if (submitButton && window.ItourImageOptimizer) {
+          window.ItourImageOptimizer.setButtonBusy(submitButton, true, croppedFile ? 'Uploading...' : 'Saving...');
+        } else if (submitButton) submitButton.disabled = true;
         const formData = new FormData();
         formData.append('csrf_token', <?= json_encode($adminContentCsrf, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>);
         formData.append('action','update');
@@ -430,42 +458,19 @@ body.about-gallery-modal-open { overflow: hidden; }
         formData.append('short_desc', document.getElementById(`modalShortUnique${id}`).value);
         formData.append('long_desc', document.getElementById(`modalLongUnique${id}`).value);
 
-        const dragArea = document.getElementById(`dragAreaUnique${id}`);
-        const imgTag = document.getElementById(`uploadPreviewUnique${id}`);
-
-        if(imgTag && !imgTag.hidden && imgTag.src.startsWith('data:')){
-          fetch(imgTag.src)
-            .then(res => res.blob())
-            .then(blob => {
-              formData.append('image', blob, 'cropped.png');
-              sendUpdate(formData);
-            }).catch(err => {
-              Swal.fire({
-                icon: 'error',
-                title: 'Error',
-                text: 'Failed to process image.',
-                confirmButtonColor: '#49A47A'
-              });
-              if (submitButton) submitButton.disabled = false;
-            });
-        } else {
-          sendUpdate(formData);
-        }
+        if (croppedFile) formData.append('image', croppedFile, croppedFile.name);
+        sendUpdate(formData);
 
         function sendUpdate(fd){
-          fetch('adabout.php',{method:'POST',body:fd})
-            .then(async res => {
-              const payload = await res.json().catch(() => null);
-              if (!res.ok || !payload) throw new Error(payload?.message || 'The server returned an invalid response.');
-              return payload;
-            })
+          postAboutGalleryForm(fd, submitButton)
             .then(data=>{
               if(data.success){
+                closeAboutGalleryModal(document.getElementById(`editModalUnique${id}`));
                 Swal.fire({
                   icon: 'success',
                   title: 'Success',
                   text: 'About Gallery Updated Successfully!',
-                  confirmButtonColor: '#49A47A'
+                  confirmButtonColor: '#246f59'
                 }).then(()=> location.reload());
               } else {
                 Swal.fire({
@@ -485,7 +490,10 @@ body.about-gallery-modal-open { overflow: hidden; }
                 confirmButtonColor: '#d33'
               });
             })
-            .finally(() => { if (submitButton) submitButton.disabled = false; });
+            .finally(() => {
+              if (submitButton && window.ItourImageOptimizer) window.ItourImageOptimizer.setButtonBusy(submitButton, false);
+              else if (submitButton) submitButton.disabled = false;
+            });
         }
       }
 
@@ -497,6 +505,30 @@ body.about-gallery-modal-open { overflow: hidden; }
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script>
+
+function postAboutGalleryForm(formData, submitButton) {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open('POST', 'adabout.php');
+    request.responseType = 'json';
+    request.upload.addEventListener('load', () => {
+      if (submitButton && window.ItourImageOptimizer) {
+        window.ItourImageOptimizer.setButtonBusy(submitButton, true, 'Saving...');
+      }
+    });
+    request.addEventListener('load', () => {
+      const payload = request.response;
+      if (request.status < 200 || request.status >= 300 || !payload) {
+        reject(new Error(payload?.message || 'The server returned an invalid response.'));
+        return;
+      }
+      resolve(payload);
+    });
+    request.addEventListener('error', () => reject(new Error('The image upload was interrupted. Please try again.')));
+    request.addEventListener('abort', () => reject(new Error('The image upload was cancelled.')));
+    request.send(formData);
+  });
+}
 
 // Keep About dialogs isolated from the tab panels and independent of CDN timing.
 function mountAboutGalleryModals() {
@@ -570,31 +602,42 @@ const fileInputNew = document.getElementById('fileInputNew');
 const cropperContainerNew = document.getElementById('cropperContainerNew');
 const cropperImageNew = document.getElementById('cropperImageNew');
 let cropperNew;
+let aboutNewSourceUrl = '';
+let aboutNewPreviewUrl = '';
+let aboutNewCroppedFile = null;
 
 // ===========================
 // Handle File Selection
 // ===========================
-function handleNewFile(file) {
-  if (!file || !file.type.startsWith('image/')) {
-    Swal.fire({ icon: 'warning', title: 'Invalid file', text: 'Please choose a PNG, JPG, or WEBP image.', confirmButtonColor: '#2b7a66' });
+async function handleNewFile(file) {
+  const doneButton = document.getElementById('cropDoneNew');
+  if (!window.ItourImageOptimizer) {
+    Swal.fire({icon:'error',title:'Optimizer unavailable',text:'Refresh the page and try again.',confirmButtonColor:'#2b7a66'});
     return;
   }
-  const url = URL.createObjectURL(file);
-
-  // Show cropper, hide drag area content
-  cropperImageNew.src = url;
   cropperContainerNew.style.display = 'block';
   dragAreaNew.style.display = 'none';
-
-  // Destroy previous cropper if exists
-  if (cropperNew) cropperNew.destroy();
-
-  // Initialize cropper
-  cropperNew = new Cropper(cropperImageNew, {
-    aspectRatio: 1.5, // landscape 300/200
-    viewMode: 1,
-    autoCropArea: 1
-  });
+  window.ItourImageOptimizer.setButtonBusy(doneButton, true, 'Optimizing...');
+  try {
+    const optimizedFile = await window.ItourImageOptimizer.optimizeSource(file, 4096);
+    if (aboutNewSourceUrl) URL.revokeObjectURL(aboutNewSourceUrl);
+    aboutNewSourceUrl = URL.createObjectURL(optimizedFile);
+    cropperImageNew.src = aboutNewSourceUrl;
+    await new Promise((resolve, reject) => {
+      if (cropperImageNew.complete && cropperImageNew.naturalWidth) return resolve();
+      cropperImageNew.onload = resolve;
+      cropperImageNew.onerror = () => reject(new Error('The optimized image could not be previewed.'));
+    });
+    if (cropperNew) cropperNew.destroy();
+    cropperNew = new Cropper(cropperImageNew, {aspectRatio:1.5,viewMode:1,autoCropArea:1});
+  } catch (error) {
+    cropperContainerNew.style.display = 'none';
+    dragAreaNew.style.display = 'flex';
+    if (fileInputNew) fileInputNew.value = '';
+    Swal.fire({icon:'error',title:'Image not accepted',text:error?.message || 'The image could not be optimized.',confirmButtonColor:'#2b7a66'});
+  } finally {
+    window.ItourImageOptimizer.setButtonBusy(doneButton, false);
+  }
 }
 
 // ===========================
@@ -659,6 +702,11 @@ function openNewAboutGalleryItemModal() {
   if (cropperContainerNew) cropperContainerNew.style.display = 'none';
   if (cropperNew) cropperNew.destroy();
   cropperNew = null;
+  aboutNewCroppedFile = null;
+  if (aboutNewSourceUrl) URL.revokeObjectURL(aboutNewSourceUrl);
+  if (aboutNewPreviewUrl) URL.revokeObjectURL(aboutNewPreviewUrl);
+  aboutNewSourceUrl = '';
+  aboutNewPreviewUrl = '';
 
   // Show modal
   openAboutGalleryModal(addModal);
@@ -672,19 +720,28 @@ document.getElementById('addNewBtn')?.addEventListener('click', event => {
 // ===========================
 // Crop Done / Cancel
 // ===========================
-document.getElementById('cropDoneNew')?.addEventListener('click', () => {
+document.getElementById('cropDoneNew')?.addEventListener('click', async () => {
   if (!cropperNew) return;
-  const canvas = cropperNew.getCroppedCanvas({ width: 300, height: 200 });
-
-  // Show cropped image in drag area
-  const preview = document.getElementById('uploadPreviewNew');
-  preview.src = canvas.toDataURL('image/png');
-  preview.hidden = false;
-  dragAreaNew.querySelectorAll('.icon-unique, .text-unique').forEach(element => element.style.display = 'none');
-  dragAreaNew.style.display = 'flex';
-  cropperContainerNew.style.display = 'none';
-  if (cropperNew) cropperNew.destroy();
-  cropperNew = null;
+  const doneButton = document.getElementById('cropDoneNew');
+  window.ItourImageOptimizer.setButtonBusy(doneButton, true, 'Optimizing...');
+  try {
+    const blob = await window.ItourImageOptimizer.exportCrop(cropperNew, 'image/jpeg', {maxWidth:1920,maxHeight:1280});
+    aboutNewCroppedFile = new File([blob], `about_${Date.now()}.jpg`, {type:'image/jpeg'});
+    if (aboutNewPreviewUrl) URL.revokeObjectURL(aboutNewPreviewUrl);
+    aboutNewPreviewUrl = URL.createObjectURL(aboutNewCroppedFile);
+    const preview = document.getElementById('uploadPreviewNew');
+    preview.src = aboutNewPreviewUrl;
+    preview.hidden = false;
+    dragAreaNew.querySelectorAll('.icon-unique, .text-unique').forEach(element => element.style.display = 'none');
+    dragAreaNew.style.display = 'flex';
+    cropperContainerNew.style.display = 'none';
+    cropperNew.destroy();
+    cropperNew = null;
+  } catch (error) {
+    Swal.fire({icon:'error',title:'Image processing failed',text:error?.message || 'The image could not be optimized.',confirmButtonColor:'#2b7a66'});
+  } finally {
+    window.ItourImageOptimizer.setButtonBusy(doneButton, false);
+  }
 });
 
 document.getElementById('cropCancelNew')?.addEventListener('click', () => {
@@ -706,7 +763,9 @@ document.getElementById('saveNewBtn')?.addEventListener('click', () => {
     Swal.fire({ icon: 'warning', title: 'Title required', text: 'Enter a gallery title before adding the item.', confirmButtonColor: '#2b7a66' });
     return;
   }
-  submitButton.disabled = true;
+  if (window.ItourImageOptimizer) {
+    window.ItourImageOptimizer.setButtonBusy(submitButton, true, aboutNewCroppedFile ? 'Uploading...' : 'Saving...');
+  } else submitButton.disabled = true;
   const formData = new FormData();
   formData.append('csrf_token', <?= json_encode($adminContentCsrf, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>);
   formData.append('action', 'add');
@@ -714,40 +773,19 @@ document.getElementById('saveNewBtn')?.addEventListener('click', () => {
   formData.append('short_desc', document.getElementById('modalShortNew').value);
   formData.append('long_desc', document.getElementById('modalLongNew').value);
 
-  const imgTag = document.getElementById('uploadPreviewNew');
-  if (imgTag && !imgTag.hidden && imgTag.src.startsWith('data:')) {
-    fetch(imgTag.src)
-      .then(res => res.blob())
-      .then(blob => {
-        formData.append('image', blob, 'cropped.png');
-        sendAdd(formData);
-      }).catch(err => {
-        Swal.fire({
-          icon: 'error',
-          title: 'Error',
-          text: 'Failed to process image.',
-          confirmButtonColor: '#49A47A'
-        });
-        submitButton.disabled = false;
-      });
-  } else {
-    sendAdd(formData);
-  }
+  if (aboutNewCroppedFile) formData.append('image', aboutNewCroppedFile, aboutNewCroppedFile.name);
+  sendAdd(formData);
 
   function sendAdd(fd) {
-    fetch('adabout.php', { method: 'POST', body: fd })
-      .then(async res => {
-        const payload = await res.json().catch(() => null);
-        if (!res.ok || !payload) throw new Error(payload?.message || 'The server returned an invalid response.');
-        return payload;
-      })
+    postAboutGalleryForm(fd, submitButton)
       .then(data => {
         if(data.success){
+          closeAboutGalleryModal(document.getElementById('addModalUnique'));
           Swal.fire({
             icon: 'success',
             title: 'Success',
             text: 'About Gallery Added Successfully!',
-            confirmButtonColor: '#49A47A'
+            confirmButtonColor: '#246f59'
           }).then(()=> location.reload());
         } else {
           Swal.fire({
@@ -767,7 +805,10 @@ document.getElementById('saveNewBtn')?.addEventListener('click', () => {
           confirmButtonColor: '#d33'
         });
       })
-      .finally(() => { submitButton.disabled = false; });
+      .finally(() => {
+        if (window.ItourImageOptimizer) window.ItourImageOptimizer.setButtonBusy(submitButton, false);
+        else submitButton.disabled = false;
+      });
   }
 });
 

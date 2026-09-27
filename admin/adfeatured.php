@@ -33,10 +33,11 @@ function saveFeaturedMedia(string $fileField, string $mediaType): string {
     $targetDir = ItourEnsureProjectDirectory('uploads/featured');
 
     if ($mediaType === 'image') {
-        $validated = ItourSecureValidateUploadedImage($file, 8 * 1024 * 1024);
+        $validated = ItourSecureValidateUploadedImage($file, 40 * 1024 * 1024, 40000000, 12000, 12000);
         $filename = ItourSecureRandomFilename('featured', (string)$validated['extension']);
         $absoluteTarget = $targetDir . DIRECTORY_SEPARATOR . $filename;
-        ItourSecureReencodeImageFile($validated, $absoluteTarget);
+        ItourSecureOptimizeUploadedImage($validated, $absoluteTarget, 2400);
+        ItourAssertPublicMediaFile($absoluteTarget);
         return 'uploads/featured/' . $filename;
     }
 
@@ -261,6 +262,22 @@ $aboutItemCount = (int)$pdo->query("SELECT COUNT(*) FROM about_gallery")->fetchC
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>iTour Mercedes - Featured Admin</title>
+<script>
+(() => {
+  const storageKey = 'itour-content-management-active-tab';
+  const allowedTabs = ['featured', 'faq', 'about'];
+  const navigationEntry = performance.getEntriesByType?.('navigation')?.[0];
+  const isReload = navigationEntry ? navigationEntry.type === 'reload' : performance.navigation?.type === 1;
+  let initialTab = 'featured';
+  try {
+    if (isReload) initialTab = sessionStorage.getItem(storageKey) || 'featured';
+    else sessionStorage.removeItem(storageKey);
+  } catch (_error) {}
+  if (!allowedTabs.includes(initialTab)) initialTab = 'featured';
+  window.__itourInitialContentTab = initialTab;
+  document.documentElement.dataset.cmInitialTab = initialTab;
+})();
+</script>
 <link rel="icon" type="image/png" href="img/newlogo.png" />
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600&display=swap" rel="stylesheet" />
 <link href="https://unpkg.com/cropperjs@1.5.13/dist/cropper.min.css" rel="stylesheet"/>
@@ -677,8 +694,8 @@ section {
   display: inline-block;
   width: 24px;
   height: 24px;
-  border: 3px solid #2b7a66;
-  border-top: 3px solid transparent;
+  border: 3px solid rgba(255,255,255,.45);
+  border-top: 3px solid #fff;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
@@ -715,8 +732,10 @@ section {
 
 .custum-file-upload .text {
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  text-align: center;
 }
 
 .custum-file-upload .text span {
@@ -1593,6 +1612,7 @@ section {
   border: 1px solid #cfdfd9;
   border-radius: 18px;
   box-shadow: 0 28px 75px rgba(4, 32, 24, .3);
+  transition: width .18s ease, max-width .18s ease;
 }
 #af-media-modal .af-modal-header {
   min-height: 68px;
@@ -1685,8 +1705,11 @@ section {
 #af-media-modal .custum-file-upload .icon svg { width: 34px; height: 34px !important; fill: currentColor !important; }
 #af-media-modal .custum-file-upload .text span { color: #29483e; font-size: 12.5px; font-weight: 750; }
 #af-media-modal .custum-file-upload .text span::after {
-  content: "PNG, JPG, WEBP, or MP4"; display: block; margin-top: 6px;
-  color: #83948e; font-size: 9px; font-weight: 600; text-align: center;
+  content: none;
+}
+#af-media-modal .custum-file-upload .text small {
+  display: block; margin-top: 6px; color: #83948e;
+  font-size: 9px; font-weight: 600; line-height: 1.45; text-align: center;
 }
 #af-media-modal #af-preview-area {
   display: flex; align-items: center; justify-content: center;
@@ -1714,6 +1737,7 @@ section {
 #af-media-modal .af-modal.is-crop-step .af-upload-pane { display: none; }
 #af-media-modal .af-modal.is-crop-step .af-preview-pane { width: min(520px,100%); margin: 0 auto; }
 #af-media-modal .af-modal.is-crop-step #af-preview-area { height: 300px !important; }
+#af-media-modal .af-modal.is-preparing-crop #af-preview-area { visibility: hidden; }
 
 @media (max-width: 700px) {
   #af-media-modal { padding: 10px; }
@@ -1726,6 +1750,32 @@ section {
   #af-media-modal .custum-file-upload,
   #af-media-modal #af-preview-area { height: 190px !important; min-height: 190px; }
 }
+
+/* Match the saved refresh tab before the main script runs, preventing an active-tab flash. */
+html[data-cm-initial-tab="faq"] #cm-tab-featured.active,
+html[data-cm-initial-tab="about"] #cm-tab-featured.active {
+  color: #536b63;
+  background: transparent;
+  box-shadow: none;
+}
+html[data-cm-initial-tab="faq"] #cm-tab-faq,
+html[data-cm-initial-tab="about"] #cm-tab-about {
+  color: #fff;
+  background: #246f5a;
+  box-shadow: 0 4px 10px rgba(25, 93, 73, .2);
+}
+html[data-cm-initial-tab="faq"] #cm-panel-featured.active,
+html[data-cm-initial-tab="about"] #cm-panel-featured.active { display: none; }
+html[data-cm-initial-tab="faq"] #cm-panel-faq,
+html[data-cm-initial-tab="about"] #cm-panel-about { display: grid; gap: 12px; }
+html[data-cm-initial-tab="faq"] .cm-toolbar-context.active,
+html[data-cm-initial-tab="about"] .cm-toolbar-context.active { display: none; }
+html[data-cm-initial-tab="faq"] .cm-toolbar-context[data-context="faq"],
+html[data-cm-initial-tab="about"] .cm-toolbar-context[data-context="about"] { display: flex; }
+html[data-cm-initial-tab="faq"] #cmToolbarTitle,
+html[data-cm-initial-tab="about"] #cmToolbarTitle { font-size: 0; }
+html[data-cm-initial-tab="faq"] #cmToolbarTitle::after { content: "FAQ"; font-size: 24px; }
+html[data-cm-initial-tab="about"] #cmToolbarTitle::after { content: "About"; font-size: 24px; }
 
 /* Formal About gallery add/edit dialogs. */
 .modal-backdrop.show { opacity: .58; }
@@ -2107,7 +2157,8 @@ body.about-gallery-modal-open { overflow: hidden; }
             </svg>
           </div>
           <div class="text">
-            <span>Click or Drag to upload image</span>
+            <span>Click or drag to upload an image</span>
+            <small id="af-upload-hint">JPG, PNG, or WebP up to 40 MB · optimized before saving</small>
           </div>
           <input type="file" id="af-file-input">
         </label>
@@ -2127,8 +2178,8 @@ body.about-gallery-modal-open { overflow: hidden; }
     <div class="af-actions">
       <button id="af-media-cancel" class="af-btn secondary">Cancel</button>
       <button id="af-media-next" class="af-btn" disabled>
-        <span id="af-media-next-label">Next</span>
         <span class="af-loader" id="af-media-next-loader" style="display:none;"></span>
+        <span id="af-media-next-label">Next</span>
       </button>
     </div>
   </div>
@@ -2172,6 +2223,7 @@ body.about-gallery-modal-open { overflow: hidden; }
 
 <script src="https://unpkg.com/cropperjs@1.5.13/dist/cropper.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="js/image-upload-optimizer-v2.js?v=<?= (int)@filemtime('js/image-upload-optimizer-v2.js') ?>"></script>
 <script>
 // ==== JS for modal & upload ====
 
@@ -2179,6 +2231,8 @@ let currentMediaType = null;
 let currentMediaSlot = null;
 let cropper = null;
 let currentTextField = null;
+let featuredOptimizedFile = null;
+let featuredObjectUrl = '';
 
 const cmTabButtons = Array.from(document.querySelectorAll('.cm-tab-btn'));
 const cmTabPanels = Array.from(document.querySelectorAll('.cm-tab-panel'));
@@ -2186,6 +2240,7 @@ const cmSearchInput = document.getElementById('cmContentSearch');
 const cmSearchClear = document.getElementById('cmSearchClear');
 const cmToolbarTitle = document.getElementById('cmToolbarTitle');
 const cmToolbarContexts = Array.from(document.querySelectorAll('.cm-toolbar-context'));
+const cmActiveTabStorageKey = 'itour-content-management-active-tab';
 
 const cmSearchMeta = {
   featured: { selector: '.featured-box', placeholder: 'Search featured content...' },
@@ -2195,6 +2250,10 @@ const cmSearchMeta = {
 
 function setActiveContentTab(tabKey) {
   if (!cmSearchMeta[tabKey]) return;
+
+  try {
+    sessionStorage.setItem(cmActiveTabStorageKey, tabKey);
+  } catch (_error) {}
 
   if (tabKey !== 'about') {
     document.querySelectorAll('.modal-unique.is-open, .modal-unique.show').forEach(modalElement => {
@@ -2298,7 +2357,15 @@ if (cmAddFaqShortcut) {
   });
 }
 
-setActiveContentTab('featured');
+const cmInitialTab = window.__itourInitialContentTab || 'featured';
+setActiveContentTab(cmSearchMeta[cmInitialTab] ? cmInitialTab : 'featured');
+delete document.documentElement.dataset.cmInitialTab;
+
+window.addEventListener('pageshow', (event) => {
+  if (!event.persisted) return;
+  try { sessionStorage.removeItem(cmActiveTabStorageKey); } catch (_error) {}
+  setActiveContentTab('featured');
+});
 
 document.addEventListener('DOMContentLoaded', () => {
     const modal = document.getElementById('af-media-modal');
@@ -2309,6 +2376,22 @@ document.addEventListener('DOMContentLoaded', () => {
     const stepUpload = document.getElementById('step-upload');
     const stepCrop = document.getElementById('step-crop');
     const dropArea = document.getElementById('af-drop-area');
+    const loader = document.getElementById('af-media-next-loader');
+
+    const setMediaButtonBusy = (busy, label) => {
+        if (!nextBtn) return;
+        nextBtn.disabled = busy;
+        nextBtn.setAttribute('aria-busy', busy ? 'true' : 'false');
+        if (nextBtnLabel && label) nextBtnLabel.textContent = label;
+        if (loader) loader.style.display = busy ? 'inline-block' : 'none';
+    };
+
+    const showMediaError = (message) => Swal.fire({
+        icon: 'error',
+        title: 'File not accepted',
+        text: message,
+        confirmButtonColor: '#2b7a66'
+    });
 
     // --- OPEN MEDIA MODAL ---
     document.querySelectorAll('[data-open-media]').forEach(btn => {
@@ -2320,9 +2403,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const modalTitle = document.getElementById('af-media-modal-title');
             const previewTitle = document.querySelector('#af-preview-wrapper h3');
+            const uploadHint = document.getElementById('af-upload-hint');
             if (modalTitle) modalTitle.textContent = currentMediaType === 'video' ? 'Replace Video' : 'Replace Image';
             if (previewTitle) previewTitle.textContent = currentMediaType === 'video' ? 'Video preview' : 'Image preview';
             if (inputFile) inputFile.accept = currentMediaType === 'video' ? 'video/mp4,video/webm' : 'image/png,image/jpeg,image/webp';
+            if (uploadHint) uploadHint.textContent = currentMediaType === 'video'
+                ? 'MP4 or WebM up to 50 MB'
+                : 'JPG, PNG, or WebP up to 40 MB · optimized before saving';
 
             const stepIndicator = document.querySelector('.af-step-indicator');
             if(currentMediaType === 'video'){
@@ -2362,11 +2449,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- FILE SELECT / PREVIEW ---
     if(inputFile){
-        inputFile.addEventListener('change', e => {
+        inputFile.addEventListener('change', async e => {
             const file = e.target.files?.[0];
             if (!file) return;
 
-            if(nextBtn) nextBtn.disabled = false;
             const previewArea = document.getElementById('af-preview-area');
             const previewPath = document.getElementById('af-preview-path');
 
@@ -2374,72 +2460,128 @@ document.addEventListener('DOMContentLoaded', () => {
             if(previewPath) previewPath.innerText = file.name;
 
             if(currentMediaType === 'image'){
-                if(previewArea){
-                    const img = document.createElement('img');
-                    img.src = URL.createObjectURL(file);
-                    img.style.maxWidth = '100%';
-                    img.style.maxHeight = '100%';
-                    img.style.objectFit = 'cover';
-                    previewArea.appendChild(img);
+                if (!window.ItourImageOptimizer) {
+                    inputFile.value = '';
+                    return showMediaError('The image optimizer could not load. Refresh the page and try again.');
+                }
+                setMediaButtonBusy(true, 'Optimizing...');
+                try {
+                    featuredOptimizedFile = await window.ItourImageOptimizer.optimizeSource(file, 4096);
+                    if (featuredObjectUrl) URL.revokeObjectURL(featuredObjectUrl);
+                    featuredObjectUrl = URL.createObjectURL(featuredOptimizedFile);
+                    if(previewArea){
+                        const img = document.createElement('img');
+                        img.src = featuredObjectUrl;
+                        img.style.maxWidth = '100%';
+                        img.style.maxHeight = '100%';
+                        img.style.objectFit = 'cover';
+                        previewArea.appendChild(img);
+                    }
+                    setMediaButtonBusy(false, 'Next');
+                    nextBtn.disabled = false;
+                } catch (error) {
+                    featuredOptimizedFile = null;
+                    inputFile.value = '';
+                    if(previewArea) previewArea.innerHTML = '<div class="af-preview-empty">Choose a file to display it here.</div>';
+                    if(previewPath) previewPath.innerText = '';
+                    setMediaButtonBusy(false, 'Next');
+                    nextBtn.disabled = true;
+                    showMediaError(error?.message || 'The image could not be optimized. Please try another photo.');
                 }
             } else {
+                if (file.size > 50 * 1024 * 1024 || !['video/mp4', 'video/webm'].includes(file.type)) {
+                    inputFile.value = '';
+                    nextBtn.disabled = true;
+                    return showMediaError('Choose an MP4 or WebM video that is 50 MB or smaller.');
+                }
+                featuredOptimizedFile = null;
+                if (featuredObjectUrl) URL.revokeObjectURL(featuredObjectUrl);
+                featuredObjectUrl = URL.createObjectURL(file);
                 if(previewArea){
                     const vid = document.createElement('video');
-                    vid.src = URL.createObjectURL(file);
+                    vid.src = featuredObjectUrl;
                     vid.controls = true;
                     vid.style.width = '100%';
                     vid.style.height = '100%';
                     previewArea.appendChild(vid);
                 }
+                nextBtn.disabled = false;
             }
         });
     }
 
     // --- NEXT / SAVE BUTTON ---
     if(nextBtn){
-        nextBtn.addEventListener('click', () => {
+        nextBtn.addEventListener('click', async () => {
             if(!inputFile || !inputFile.files[0]) return;
 
             // STEP 1 → STEP 2 (IMAGE CROPPING)
             if(currentMediaType === 'image' && !cropper){
-                const file = inputFile.files[0];
+                if (!featuredOptimizedFile) return showMediaError('Choose an image before continuing.');
                 const previewArea = document.getElementById('af-preview-area');
-                if(previewArea) previewArea.innerHTML = '';
-
+                const modalContent = modal?.querySelector('.af-modal');
                 const img = document.createElement('img');
                 img.id = 'af-crop-image';
-                img.src = URL.createObjectURL(file);
+                img.src = featuredObjectUrl;
                 img.style.width = '100%';
                 img.style.height = 'auto';
-                if(previewArea) previewArea.appendChild(img);
+                setMediaButtonBusy(true, 'Preparing crop...');
+                try {
+                    await new Promise((resolve, reject) => {
+                        if (img.complete && img.naturalWidth) return resolve();
+                        img.onload = resolve;
+                        img.onerror = () => reject(new Error('The optimized image could not be previewed.'));
+                    });
 
-                cropper = new Cropper(img, {
-                    aspectRatio: 300 / 200,
-                    viewMode: 1,
-                    autoCropArea: 1,
-                });
-
-                if(stepUpload && stepCrop){
-                    stepUpload.classList.replace('phase-active','phase-completed');
-                    stepCrop.classList.replace('phase-inactive','phase-active');
+                    modalContent?.classList.add('is-preparing-crop');
+                    if(stepUpload && stepCrop){
+                        stepUpload.classList.replace('phase-active','phase-completed');
+                        stepCrop.classList.replace('phase-inactive','phase-active');
+                    }
+                    const previewHeading = document.querySelector('#af-preview-wrapper h3');
+                    const previewHint = document.querySelector('#af-preview-wrapper p');
+                    if(previewHeading) previewHeading.textContent = 'Crop image';
+                    if(previewHint) previewHint.textContent = 'Adjust the frame, then save your updated image.';
+                    if(dropArea) dropArea.style.display = 'none';
+                    resizeModalForCrop();
+                    await new Promise((resolve) => window.setTimeout(resolve, 190));
+                    if(previewArea) {
+                        previewArea.replaceChildren(img);
+                        await new Promise((resolve) => {
+                            cropper = new Cropper(img, {
+                                aspectRatio: 3 / 2,
+                                viewMode: 1,
+                                autoCropArea: 1,
+                                ready: resolve
+                            });
+                        });
+                    }
+                    modalContent?.classList.remove('is-preparing-crop');
+                    setMediaButtonBusy(false, 'Save');
+                    nextBtn.disabled = false;
+                    const cancelBtn = document.getElementById('af-media-cancel');
+                    if(cancelBtn) cancelBtn.innerText = 'Cancel';
+                } catch (error) {
+                    if (cropper) cropper.destroy();
+                    cropper = null;
+                    modalContent?.classList.remove('is-preparing-crop');
+                    resetModalSize();
+                    if(dropArea) dropArea.style.display = 'flex';
+                    if(stepUpload && stepCrop){
+                        stepUpload.classList.add('phase-active');
+                        stepUpload.classList.remove('phase-completed');
+                        stepCrop.classList.add('phase-inactive');
+                        stepCrop.classList.remove('phase-active');
+                    }
+                    setMediaButtonBusy(false, 'Next');
+                    nextBtn.disabled = false;
+                    showMediaError(error?.message || 'The cropper could not be prepared. Please try again.');
                 }
-                const previewHeading = document.querySelector('#af-preview-wrapper h3');
-                const previewHint = document.querySelector('#af-preview-wrapper p');
-                if(previewHeading) previewHeading.textContent = 'Crop image';
-                if(previewHint) previewHint.textContent = 'Adjust the frame, then save your updated image.';
-                if(dropArea) dropArea.style.display = 'none';
-                resizeModalForCrop();
-
-                if(nextBtnLabel) nextBtnLabel.textContent = 'Save';
-                const cancelBtn = document.getElementById('af-media-cancel');
-                if(cancelBtn) cancelBtn.innerText = 'Cancel';
                 return;
             }
 
             // STEP 2 → SAVE
-            nextBtn.disabled = true;
-            const loader = document.getElementById('af-media-next-loader');
-            if(loader) loader.style.display = 'inline-block';
+            setMediaButtonBusy(true, 'Saving...');
 
             const fd = new FormData();
             fd.append('csrf_token', <?= json_encode($adminContentCsrf, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>);
@@ -2465,7 +2607,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         icon: 'success',
                         title: `${currentMediaType.charAt(0).toUpperCase() + currentMediaType.slice(1)} Updated`,
                         html: `<p style="font-size:16px;margin-top:8px;">${currentMediaType.charAt(0).toUpperCase() + currentMediaType.slice(1)} updated successfully!</p>`,
-                        confirmButtonColor: '#49A47A',
+                        confirmButtonColor: '#246f59',
                         confirmButtonText: 'OK'
                     });
 
@@ -2480,26 +2622,22 @@ document.addEventListener('DOMContentLoaded', () => {
                     });
                 }
             };
-            if(currentMediaType==='image' && cropper){
-                cropper.getCroppedCanvas({width:300,height:200}).toBlob(blob => {
-                    fd.append('file',blob,inputFile.files[0].name);
-                    fetch(window.location.href,{method:'POST',body:fd})
-                    .then(r=>r.json())
-                    .then(j=>handleResponse(j,j.path))
-                    .finally(()=>{
-                        if(nextBtn) nextBtn.disabled = false;
-                        if(loader) loader.style.display='none';
-                    });
-                });
-            } else {
-                fd.append('file',inputFile.files[0]);
-                fetch(window.location.href,{method:'POST',body:fd})
-                .then(r=>r.json())
-                .then(j=>handleResponse(j,j.path))
-                .finally(()=>{
-                    if(nextBtn) nextBtn.disabled = false;
-                    if(loader) loader.style.display='none';
-                });
+            try {
+                if(currentMediaType==='image' && cropper){
+                    const blob = await window.ItourImageOptimizer.exportCrop(cropper, 'image/jpeg', {maxWidth:2400,maxHeight:1600});
+                    const extension = blob.type === 'image/jpeg' ? 'jpg' : blob.type.split('/')[1];
+                    fd.append('file', blob, `featured_${Date.now()}.${extension}`);
+                } else {
+                    fd.append('file',inputFile.files[0]);
+                }
+                const response = await fetch(window.location.href,{method:'POST',body:fd});
+                const result = await response.json();
+                handleResponse(result,result.path);
+            } catch (error) {
+                showMediaError(error?.message || 'The media could not be saved. Please try again.');
+            } finally {
+                setMediaButtonBusy(false, cropper ? 'Save' : (currentMediaType === 'video' ? 'Save' : 'Next'));
+                if (modal?.style.display !== 'none') nextBtn.disabled = false;
             }
         });
     }
@@ -2549,7 +2687,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         icon: 'success',
                         title: 'Text Updated',
                         html: `<p style="font-size:16px;margin-top:8px;">Text updated successfully!</p>`,
-                        confirmButtonColor: '#49A47A',
+                        confirmButtonColor: '#246f59',
                         confirmButtonText: 'OK'
                     });
                 } else {
@@ -2620,6 +2758,10 @@ function resetMediaModal(){
     const inputFile = document.getElementById('af-file-input');
     if(inputFile) inputFile.value='';
 
+    if(featuredObjectUrl) URL.revokeObjectURL(featuredObjectUrl);
+    featuredObjectUrl='';
+    featuredOptimizedFile=null;
+
     if(cropper) cropper.destroy();
     cropper=null;
     resetModalSize();
@@ -2630,6 +2772,8 @@ function resetMediaModal(){
     }
     const nextBtnLabel = document.getElementById('af-media-next-label');
     if(nextBtnLabel) nextBtnLabel.textContent='Next';
+    const loader = document.getElementById('af-media-next-loader');
+    if(loader) loader.style.display='none';
 
     const cancelBtn = document.getElementById('af-media-cancel');
     if(cancelBtn) cancelBtn.innerText='Cancel';
@@ -2650,7 +2794,7 @@ function resetMediaModal(){
 function resetModalSize(){
     const modalContent = document.querySelector('#af-media-modal .af-modal');
     if(modalContent){
-        modalContent.classList.remove('is-crop-step');
+        modalContent.classList.remove('is-crop-step','is-preparing-crop');
         modalContent.style.maxWidth='900px';
         modalContent.style.width='90%';
     }
@@ -2711,29 +2855,42 @@ document.querySelectorAll('.cmf-edit-btn').forEach(btn=>{
 });
 
 // Save edited FAQ
-document.getElementById('cmf-save-faq-btn').addEventListener('click',()=>{
+document.getElementById('cmf-save-faq-btn').addEventListener('click', async (event)=>{
+    const saveButton = event.currentTarget;
     const q = cmfModalQ.value.trim();
     const a = cmfModalA.value.trim();
+    if (!q || !a) {
+      Swal.fire({icon:'warning',title:'Complete the FAQ',text:'Enter both a question and an answer.',confirmButtonColor:'#246f59'});
+      return;
+    }
 
-    fetch(window.location.href,{
-        method:'POST',
-        headers:{'Content-Type':'application/x-www-form-urlencoded'},
-        body:new URLSearchParams({action:'update_faq', id:String(cmfCurrentId), question:q, answer:a, csrf_token:<?= json_encode($adminContentCsrf, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>})
-    }).then(r=>r.json()).then(res=>{
-        if(res.success){
-          const item = document.querySelector(`.cmf-faq-item[data-id='${cmfCurrentId}']`);
-          item.querySelector('strong').innerText = q;
-          item.querySelector('small').innerText = a;
+    if (window.ItourImageOptimizer) window.ItourImageOptimizer.setButtonBusy(saveButton, true, 'Saving...');
+    else saveButton.disabled = true;
+    try {
+      const response = await fetch(window.location.href,{
+          method:'POST',
+          headers:{'Content-Type':'application/x-www-form-urlencoded'},
+          body:new URLSearchParams({action:'update_faq', id:String(cmfCurrentId), question:q, answer:a, csrf_token:<?= json_encode($adminContentCsrf, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>})
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok || !result?.success) throw new Error(result?.message || 'The FAQ could not be updated.');
 
-          // Update edit button dataset
-          const editBtn = item.querySelector('.cmf-edit-btn');
-          editBtn.dataset.question = q;
-          editBtn.dataset.answer = a;
+      const item = document.querySelector(`.cmf-faq-item[data-id='${cmfCurrentId}']`);
+      item.querySelector('strong').innerText = q;
+      item.querySelector('small').innerText = a;
 
-          cmfModal.style.display = 'none';
-          Swal.fire({icon:'success',title:'FAQ Updated',confirmButtonColor:'#49A47A'});
-      }
-    });
+      const editBtn = item.querySelector('.cmf-edit-btn');
+      editBtn.dataset.question = q;
+      editBtn.dataset.answer = a;
+
+      cmfModal.style.display = 'none';
+      Swal.fire({icon:'success',title:'FAQ Updated',confirmButtonColor:'#246f59'});
+    } catch (error) {
+      Swal.fire({icon:'error',title:'Update failed',text:error?.message || 'The FAQ could not be updated.',confirmButtonColor:'#d33'});
+    } finally {
+      if (window.ItourImageOptimizer) window.ItourImageOptimizer.setButtonBusy(saveButton, false);
+      else saveButton.disabled = false;
+    }
 });
 
 // Add new FAQ
@@ -2760,7 +2917,7 @@ cmfAddBtn.addEventListener('click',()=>{
             if (faqCountValue) faqCountValue.textContent = updatedFaqCount;
             if (faqCountHint) faqCountHint.textContent = `${updatedFaqCount} question${updatedFaqCount === 1 ? '' : 's'} currently available.`;
             cmfNewQ.value=''; cmfNewA.value=''; cmfToggleAdd();
-            Swal.fire({icon:'success',title:'FAQ Added',confirmButtonColor:'#49A47A'});
+            Swal.fire({icon:'success',title:'FAQ Added',confirmButtonColor:'#246f59'});
         }else{
             Swal.fire({icon:'error',title:'Add Failed',confirmButtonColor:'#d33'});
         }

@@ -120,9 +120,9 @@
   }
 
   const mediaSettings = {
-    card: {title:'Crop card profile image', subtitle:'Create the compact image shown on destination cards.', ratio:4/3, width:1200, height:900, hint:'Card photos use a boxy 4:3 crop.'},
-    hero: {title:'Crop hero cover image', subtitle:'Create the wide banner shown at the top of destination details.', width:1920, hint:'Hero covers preserve the uploaded banner proportions.'},
-    gallery: {title:'Crop gallery photo', subtitle:'Prepare a supporting landscape photo for the destination gallery.', ratio:3/2, width:1200, height:800, hint:'Gallery photos use a landscape 3:2 crop.'}
+    card: {title:'Crop card profile image', subtitle:'Create the compact image shown on destination cards.', ratio:4/3, width:1600, height:1200, hint:'Card photos use a boxy 4:3 crop.'},
+    hero: {title:'Crop hero cover image', subtitle:'Create the wide banner shown at the top of destination details.', width:2400, height:1600, hint:'Hero covers preserve the uploaded banner proportions.'},
+    gallery: {title:'Crop gallery photo', subtitle:'Prepare a supporting landscape photo for the destination gallery.', ratio:3/2, width:1920, height:1280, hint:'Gallery photos use a landscape 3:2 crop.'}
   };
 
   function resetMediaPicker() {
@@ -133,6 +133,9 @@
     byId('mediaCropImage').removeAttribute('src');
     byId('mediaSelectStep').hidden = false; byId('mediaCropStep').hidden = true;
     byId('mediaBackButton').hidden = true; byId('applyCropButton').hidden = true;
+    window.ItourImageOptimizer?.setButtonBusy(byId('applyCropButton'), false);
+    const mediaHint = byId('mediaDropzone')?.querySelector('small');
+    if (mediaHint) mediaHint.textContent = 'JPG, PNG or WEBP · Up to 40 MB · Optimized before saving';
   }
 
   function openMediaPicker(kind) {
@@ -151,38 +154,55 @@
     else alert(message);
   }
 
-  function loadMediaFile(file) {
+  async function loadMediaFile(file) {
     if (!file) return;
-    if (!['image/jpeg','image/png','image/webp'].includes(file.type)) return rejectMedia('Choose a JPG, PNG, or WEBP image.');
-    if (file.size > 8 * 1024 * 1024) return rejectMedia('The image must be 8 MB or smaller.');
+    if (!window.ItourImageOptimizer) return rejectMedia('The image optimizer could not load. Please refresh and try again.');
     if (typeof window.Cropper !== 'function') return rejectMedia('The cropper could not load. Please refresh and try again.');
-    cropper?.destroy();
-    if (sourceObjectUrl) URL.revokeObjectURL(sourceObjectUrl);
-    sourceObjectUrl = URL.createObjectURL(file);
-    const cropImage = byId('mediaCropImage');
-    cropImage.onload = () => {
-      const setting = mediaSettings[mediaKind];
-      const cropRatio = mediaKind === 'hero'
-        ? cropImage.naturalWidth / cropImage.naturalHeight
-        : setting.ratio;
-      cropper = new Cropper(cropImage, {
-        aspectRatio: cropRatio,
-        viewMode: mediaKind === 'hero' ? 0 : 1,
-        dragMode: 'move',
-        autoCropArea: mediaKind === 'hero' ? 1 : .9,
-        responsive: true,
-        background: false,
-        guides: true,
-        center: true,
-        movable: true,
-        zoomable: true,
-        rotatable: true,
-        scalable: false
-      });
-    };
-    cropImage.src = sourceObjectUrl;
-    byId('mediaSelectStep').hidden = true; byId('mediaCropStep').hidden = false;
-    byId('mediaBackButton').hidden = false; byId('applyCropButton').hidden = false;
+    const applyButton = byId('applyCropButton');
+    applyButton.hidden = false;
+    window.ItourImageOptimizer.setButtonBusy(applyButton, true, 'Optimizing image...');
+    try {
+      const optimizedFile = await window.ItourImageOptimizer.optimizeSource(file, 4096);
+      cropper?.destroy();
+      if (sourceObjectUrl) URL.revokeObjectURL(sourceObjectUrl);
+      sourceObjectUrl = URL.createObjectURL(optimizedFile);
+      const cropImage = byId('mediaCropImage');
+      cropImage.onload = () => {
+        const setting = mediaSettings[mediaKind];
+        const cropRatio = mediaKind === 'hero'
+          ? cropImage.naturalWidth / cropImage.naturalHeight
+          : setting.ratio;
+        cropper = new Cropper(cropImage, {
+          aspectRatio: cropRatio,
+          viewMode: mediaKind === 'hero' ? 0 : 1,
+          dragMode: 'move',
+          autoCropArea: mediaKind === 'hero' ? 1 : .9,
+          responsive: true,
+          background: false,
+          guides: true,
+          center: true,
+          movable: true,
+          zoomable: true,
+          rotatable: true,
+          scalable: false,
+          ready: () => window.ItourImageOptimizer.setButtonBusy(applyButton, false)
+        });
+      };
+      cropImage.onerror = () => {
+        window.ItourImageOptimizer.setButtonBusy(applyButton, false);
+        applyButton.hidden = true;
+        byId('mediaSourceInput').value = '';
+        rejectMedia('The optimized image could not be previewed. Please try another photo.');
+      };
+      cropImage.src = sourceObjectUrl;
+      byId('mediaSelectStep').hidden = true; byId('mediaCropStep').hidden = false;
+      byId('mediaBackButton').hidden = false;
+    } catch (error) {
+      window.ItourImageOptimizer.setButtonBusy(applyButton, false);
+      applyButton.hidden = true;
+      byId('mediaSourceInput').value = '';
+      rejectMedia(error?.message || 'The image could not be optimized. Please try another photo.');
+    }
   }
 
   function putFileInInput(input, file, append = false) {
@@ -206,17 +226,15 @@
     const actions = {'zoom-in':()=>cropper.zoom(.1),'zoom-out':()=>cropper.zoom(-.1),'rotate-left':()=>cropper.rotate(-90),'rotate-right':()=>cropper.rotate(90),'reset':()=>cropper.reset()};
     actions[button.dataset.cropAction]?.();
   }));
-  byId('applyCropButton')?.addEventListener('click', () => {
+  byId('applyCropButton')?.addEventListener('click', async () => {
     if (!cropper) return;
     const setting = mediaSettings[mediaKind];
-    const canvasOptions = {width:setting.width,imageSmoothingEnabled:true,imageSmoothingQuality:'high',fillColor:'#fff'};
-    if (setting.height) canvasOptions.height = setting.height;
-    const canvas = cropper.getCroppedCanvas(canvasOptions);
-    byId('applyCropButton').disabled = true;
-    canvas.toBlob((blob) => {
-      byId('applyCropButton').disabled = false;
-      if (!blob) return rejectMedia('The cropped image could not be prepared.');
-      const file = new File([blob], `${mediaKind}_${Date.now()}.jpg`, {type:'image/jpeg'});
+    const applyButton = byId('applyCropButton');
+    window.ItourImageOptimizer.setButtonBusy(applyButton, true, 'Optimizing image...');
+    try {
+      const blob = await window.ItourImageOptimizer.exportCrop(cropper, 'image/jpeg', {maxWidth:setting.width, maxHeight:setting.height});
+      const extension = blob.type === 'image/jpeg' ? 'jpg' : blob.type.split('/')[1];
+      const file = new File([blob], `${mediaKind}_${Date.now()}.${extension}`, {type:blob.type});
       if (mediaKind === 'gallery') {
         putFileInInput(byId('galleryImages'), file, true); renderNewGallery();
       } else {
@@ -225,7 +243,11 @@
         putFileInInput(byId(inputId), file); preview(previewId, URL.createObjectURL(file));
       }
       mediaPicker.close();
-    }, 'image/jpeg', .9);
+    } catch (error) {
+      rejectMedia(error?.message || 'The cropped image could not be prepared.');
+    } finally {
+      window.ItourImageOptimizer.setButtonBusy(applyButton, false);
+    }
   });
 
   function filterDestinations() {
@@ -300,7 +322,10 @@
       && editor.dataset.originalStatus === 'published'
       && byId('fieldStatus').value === 'archived'
       && form.dataset.archiveConfirmed !== 'true';
-    if (!isArchiving) return;
+    if (!isArchiving) {
+      window.ItourImageOptimizer?.setButtonBusy(byId('editorSave'), true, 'Saving...');
+      return;
+    }
 
     event.preventDefault();
     const destinationName = byId('fieldTitle').value.trim() || 'This destination';
@@ -320,6 +345,7 @@
       }).then((result) => { if (result.isConfirmed) execute(); });
     } else if (confirm(`Archive ${destinationName}?`)) execute();
   });
+  window.addEventListener('pageshow', () => window.ItourImageOptimizer?.setButtonBusy(byId('editorSave'), false));
   if (Array.isArray(window.destinationNotice) && window.Swal) {
     const [icon, message] = window.destinationNotice;
     const archived = icon === 'success' && /archiv/i.test(message || '');
