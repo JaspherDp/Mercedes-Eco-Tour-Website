@@ -488,6 +488,7 @@ try {
     <button class="jg_guide-close" id="jg_guide_edit_close">✕</button>
     <form class="jg_guide-form" id="jg_guide_edit_form" method="POST">
       <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($adminGuideCsrf, ENT_QUOTES, 'UTF-8') ?>">
+      <input type="hidden" name="saveGuide" value="1">
       <div class="catalog-modal-heading">
         <h3 id="jg_guide_modal_title">Edit tour guide</h3>
         <p>Update the public profile details. All fields below are required.</p>
@@ -531,7 +532,7 @@ try {
 
       <div class="jg_guide-actions">
         <button type="button" class="jg_guide-cancel" id="jg_guide_cancel_btn">Cancel</button>
-        <button type="submit" name="saveGuide" class="jg_guide-save">Save guide</button>
+        <button type="submit" id="jg_guide_save_btn" class="jg_guide-save">Save guide</button>
       </div>
     </form>
   </div>
@@ -647,6 +648,17 @@ function jg_closeEditModal() {
 }
 document.getElementById('jg_guide_edit_close').addEventListener('click', jg_closeEditModal);
 document.getElementById('jg_guide_cancel_btn').addEventListener('click', jg_closeEditModal);
+
+const jgEditForm = document.getElementById('jg_guide_edit_form');
+const jgSaveButton = document.getElementById('jg_guide_save_btn');
+jgEditForm.addEventListener('submit', () => {
+  ItourImageOptimizer.setButtonBusy(jgSaveButton, true, 'Saving...');
+});
+window.addEventListener('pageshow', () => {
+  if (jgSaveButton.getAttribute('aria-busy') === 'true') {
+    ItourImageOptimizer.setButtonBusy(jgSaveButton, false);
+  }
+});
 
 // ------------------------------
 // Open Upload Modal
