@@ -5478,6 +5478,163 @@ body.ho-tourist-profile-open {
   font-size: 12px;
 }
 
+/* Room details modal */
+.ho-body .ho-room-details-modal-card {
+  width: min(1040px, calc(100vw - 36px));
+  max-height: min(94dvh, 820px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid #d5e4de;
+  border-radius: 18px;
+  background: #f6faf8;
+  box-shadow: 0 28px 80px rgba(7, 39, 29, .28);
+}
+.ho-body .ho-room-details-head {
+  min-height: 82px;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 15px 20px 15px 22px;
+  border-bottom: 1px solid #dfebe6;
+  background: linear-gradient(135deg, #f3faf7 0%, #fff 72%);
+}
+.ho-room-details-heading { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ho-room-details-heading-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 42px;
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(145deg, #2b8065, #176049);
+  box-shadow: 0 7px 16px rgba(28, 105, 79, .22);
+}
+.ho-room-details-heading-icon svg,
+.ho-room-details-block-icon svg,
+.ho-room-booking-card-meta svg { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.ho-room-details-heading-icon svg { width: 22px; height: 22px; }
+.ho-room-details-heading small,
+.ho-room-details-copy > small { display: block; color: #28745b; font-size: 8px; font-weight: 850; letter-spacing: .12em; }
+.ho-room-details-heading h3 { margin: 2px 0 1px; color: #173e32; font-size: 18px; letter-spacing: -.015em; }
+.ho-room-details-heading p { margin: 0; color: #71857d; font-size: 10px; }
+.ho-body .ho-room-details-head .ho-close {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 34px;
+  border: 0;
+  border-radius: 50%;
+  background: #edf4f1;
+  color: #3f5f54;
+  font-size: 22px;
+}
+.ho-body .ho-room-details-head .ho-close:hover { background: #dfece7; color: #164f3e; }
+.ho-body .ho-room-details-modal-card > .ho-room-details-layout {
+  min-height: 0;
+  flex: 1 1 auto;
+  grid-template-columns: minmax(0, .92fr) minmax(0, 1.08fr);
+  gap: 16px;
+  overflow-y: auto;
+  padding: 18px;
+  scrollbar-width: thin;
+  scrollbar-color: #68a590 transparent;
+}
+.ho-room-details-left { align-content: start; }
+.ho-room-details-media { position: relative; overflow: hidden; border-radius: 14px; background: #dfe9e5; box-shadow: 0 9px 24px rgba(23, 67, 53, .12); }
+.ho-body .ho-room-details-modal-card .ho-room-details-image { height: 250px; display: block; border: 0; border-radius: 0; transition: transform .3s ease; }
+.ho-room-details-media:hover .ho-room-details-image { transform: scale(1.015); }
+.ho-room-details-media:after { position: absolute; inset: auto 0 0; height: 40%; content: ''; background: linear-gradient(transparent, rgba(6, 34, 25, .42)); pointer-events: none; }
+.ho-room-details-status {
+  position: absolute;
+  z-index: 1;
+  left: 13px;
+  bottom: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 9px;
+  border: 1px solid rgba(255,255,255,.72);
+  border-radius: 999px;
+  color: #164f3e;
+  background: rgba(244,255,250,.94);
+  box-shadow: 0 5px 14px rgba(4,31,22,.16);
+  font-size: 9px;
+  font-weight: 850;
+  backdrop-filter: blur(7px);
+}
+.ho-room-details-status i { width: 7px; height: 7px; border-radius: 50%; background: #31a875; box-shadow: 0 0 0 3px rgba(49,168,117,.15); }
+.ho-room-details-status.booked { color: #815c12; background: rgba(255,250,235,.95); }
+.ho-room-details-status.booked i { background: #e2a934; box-shadow: 0 0 0 3px rgba(226,169,52,.16); }
+.ho-room-details-status.occupied { color: #245d87; background: rgba(240,248,255,.95); }
+.ho-room-details-status.occupied i { background: #4c95c9; box-shadow: 0 0 0 3px rgba(76,149,201,.16); }
+.ho-body .ho-room-details-modal-card .ho-room-details-meta {
+  gap: 14px;
+  padding: 16px;
+  border-color: #dce9e4;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgba(26, 72, 57, .05);
+}
+.ho-room-details-copy h4 { margin: 3px 0 4px; color: #173e32; font-size: 18px; letter-spacing: -.015em; }
+.ho-body .ho-room-details-modal-card .ho-room-details-copy p { color: #62766f; font-size: 11px; line-height: 1.55; }
+.ho-room-details-metrics { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; }
+.ho-room-details-metrics article { min-width: 0; padding: 10px 11px; border: 1px solid #e1ebe7; border-radius: 10px; background: #f7faf9; }
+.ho-room-details-metrics article.bookings { border-color: #cfe5dc; background: #edf7f3; }
+.ho-room-details-metrics small { display: block; margin-bottom: 3px; color: #74877f; font-size: 8px; font-weight: 750; text-transform: uppercase; letter-spacing: .06em; }
+.ho-room-details-metrics strong { display: block; overflow: hidden; color: #244c3f; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.ho-room-details-metrics article.bookings strong { color: #176247; font-size: 16px; }
+.ho-room-details-right { grid-template-rows: repeat(2, minmax(0, 1fr)); min-height: 0; }
+.ho-body .ho-room-details-modal-card .ho-room-details-block {
+  min-height: 190px;
+  align-content: start;
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+  border-color: #dce9e4;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgba(26, 72, 57, .05);
+}
+.ho-room-details-block-head { display: grid; grid-template-columns: auto minmax(0,1fr) auto; align-items: center; gap: 10px; padding: 13px 14px; border-bottom: 1px solid #e6efeb; background: #f9fbfa; }
+.ho-room-details-block-icon { width: 34px; height: 34px; display: grid; place-items: center; border-radius: 9px; color: #26745b; background: #e8f4ef; }
+.ho-room-details-block-icon svg { width: 17px; height: 17px; }
+.ho-room-details-block-head h4 { color: #1e4639; font-size: 12px; }
+.ho-room-details-block-head p { margin: 2px 0 0; color: #7b8d86; font-size: 8.5px; }
+.ho-room-details-block-head > strong { min-width: 27px; height: 27px; display: grid; place-items: center; border-radius: 8px; color: #1e694f; background: #e5f2ed; font-size: 11px; }
+.ho-body .ho-room-details-modal-card .ho-room-details-booking-list { max-height: 220px; gap: 8px; overflow-y: auto; padding: 11px; scrollbar-width: thin; scrollbar-color: #a6c8bb transparent; }
+.ho-body .ho-room-details-modal-card .ho-room-details-booking-list li { gap: 7px; padding: 10px 11px; border-color: #e0ebe7; border-radius: 10px; background: #fff; box-shadow: 0 3px 10px rgba(24, 69, 54, .04); }
+.ho-body .ho-room-details-modal-card .ho-room-details-booking-list li > strong { color: #203f35; font-size: 11px; }
+.ho-room-booking-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ho-room-booking-card-head span { color: #267259 !important; font-size: 8.5px !important; font-weight: 850; letter-spacing: .06em; }
+.ho-room-booking-card-head small { padding: 3px 6px; border-radius: 999px; color: #2b6c56 !important; background: #e9f4f0; font-size: 7.5px !important; font-weight: 800; text-transform: uppercase; }
+.ho-room-booking-card-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; }
+.ho-room-booking-card-meta span { display: inline-flex; align-items: center; gap: 5px; color: #667b73 !important; font-size: 8.5px !important; }
+.ho-room-booking-card-meta svg { width: 13px; height: 13px; color: #43826d; }
+.ho-room-details-empty { min-height: 120px; display: grid; place-items: center; align-content: center; gap: 4px; padding: 16px; color: #788b84; text-align: center; }
+.ho-room-details-empty > span { width: 34px; height: 34px; display: grid; place-items: center; margin-bottom: 2px; border-radius: 50%; color: #28745b; background: #e8f4ef; font-size: 17px; }
+.ho-room-details-empty strong { color: #426258; font-size: 10px; }
+.ho-room-details-empty p { margin: 0; font-size: 8.5px; }
+.ho-room-details-footer { min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: 0 0 auto; padding: 12px 18px; border-top: 1px solid #dfeae6; background: rgba(255,255,255,.97); }
+.ho-room-details-footer span { color: #71847d; font-size: 9px; }
+.ho-room-details-footer .ho-btn { min-width: 100px; min-height: 38px; border-color: #226c54; border-radius: 9px; background: #26775d; color: #fff; font-size: 10px; font-weight: 800; }
+.ho-room-details-footer .ho-btn:hover { border-color: #164f3d; background: #195f49; }
+
+@media (max-width: 760px) {
+  .ho-body .ho-room-details-modal-card { width: calc(100vw - 20px); max-height: calc(100dvh - 20px); border-radius: 15px; }
+  .ho-body .ho-room-details-head { min-height: 72px; padding: 12px 14px; }
+  .ho-room-details-heading-icon { width: 36px; height: 36px; flex-basis: 36px; }
+  .ho-room-details-heading p { display: none; }
+  .ho-body .ho-room-details-modal-card > .ho-room-details-layout { grid-template-columns: 1fr; padding: 12px; }
+  .ho-body .ho-room-details-modal-card .ho-room-details-image { height: 210px; }
+  .ho-room-details-right { grid-template-rows: auto; }
+  .ho-room-details-footer { padding: 10px 12px; }
+  .ho-room-details-footer span { display: none; }
+  .ho-room-details-footer .ho-btn { width: 100%; }
+}
+
 .ho-lifecycle-modal-card {
   width: min(760px, 95vw);
 }
@@ -9238,6 +9395,8 @@ body.ho-billing-open { overflow: hidden; }
   position: sticky;
   z-index: 2;
   bottom: 0;
+  align-items: center;
+  flex-wrap: wrap;
   margin: 3px -22px 0;
   padding: 14px 22px;
   border-top: 1px solid #e1ebe7;
@@ -9247,7 +9406,19 @@ body.ho-billing-open { overflow: hidden; }
 .ho-body .ho-room-modal-card .ho-room-actions .ho-btn { min-width: 108px; min-height: 39px; border-radius: 9px; font-size: 11px; font-weight: 800; }
 .ho-body .ho-room-modal-card .ho-room-actions .ho-btn.confirm { border-color: #226c54; background: #26775d; color: #fff; }
 .ho-body .ho-room-modal-card .ho-room-actions .ho-btn.cancel { border-color: #d4e0dc; background: #fff; color: #30473f; }
-.ho-body .ho-room-modal-card > .ho-room-archive-form { flex: 0 0 auto; margin: 0; padding: 10px 22px; border-top: 1px solid #e8f0ed; background: #fbfcfc; }
+.ho-body .ho-room-modal-card .ho-room-actions-main { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.ho-body .ho-room-modal-card .ho-room-actions .ho-room-archive-btn {
+  margin-right: auto;
+  border-color: #efc6ca;
+  background: #fff;
+  color: #a83a45;
+}
+.ho-body .ho-room-modal-card .ho-room-actions .ho-room-archive-btn:hover {
+  border-color: #d998a0;
+  background: #fff3f4;
+  color: #8e2933;
+}
+.ho-body .ho-room-modal-card > .ho-room-archive-form[hidden] { display: none !important; }
 
 /* Shared hotel-room drag image dialog */
 .ho-body #hoRoomImageUploadModal {

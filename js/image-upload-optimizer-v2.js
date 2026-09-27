@@ -114,31 +114,44 @@
     }, type, quality));
   }
 
-  async function encodeAdaptive(canvas, type) {
+  async function encodeAdaptive(canvas, type, options = {}) {
     if (type === 'image/png') return canvasBlob(canvas, type);
-    let blob = await canvasBlob(canvas, type, 0.90);
-    if (blob.size > PREFERRED_BYTES) blob = await canvasBlob(canvas, type, 0.86);
-    if (blob.size > PREFERRED_BYTES * 1.5) blob = await canvasBlob(canvas, type, 0.82);
+    const preferredBytes = Math.max(256 * 1024, Number(options.preferredBytes) || PREFERRED_BYTES);
+    const initialQuality = Math.min(0.92, Math.max(0.65, Number(options.quality) || 0.90));
+    let blob = await canvasBlob(canvas, type, initialQuality);
+    if (blob.size > preferredBytes) {
+      blob = await canvasBlob(canvas, type, Math.max(0.62, initialQuality - 0.08));
+    }
+    if (blob.size > preferredBytes * 1.5) {
+      blob = await canvasBlob(canvas, type, Math.max(0.58, initialQuality - 0.14));
+    }
     return blob;
   }
 
-  async function optimizeSource(file, maxLongEdge = 4096) {
+  async function optimizeSource(file, maxLongEdge = 4096, options = {}) {
     const decoded = await decode(file);
     try {
       validateDimensions(decoded.width, decoded.height);
+      const outputType = allowedTypes.includes(options.outputType) ? options.outputType : file.type;
+      const preferredBytes = Math.max(256 * 1024, Number(options.preferredBytes) || PREFERRED_BYTES);
       const scale = Math.min(1, maxLongEdge / Math.max(decoded.width, decoded.height));
-      if (scale === 1 && file.size <= PREFERRED_BYTES) return file;
+      if (scale === 1 && file.size <= preferredBytes && outputType === file.type && !options.forceEncode) return file;
       const width = Math.max(1, Math.round(decoded.width * scale));
       const height = Math.max(1, Math.round(decoded.height * scale));
       const canvas = document.createElement('canvas');
       canvas.width = width; canvas.height = height;
-      const context = canvas.getContext('2d', {alpha: file.type !== 'image/jpeg'});
+      const context = canvas.getContext('2d', {alpha: outputType !== 'image/jpeg'});
+      if (!context) throw error('The image canvas could not be created.', 'canvas');
+      if (outputType === 'image/jpeg') {
+        context.fillStyle = '#fff';
+        context.fillRect(0, 0, width, height);
+      }
       context.imageSmoothingEnabled = true;
       context.imageSmoothingQuality = 'high';
       context.drawImage(decoded.source, 0, 0, width, height);
-      const blob = await encodeAdaptive(canvas, file.type);
-      const extension = file.type === 'image/jpeg' ? 'jpg' : file.type.split('/')[1];
-      return new File([blob], `optimized.${extension}`, {type: file.type, lastModified: Date.now()});
+      const blob = await encodeAdaptive(canvas, outputType, {...options, preferredBytes});
+      const extension = outputType === 'image/jpeg' ? 'jpg' : outputType.split('/')[1];
+      return new File([blob], `optimized.${extension}`, {type: outputType, lastModified: Date.now()});
     } finally {
       decoded.close();
     }

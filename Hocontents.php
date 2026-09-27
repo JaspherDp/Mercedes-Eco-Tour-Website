@@ -29,10 +29,10 @@ function HoSaveUploadedContentImage(?array $file, string $absoluteDir, string $r
 {
     if (!$file || (int)($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE) return null;
     $validated = ItourSecureValidateUploadedImage($file, 40 * 1024 * 1024, 40000000, 12000, 12000);
-    $filename = 'content_' . date('YmdHis') . '_' . bin2hex(random_bytes(5)) . '.' . $validated['extension'];
+    $filename = 'content_' . date('YmdHis') . '_' . bin2hex(random_bytes(5)) . '.webp';
     $targetAbs = $absoluteDir . DIRECTORY_SEPARATOR . $filename;
     try {
-        ItourSecureOptimizeUploadedImage($validated, $targetAbs, 2400);
+        ItourSecureOptimizeUploadedImage($validated, $targetAbs, 1920, 'image/webp');
         ItourAssertPublicMediaFile($targetAbs);
     } catch (Throwable $exception) {
         if (is_file($targetAbs)) @unlink($targetAbs);
@@ -373,9 +373,6 @@ $contentCompletionPercent = (int)round(($completedContentSections / max(1, $tota
 
       <section class="ho-content">
         <div class="ho-content-workspace">
-          <?php if ($flash !== ''): ?>
-            <div class="ho-banner success"><?= htmlspecialchars($flash) ?></div>
-          <?php endif; ?>
           <?php if ($error !== ''): ?>
             <div class="ho-banner error"><?= htmlspecialchars($error) ?></div>
           <?php endif; ?>
@@ -832,9 +829,11 @@ $contentCompletionPercent = (int)round(($completedContentSections / max(1, $tota
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="js/image-upload-optimizer-v2.js?v=<?= (int)@filemtime(__DIR__ . '/js/image-upload-optimizer-v2.js') ?>"></script>
   <script>
     (function () {
+      const contentFlashMessage = <?= json_encode($flash, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
       const toggle = document.getElementById('hoNotifToggle');
       const panel = document.getElementById('hoNotifPanel');
       const markBtn = document.getElementById('hoNotifMarkRead');
@@ -1119,7 +1118,12 @@ $contentCompletionPercent = (int)round(($completedContentSections / max(1, $tota
         ItourImageOptimizer.setButtonBusy(propertyImageApply, true, 'Optimizing image...');
         if (propertyImageName) propertyImageName.textContent = 'Optimizing image...';
         try {
-          const optimizedFile = await ItourImageOptimizer.optimizeSource(file, 2400);
+          const optimizedFile = await ItourImageOptimizer.optimizeSource(file, 1920, {
+            outputType: 'image/webp',
+            preferredBytes: 2 * 1024 * 1024,
+            quality: 0.90,
+            forceEncode: true
+          });
           if (propertyImagePreviewUrl) URL.revokeObjectURL(propertyImagePreviewUrl);
           propertyImagePendingFile = optimizedFile;
           propertyImagePreviewUrl = URL.createObjectURL(optimizedFile);
@@ -1142,7 +1146,7 @@ $contentCompletionPercent = (int)round(($completedContentSections / max(1, $tota
         openPropertyImageUpload(scope?.querySelector('[data-room-image-input]'));
       });
       propertyImagePicker?.addEventListener('change', () => selectPropertyImage(propertyImagePicker.files?.[0]));
-      propertyImageChooseAgain?.addEventListener('click', () => propertyImagePicker?.click());
+      propertyImageChooseAgain?.addEventListener('click', resetPropertyImageUpload);
       [propertyImageCancel, propertyImageClose].forEach(button => button?.addEventListener('click', closePropertyImageUpload));
       propertyImageModal?.addEventListener('click', event => {
         if (event.target === propertyImageModal) closePropertyImageUpload();
@@ -1184,6 +1188,19 @@ $contentCompletionPercent = (int)round(($completedContentSections / max(1, $tota
         const row = target.closest('.ho-gallery-row');
         if (row) row.remove();
       });
+
+      if (contentFlashMessage) {
+        if (window.Swal) {
+          Swal.fire({
+            icon: 'success',
+            title: 'Updated successfully',
+            text: contentFlashMessage,
+            confirmButtonColor: '#2b7a66'
+          });
+        } else {
+          alert(contentFlashMessage);
+        }
+      }
     })();
   </script>
 </body>

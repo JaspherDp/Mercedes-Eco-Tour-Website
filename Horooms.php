@@ -1437,61 +1437,112 @@ $hoTopbarViewToggle = [
       $checkedInBookings = $card['checkedin_bookings'];
     ?>
     <div class="ho-modal" id="roomDetailsModal<?= (int)$room['id'] ?>" aria-hidden="true">
-      <div class="ho-modal-card ho-room-details-modal-card">
-        <div class="ho-modal-head">
-          <h3>Room Details - <?= htmlspecialchars((string)$room['room_name']) ?></h3>
-          <button type="button" class="ho-close" data-close-modal>&times;</button>
+      <div class="ho-modal-card ho-room-details-modal-card" role="dialog" aria-modal="true" aria-labelledby="roomDetailsTitle<?= (int)$room['id'] ?>">
+        <div class="ho-modal-head ho-room-details-head">
+          <div class="ho-room-details-heading">
+            <span class="ho-room-details-heading-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M4 19V8.5A2.5 2.5 0 0 1 6.5 6h11A2.5 2.5 0 0 1 20 8.5V19M3 19h18M7 6V4h10v2M8 11h3v3H8zm5 0h3v3h-3z"/></svg>
+            </span>
+            <div>
+              <small>ROOM OVERVIEW</small>
+              <h3 id="roomDetailsTitle<?= (int)$room['id'] ?>"><?= htmlspecialchars((string)$room['room_name']) ?></h3>
+              <p>Review room information, reservations, and current occupancy.</p>
+            </div>
+          </div>
+          <button type="button" class="ho-close" data-close-modal aria-label="Close room details">&times;</button>
         </div>
         <div class="ho-room-details-layout">
           <section class="ho-room-details-left">
-            <img src="<?= htmlspecialchars((string)$room['main_image_path']) ?>" alt="<?= htmlspecialchars((string)$room['room_name']) ?>" class="ho-room-details-image" />
+            <div class="ho-room-details-media">
+              <img src="<?= htmlspecialchars((string)$room['main_image_path']) ?>" alt="<?= htmlspecialchars((string)$room['room_name']) ?>" class="ho-room-details-image" />
+              <span class="ho-room-details-status <?= htmlspecialchars((string)$roomStatus['status']) ?>">
+                <i aria-hidden="true"></i><?= htmlspecialchars((string)$roomStatus['label']) ?>
+              </span>
+            </div>
             <div class="ho-room-details-meta">
-              <h4><?= htmlspecialchars((string)$room['room_name']) ?></h4>
-              <p><?= htmlspecialchars((string)$room['description']) ?></p>
-              <div class="ho-room-meta-inline">
-                <span>₱<?= number_format((float)$room['price'], 2) ?>/night</span>
-                <span>Capacity: <?= $capacityTotal ?></span>
-                <span>Status: <?= htmlspecialchars((string)$roomStatus['label']) ?></span>
+              <div class="ho-room-details-copy">
+                <small>ROOM PROFILE</small>
+                <h4><?= htmlspecialchars((string)$room['room_name']) ?></h4>
+                <p><?= htmlspecialchars((string)$room['description']) ?></p>
               </div>
-              <div class="ho-room-details-totals">
-                <strong>Total Bookings:</strong> <span><?= (int)$bookingCount ?></span>
+              <div class="ho-room-details-metrics">
+                <article>
+                  <small>Nightly rate</small>
+                  <strong>₱<?= number_format((float)$room['price'], 2) ?></strong>
+                </article>
+                <article>
+                  <small>Max guests</small>
+                  <strong><?= $capacityTotal ?></strong>
+                </article>
+                <article>
+                  <small>Guest mix</small>
+                  <strong><?= (int)$room['capacity_adults'] ?>A · <?= (int)$room['capacity_children'] ?>C</strong>
+                </article>
+                <article class="bookings">
+                  <small>Total bookings</small>
+                  <strong><?= (int)$bookingCount ?></strong>
+                </article>
               </div>
             </div>
           </section>
           <section class="ho-room-details-right">
             <div class="ho-room-details-block">
-              <h4>Current Bookings</h4>
+              <div class="ho-room-details-block-head">
+                <span class="ho-room-details-block-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg></span>
+                <div><h4>Current Bookings</h4><p>Active and upcoming room reservations</p></div>
+                <strong><?= count($currentBookings) ?></strong>
+              </div>
               <?php if (!empty($currentBookings)): ?>
                 <ul class="ho-room-details-booking-list">
                   <?php foreach ($currentBookings as $bookingItem): ?>
                     <li>
-                      <strong><?= htmlspecialchars((string)$bookingItem['booking_reference']) ?> - <?= htmlspecialchars((string)$bookingItem['guest_name']) ?></strong>
-                      <span><?= htmlspecialchars((string)$bookingItem['checkin_date']) ?> to <?= htmlspecialchars((string)$bookingItem['checkout_date']) ?></span>
-                      <small>Status: <?= htmlspecialchars(ucfirst((string)$bookingItem['booking_status'])) ?> • Payment: <?= htmlspecialchars(ucfirst((string)$bookingItem['payment_status'])) ?></small>
+                      <div class="ho-room-booking-card-head">
+                        <span><?= htmlspecialchars((string)$bookingItem['booking_reference']) ?></span>
+                        <small><?= htmlspecialchars(ucfirst((string)$bookingItem['booking_status'])) ?></small>
+                      </div>
+                      <strong><?= htmlspecialchars((string)$bookingItem['guest_name']) ?></strong>
+                      <div class="ho-room-booking-card-meta">
+                        <span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M8 3v4M16 3v4M3 10h18"/></svg><?= htmlspecialchars((string)$bookingItem['checkin_date']) ?> – <?= htmlspecialchars((string)$bookingItem['checkout_date']) ?></span>
+                        <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v12H4zM4 10h16M7 15h4"/></svg><?= htmlspecialchars(ucfirst((string)$bookingItem['payment_status'])) ?> payment</span>
+                      </div>
                     </li>
                   <?php endforeach; ?>
                 </ul>
               <?php else: ?>
-                <p class="ho-empty-inline">No current bookings for this room.</p>
+                <div class="ho-room-details-empty"><span aria-hidden="true">✓</span><strong>No current bookings</strong><p>This room has no active or upcoming reservations.</p></div>
               <?php endif; ?>
             </div>
             <div class="ho-room-details-block">
-              <h4>Checked-in Guests</h4>
+              <div class="ho-room-details-block-head">
+                <span class="ho-room-details-block-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3"/><path d="M5 20c.5-4 2.8-6 7-6s6.5 2 7 6"/></svg></span>
+                <div><h4>Checked-in Guests</h4><p>Guests currently occupying this room</p></div>
+                <strong><?= count($checkedInBookings) ?></strong>
+              </div>
               <?php if (!empty($checkedInBookings)): ?>
                 <ul class="ho-room-details-booking-list">
                   <?php foreach ($checkedInBookings as $bookingItem): ?>
                     <li>
-                      <strong><?= htmlspecialchars((string)$bookingItem['booking_reference']) ?> - <?= htmlspecialchars((string)$bookingItem['guest_name']) ?></strong>
-                      <span>Checked in: <?= htmlspecialchars((string)$bookingItem['checked_in_at']) ?></span>
-                      <small>Remaining balance: ₱<?= number_format((float)$bookingItem['remaining_balance'], 2) ?></small>
+                      <div class="ho-room-booking-card-head">
+                        <span><?= htmlspecialchars((string)$bookingItem['booking_reference']) ?></span>
+                        <small>Checked in</small>
+                      </div>
+                      <strong><?= htmlspecialchars((string)$bookingItem['guest_name']) ?></strong>
+                      <div class="ho-room-booking-card-meta">
+                        <span><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><?= htmlspecialchars((string)$bookingItem['checked_in_at']) ?></span>
+                        <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16v12H4zM4 10h16M7 15h4"/></svg>₱<?= number_format((float)$bookingItem['remaining_balance'], 2) ?> balance</span>
+                      </div>
                     </li>
                   <?php endforeach; ?>
                 </ul>
               <?php else: ?>
-                <p class="ho-empty-inline">No checked-in guests in this room.</p>
+                <div class="ho-room-details-empty"><span aria-hidden="true">○</span><strong>Room is not occupied</strong><p>No guests are currently checked in.</p></div>
               <?php endif; ?>
             </div>
           </section>
+        </div>
+        <div class="ho-room-details-footer">
+          <span>Room information is synchronized with your booking records.</span>
+          <button type="button" class="ho-btn confirm" data-close-modal>Close</button>
         </div>
       </div>
     </div>
@@ -2050,17 +2101,25 @@ $hoTopbarViewToggle = [
           </div>
 
           <div class="ho-room-actions">
-            <button type="button" class="ho-btn cancel" data-close-modal>Cancel</button>
-            <button type="submit" class="ho-btn confirm">Save Changes</button>
+            <?php if ((string)$room['status'] === 'active'): ?>
+              <button
+                type="submit"
+                class="ho-btn ho-room-archive-btn"
+                form="hoRoomArchiveForm<?= (int)$room['id'] ?>"
+              >Archive Room</button>
+            <?php endif; ?>
+            <div class="ho-room-actions-main">
+              <button type="button" class="ho-btn cancel" data-close-modal>Cancel</button>
+              <button type="submit" class="ho-btn confirm">Save Changes</button>
+            </div>
           </div>
         </form>
 
         <?php if ((string)$room['status'] === 'active'): ?>
-          <form method="post" class="ho-room-archive-form" data-archive-form>
+          <form method="post" id="hoRoomArchiveForm<?= (int)$room['id'] ?>" class="ho-room-archive-form" data-archive-form hidden>
             <input type="hidden" name="room_action" value="archive" />
             <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($hotelRoomCsrf, ENT_QUOTES, 'UTF-8') ?>" />
             <input type="hidden" name="room_id" value="<?= (int)$room['id'] ?>" />
-            <button type="submit" class="ho-btn cancel">Archive Room</button>
           </form>
         <?php endif; ?>
       </div>
@@ -2432,7 +2491,12 @@ $hoTopbarViewToggle = [
         ItourImageOptimizer.setButtonBusy(roomImageApply, true, 'Optimizing image...');
         if (roomImageName) roomImageName.textContent = 'Optimizing image...';
         try {
-          const optimizedFile = await ItourImageOptimizer.optimizeSource(file, 2400);
+          const optimizedFile = await ItourImageOptimizer.optimizeSource(file, 1600, {
+            outputType: 'image/webp',
+            preferredBytes: 1.5 * 1024 * 1024,
+            quality: 0.90,
+            forceEncode: true
+          });
           if (roomImagePreviewUrl) URL.revokeObjectURL(roomImagePreviewUrl);
           roomImagePendingFile = optimizedFile;
           roomImagePreviewUrl = URL.createObjectURL(optimizedFile);
@@ -2456,7 +2520,7 @@ $hoTopbarViewToggle = [
       });
 
       roomImagePicker?.addEventListener('change', () => selectRoomImage(roomImagePicker.files?.[0]));
-      roomImageChooseAgain?.addEventListener('click', () => roomImagePicker?.click());
+      roomImageChooseAgain?.addEventListener('click', resetRoomImageUpload);
       [roomImageCancel, roomImageClose].forEach(button => button?.addEventListener('click', closeRoomImageUpload));
       roomImageModal?.addEventListener('click', event => {
         if (event.target === roomImageModal) closeRoomImageUpload();
