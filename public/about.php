@@ -29,6 +29,7 @@ try {
   <link rel="stylesheet" href="styles/homepage.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/homepage.css') ?>" />
   <link rel="stylesheet" href="styles/about.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/about.css') ?>">
   <link rel="stylesheet" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>">
+  <link rel="stylesheet" href="styles/image-viewer.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/image-viewer.css') ?>">
   <script>document.documentElement.classList.add('itour-page-loading');</script>
   <link rel="stylesheet" href="styles/page-loader.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/page-loader.css') ?>">
   <script src="js/page-loader.js?v=<?= (int)@filemtime(__DIR__ . '/../js/page-loader.js') ?>"></script>
@@ -125,15 +126,18 @@ try {
 </section>
 
 
-<div class="image-modal" id="imageModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-  <div class="modal-content">
-    <button type="button" class="close" aria-label="Close story">&times;</button>
-    <img id="modalImage" src="" alt="">
-    <div class="modal-text">
+<div class="image-modal itour-image-viewer itour-image-viewer--story" id="imageModal" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+  <div class="modal-content itour-image-viewer__stage itour-image-viewer__stage--story">
+    <button type="button" class="close itour-image-viewer__close" aria-label="Close story"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    <button type="button" class="itour-image-viewer__nav itour-image-viewer__nav--prev" id="aboutModalPrev" aria-label="Previous image"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+    <img class="itour-image-viewer__image" id="modalImage" src="" alt="">
+    <button type="button" class="itour-image-viewer__nav itour-image-viewer__nav--next" id="aboutModalNext" aria-label="Next image"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+    <div class="modal-text itour-image-viewer__caption">
       <span>Mercedes tourism story</span>
       <h5 id="modalTitle"></h5>
       <p id="modalDesc"></p>
     </div>
+    <p class="itour-image-viewer__counter" id="aboutModalCounter" aria-live="polite"></p>
   </div>
 </div>
 

@@ -65,6 +65,7 @@ foreach (destinationRows($pdo, true) as $destination) {
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous" />
     <link rel="stylesheet" href="styles/destination.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/destination.css') ?>" />
     <link rel="stylesheet" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>" />
+    <link rel="stylesheet" href="styles/image-viewer.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/image-viewer.css') ?>" />
     <script>document.documentElement.classList.add('itour-page-loading');</script>
     <link rel="stylesheet" href="styles/page-loader.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/page-loader.css') ?>" />
     <script src="js/page-loader.js?v=<?= (int)@filemtime(__DIR__ . '/../js/page-loader.js') ?>"></script>
@@ -274,23 +275,23 @@ foreach (destinationRows($pdo, true) as $destination) {
   </div>
 
   <!-- Modals (unchanged) -->
-  <div id="des_imageModal" class="des_image-modal" aria-hidden="true">
-    <div class="des_image-modal-content">
-      <button class="des_image-close-btn" type="button" aria-label="Close image viewer" onclick="closeImageModal()">&times;</button>
-      <button class="des_nav-btn des_prev" type="button" aria-label="Previous image" onclick="changeImage(-1)">&lsaquo;</button>
-      <img id="des_imageModalImg" class="des_image-modal-img" src="" alt="" />
-      <button class="des_nav-btn des_next" type="button" aria-label="Next image" onclick="changeImage(1)">&rsaquo;</button>
-      <div class="des_image-counter" id="des_imageCounter"></div>
+  <div id="des_imageModal" class="des_image-modal itour-image-viewer" role="dialog" aria-modal="true" aria-label="Destination image viewer" aria-hidden="true">
+    <div class="des_image-modal-content itour-image-viewer__stage">
+      <button class="des_image-close-btn itour-image-viewer__close" type="button" aria-label="Close image viewer" onclick="closeImageModal()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      <button class="des_nav-btn des_prev itour-image-viewer__nav itour-image-viewer__nav--prev" type="button" aria-label="Previous image" onclick="changeImage(-1)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+      <img id="des_imageModalImg" class="des_image-modal-img itour-image-viewer__image" src="" alt="" />
+      <button class="des_nav-btn des_next itour-image-viewer__nav itour-image-viewer__nav--next" type="button" aria-label="Next image" onclick="changeImage(1)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+      <div class="des_image-counter itour-image-viewer__counter" id="des_imageCounter"></div>
     </div>
   </div>
 
-  <div id="des_resortModal" class="des_image-modal" aria-hidden="true">
-    <div class="des_image-modal-content">
-      <button class="des_image-close-btn" type="button" aria-label="Close resort image viewer" onclick="closeResortImageModal()">&times;</button>
-      <button class="des_nav-btn des_prev" type="button" aria-label="Previous resort image" onclick="changeResortImage(-1)">&lsaquo;</button>
-      <img id="des_resortModalImg" class="des_image-modal-img" src="" alt="" />
-      <button class="des_nav-btn des_next" type="button" aria-label="Next resort image" onclick="changeResortImage(1)">&rsaquo;</button>
-      <div class="des_image-counter" id="des_resortCounter"></div>
+  <div id="des_resortModal" class="des_image-modal itour-image-viewer" role="dialog" aria-modal="true" aria-label="Resort image viewer" aria-hidden="true">
+    <div class="des_image-modal-content itour-image-viewer__stage">
+      <button class="des_image-close-btn itour-image-viewer__close" type="button" aria-label="Close resort image viewer" onclick="closeResortImageModal()"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      <button class="des_nav-btn des_prev itour-image-viewer__nav itour-image-viewer__nav--prev" type="button" aria-label="Previous resort image" onclick="changeResortImage(-1)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+      <img id="des_resortModalImg" class="des_image-modal-img itour-image-viewer__image" src="" alt="" />
+      <button class="des_nav-btn des_next itour-image-viewer__nav itour-image-viewer__nav--next" type="button" aria-label="Next resort image" onclick="changeResortImage(1)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+      <div class="des_image-counter itour-image-viewer__counter" id="des_resortCounter"></div>
     </div>
   </div>
 

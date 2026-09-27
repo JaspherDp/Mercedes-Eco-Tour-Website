@@ -131,6 +131,7 @@ try {
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles/homepage.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/homepage.css') ?>">
   <link rel="stylesheet" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>">
+  <link rel="stylesheet" href="styles/image-viewer.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/image-viewer.css') ?>">
   <script>document.documentElement.classList.add('itour-page-loading');</script>
   <link rel="stylesheet" href="styles/page-loader.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/page-loader.css') ?>">
   <script src="js/page-loader.js?v=<?= (int)@filemtime(__DIR__ . '/../js/page-loader.js') ?>"></script>
@@ -576,9 +577,14 @@ try {
   </a>
  
   <div id="loginModal"></div>
-  <div id="feModal" class="fe-modal" role="dialog" aria-modal="true" aria-label="Gallery preview" hidden>
-    <button class="fe-close" type="button" aria-label="Close image preview">×</button>
-    <img class="fe-modal-content" id="feModalImg" alt="Expanded gallery view">
+  <div id="feModal" class="fe-modal itour-image-viewer" role="dialog" aria-modal="true" aria-label="Gallery preview" hidden>
+    <div class="itour-image-viewer__stage">
+      <button class="fe-close itour-image-viewer__close" type="button" aria-label="Close image preview"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      <button class="itour-image-viewer__nav itour-image-viewer__nav--prev" id="feModalPrev" type="button" aria-label="Previous image"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+      <img class="fe-modal-content itour-image-viewer__image" id="feModalImg" alt="Expanded gallery view">
+      <button class="itour-image-viewer__nav itour-image-viewer__nav--next" id="feModalNext" type="button" aria-label="Next image"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+      <p class="itour-image-viewer__counter" id="feModalCounter" aria-live="polite"></p>
+    </div>
   </div>
 
   <?php include 'footer.php'; ?>

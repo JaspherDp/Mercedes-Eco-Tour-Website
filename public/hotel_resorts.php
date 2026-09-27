@@ -3735,8 +3735,8 @@ function displayCarouselItems(elementId, items, type) {
                             </div>
 
                             <div class="service-card-facts" aria-label="Guide details">
-                                <span class="service-card-chip">${renderCardIcon("language")} Local guide</span>
-                                ${guideExperience > 0 ? `<span class="service-card-chip">${renderCardIcon("award")} ${guideExperience} yr${guideExperience === 1 ? "" : "s"} experience</span>` : ""}
+                                <span class="service-card-chip service-card-chip--fixed">${renderCardIcon("language")}<span class="service-card-chip-label">Local guide</span></span>
+                                ${guideExperience > 0 ? `<span class="service-card-chip service-card-chip--experience">${renderCardIcon("award")}<span class="service-card-chip-label">${guideExperience} yr${guideExperience === 1 ? "" : "s"} experience</span></span>` : ""}
                             </div>
 
                             <div class="carousel-card-price">

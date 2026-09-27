@@ -1,12 +1,12 @@
 body.complaint-modal-open { overflow: hidden; }
-.complaint-swal-container { z-index: 6100 !important; }
+.complaint-swal-container { z-index: 10070 !important; }
 
 .complaint-modal[hidden] { display: none !important; }
 
 .complaint-modal {
   position: fixed;
   inset: 0;
-  z-index: 5000;
+  z-index: 10060;
   display: grid;
   place-items: center;
   padding: 24px;

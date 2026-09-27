@@ -302,19 +302,7 @@ $hotel['owner_content'] = $ownerContent;
 if (!in_array($hotel['img'], $hotel['gallery_images'], true)) {
     array_unshift($hotel['gallery_images'], $hotel['img']);
 }
-$defaultGalleryFallback = [
-    "https://images.unsplash.com/photo-1566073771259-6a8506099945?auto=format&fit=crop&w=1400&q=80",
-    "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?auto=format&fit=crop&w=1400&q=80",
-    "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?auto=format&fit=crop&w=1400&q=80",
-    "https://images.unsplash.com/photo-1578683010236-d716f9a3f461?auto=format&fit=crop&w=1400&q=80",
-    "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?auto=format&fit=crop&w=1400&q=80",
-    "https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=1400&q=80",
-    "https://images.unsplash.com/photo-1590490360182-c33d57733427?auto=format&fit=crop&w=1400&q=80",
-    "https://images.unsplash.com/photo-1468824357306-a439d58ccb1c?auto=format&fit=crop&w=1400&q=80",
-    "https://images.unsplash.com/photo-1519821172141-b5d8a96dfec8?auto=format&fit=crop&w=1400&q=80",
-    "https://images.unsplash.com/photo-1584132967334-10e028bd69f7?auto=format&fit=crop&w=1400&q=80"
-];
-$hotel['gallery_images'] = array_values(array_unique(array_merge($hotel['gallery_images'], $defaultGalleryFallback)));
+$hotel['gallery_images'] = array_values(array_unique($hotel['gallery_images']));
 unset($hotel['amenities_json']);
 
 $roomRows = HoGetHotelRooms($pdo, $hotel['id'], true);
@@ -455,6 +443,7 @@ function ratingValue($value): float {
   <link rel="stylesheet" href="styles/hotel_details.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/hotel_details.css') ?>" />
   <link rel="stylesheet" href="styles/favorites.css" />
   <link rel="stylesheet" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>" />
+  <link rel="stylesheet" href="styles/image-viewer.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/image-viewer.css') ?>" />
   <style>
     /* hard-match hotel_resorts search bar + calendar on hotel_details */
     #detailsSearchWrap {
@@ -1089,7 +1078,7 @@ function ratingValue($value): float {
       .mobile-floating-reserve.is-visible{opacity:1;visibility:visible;pointer-events:auto;transform:translateY(0) scale(1);}
       body.hotel-floating-reserve-visible .back-to-top{
         right:14px;
-        bottom:max(16px,env(safe-area-inset-bottom));
+        bottom:max(74px,calc(env(safe-area-inset-bottom) + 62px));
       }
       body.no-scroll .mobile-floating-reserve,
       body.no-scroll .back-to-top{opacity:0;visibility:hidden;pointer-events:none;}
@@ -2291,13 +2280,13 @@ function ratingValue($value): float {
     </section>
   </main>
 
-  <div id="galleryModal" class="modal-backdrop">
-    <div class="modal-card gallery-modal-card">
-      <button type="button" class="modal-close" id="closeGalleryModal" aria-label="Close gallery">&times;</button>
-      <button type="button" class="gallery-nav prev" id="galleryPrev" aria-label="Previous image">&#8249;</button>
-      <img id="galleryModalImage" alt="Hotel gallery image" />
-      <button type="button" class="gallery-nav next" id="galleryNext" aria-label="Next image">&#8250;</button>
-      <p id="galleryCounter"></p>
+  <div id="galleryModal" class="modal-backdrop itour-image-viewer" role="dialog" aria-modal="true" aria-label="Hotel image viewer" aria-hidden="true">
+    <div class="modal-card gallery-modal-card itour-image-viewer__stage">
+      <button type="button" class="modal-close itour-image-viewer__close" id="closeGalleryModal" aria-label="Close gallery"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+      <button type="button" class="gallery-nav prev itour-image-viewer__nav itour-image-viewer__nav--prev" id="galleryPrev" aria-label="Previous image"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+      <img class="itour-image-viewer__image" id="galleryModalImage" alt="Hotel gallery image" />
+      <button type="button" class="gallery-nav next itour-image-viewer__nav itour-image-viewer__nav--next" id="galleryNext" aria-label="Next image"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+      <p class="itour-image-viewer__counter" id="galleryCounter"></p>
     </div>
   </div>
 
@@ -2557,26 +2546,35 @@ function ratingValue($value): float {
     function updateGalleryModal() {
       galleryModalImage.src = activeGalleryImages[currentGalleryIndex];
       galleryCounter.innerText = `${currentGalleryIndex + 1} / ${activeGalleryImages.length}`;
+      const hasMultipleImages = activeGalleryImages.length > 1;
+      galleryPrev.hidden = !hasMultipleImages;
+      galleryNext.hidden = !hasMultipleImages;
     }
 
     function openGallery(index) {
       currentGalleryIndex = Math.max(0, Math.min(index, activeGalleryImages.length - 1));
       updateGalleryModal();
-      galleryModal.classList.add("open");
+      galleryModal.classList.add("open", "is-open");
+      galleryModal.setAttribute("aria-hidden", "false");
       document.body.classList.add("no-scroll");
+      document.body.classList.add("itour-image-viewer-open");
     }
 
     function openGalleryWithSet(images, index) {
       activeGalleryImages = images;
       currentGalleryIndex = Math.max(0, Math.min(index, activeGalleryImages.length - 1));
       updateGalleryModal();
-      galleryModal.classList.add("open");
+      galleryModal.classList.add("open", "is-open");
+      galleryModal.setAttribute("aria-hidden", "false");
       document.body.classList.add("no-scroll");
+      document.body.classList.add("itour-image-viewer-open");
     }
 
     function closeGallery() {
-      galleryModal.classList.remove("open");
+      galleryModal.classList.remove("open", "is-open");
+      galleryModal.setAttribute("aria-hidden", "true");
       document.body.classList.remove("no-scroll");
+      document.body.classList.remove("itour-image-viewer-open");
     }
 
     const getShareUrl = () => {

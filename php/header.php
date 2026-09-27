@@ -294,10 +294,13 @@ if (
             $key = headSubnavDestinationKey((string)($destination['title'] ?? ''));
             $bookingCount = (int)($destinationBookingCounts[$key] ?? 0);
             if ($bookingCount > 0) {
+                $destinationSlug = trim((string)($destination['slug'] ?? ''));
                 $popularDestinations[] = [
                     'label' => 'Things to do in',
                     'title' => (string)($destination['title'] ?? 'Mercedes'),
-                    'url' => 'destination.php',
+                    'url' => $destinationSlug !== ''
+                        ? 'destination.php?destination=' . rawurlencode($destinationSlug)
+                        : 'destination.php',
                     'image' => (string)($destination['card_image'] ?? ''),
                     'booking_count' => $bookingCount,
                     'sort_order' => (int)($destination['sort_order'] ?? 0),
@@ -1543,6 +1546,17 @@ html {
 
   body .head-subnav-item.is-touch-open > .head-subnav-popup {
     display: block !important;
+  }
+
+  body .head-subnav-item--destinations:hover > .head-subnav-link,
+  body .head-subnav-item--destinations:focus-within > .head-subnav-link {
+    color: #111827 !important;
+    background: transparent !important;
+  }
+
+  body .head-subnav-item--destinations.is-touch-open > .head-subnav-link {
+    color: #155a49 !important;
+    background: #eef7f2 !important;
   }
 
   body .head-subnav-item:hover > .head-subnav-link .head-subnav-dropdown-icon,

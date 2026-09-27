@@ -554,7 +554,7 @@ footer {
 
 .developers-modal-open { overflow: hidden; }
 .developers-modal[hidden] { display: none; }
-.developers-modal { position: fixed; inset: 0; z-index: 5000; display: grid; place-items: center; padding: 24px; }
+.developers-modal { position: fixed; inset: 0; z-index: 10060; display: grid; place-items: center; padding: 24px; }
 .developers-modal__backdrop { position: absolute; inset: 0; background: rgba(8, 24, 34, .72); backdrop-filter: blur(5px); }
 .developers-modal__dialog { position: relative; width: min(100%, 1120px); max-height: min(820px, calc(100vh - 48px)); overflow: auto; border: 1px solid rgba(23, 80, 69, .18); border-radius: 20px; background: radial-gradient(circle at 100% 0, rgba(199, 235, 220, .34), transparent 34%), #f7faf9; box-shadow: 0 30px 90px rgba(0, 0, 0, .36); outline: 0; }
 .developers-modal__header { position: sticky; top: 0; z-index: 5; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 24px 34px; color: #fff; background: linear-gradient(125deg, #093f35, #176c59); box-shadow: 0 7px 20px rgba(4, 45, 35, .13); }

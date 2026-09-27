@@ -10,7 +10,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const modalTitle = document.getElementById('modalTitle');
   const modalDescription = document.getElementById('modalDesc');
   const closeButton = modal?.querySelector('.close');
+  const modalPrevious = document.getElementById('aboutModalPrev');
+  const modalNext = document.getElementById('aboutModalNext');
+  const modalCounter = document.getElementById('aboutModalCounter');
   let lastTrigger = null;
+  let currentStoryIndex = 0;
 
   const revealElements = Array.from(document.querySelectorAll('[data-about-reveal]'));
   if ('IntersectionObserver' in window && revealElements.length) {
@@ -80,32 +84,53 @@ document.addEventListener('DOMContentLoaded', () => {
   const closeStory = () => {
     if (!modal || !modal.classList.contains('show')) return;
     modal.classList.remove('show');
+    modal.classList.remove('is-open');
     modal.setAttribute('aria-hidden', 'true');
-    document.body.style.overflow = '';
+    document.body.classList.remove('itour-image-viewer-open');
     window.setTimeout(() => {
       modal.style.display = 'none';
       lastTrigger?.focus();
     }, 200);
   };
 
-  const openStory = (item) => {
+  const showStory = (index) => {
+    if (!galleryItems.length) return;
+    currentStoryIndex = (index + galleryItems.length) % galleryItems.length;
+    const item = galleryItems[currentStoryIndex];
     const image = item.querySelector('img');
-    if (!modal || !modalImage || !modalTitle || !modalDescription || !image) return;
-    lastTrigger = item;
+    if (!modalImage || !modalTitle || !modalDescription || !image) return;
     modalImage.src = image.currentSrc || image.src;
     modalImage.alt = item.dataset.title || image.alt || '';
     modalTitle.textContent = item.dataset.title || '';
     modalDescription.textContent = item.dataset.longdesc || item.dataset.desc || '';
+    if (modalCounter) modalCounter.textContent = `${currentStoryIndex + 1} / ${galleryItems.length}`;
+    const hasMultipleImages = galleryItems.length > 1;
+    if (modalPrevious) modalPrevious.hidden = !hasMultipleImages;
+    if (modalNext) modalNext.hidden = !hasMultipleImages;
+  };
+
+  const openStory = (index) => {
+    if (!modal || !galleryItems[index]) return;
+    lastTrigger = galleryItems[index];
+    showStory(index);
     modal.style.display = 'flex';
     modal.setAttribute('aria-hidden', 'false');
-    document.body.style.overflow = 'hidden';
+    document.body.classList.add('itour-image-viewer-open');
     requestAnimationFrame(() => {
       modal.classList.add('show');
+      modal.classList.add('is-open');
       closeButton?.focus();
     });
   };
 
-  galleryItems.forEach((item) => item.addEventListener('click', () => openStory(item)));
+  gallery?.addEventListener('click', (event) => {
+    const item = event.target.closest('.carousel-item');
+    if (!item || !gallery.contains(item)) return;
+    const index = galleryItems.indexOf(item);
+    if (index >= 0) openStory(index);
+  });
+  modalPrevious?.addEventListener('click', () => showStory(currentStoryIndex - 1));
+  modalNext?.addEventListener('click', () => showStory(currentStoryIndex + 1));
   closeButton?.addEventListener('click', closeStory);
   modal?.addEventListener('click', (event) => {
     if (event.target === modal) closeStory();
@@ -140,8 +165,6 @@ document.addEventListener('DOMContentLoaded', () => {
       startScrollLeft = gallery.scrollLeft;
       dragged = false;
       suppressClick = false;
-      gallery.setPointerCapture(pointerId);
-      gallery.classList.add('is-dragging');
     });
 
     gallery.addEventListener('pointermove', (event) => {
@@ -149,7 +172,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const coalescedEvents = event.getCoalescedEvents?.();
       const latestEvent = coalescedEvents?.[coalescedEvents.length - 1] || event;
       const distance = latestEvent.clientX - startX;
-      if (Math.abs(distance) > 5) dragged = true;
+      if (!dragged && Math.abs(distance) > 8) {
+        dragged = true;
+        gallery.setPointerCapture(pointerId);
+        gallery.classList.add('is-dragging');
+      }
       if (!dragged) return;
       event.preventDefault();
       pendingClientX = latestEvent.clientX;
@@ -189,6 +216,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
   document.addEventListener('keydown', (event) => {
     if (event.key === 'Escape') closeStory();
+    if (modal?.classList.contains('show') && event.key === 'ArrowLeft') showStory(currentStoryIndex - 1);
+    if (modal?.classList.contains('show') && event.key === 'ArrowRight') showStory(currentStoryIndex + 1);
     if (!modal?.classList.contains('show') && document.activeElement === gallery) {
       if (event.key === 'ArrowLeft') scrollGallery(-1);
       if (event.key === 'ArrowRight') scrollGallery(1);

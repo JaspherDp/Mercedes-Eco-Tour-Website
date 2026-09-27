@@ -1112,6 +1112,7 @@ place.activities.forEach(a => {
 
     modal.classList.add('open');
     modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('destination-map-open');
     renderDestinationMapResultsV2(destinations);
 
     if (typeof L === 'undefined') return;
@@ -1143,6 +1144,7 @@ place.activities.forEach(a => {
     if (!modal) return;
     modal.classList.remove('open');
     modal.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('destination-map-open');
   }
 
   function focusDestinationOnMapV2(placeId, animate = true) {
@@ -1632,17 +1634,24 @@ place.activities.forEach(a => {
     if (!modal || !image || !counter) return;
 
     image.src = currentGalleryImagesLocal[index];
-    counter.textContent = `${index + 1}/${currentGalleryImagesLocal.length}`;
-    modal.classList.add('visible');
+    counter.textContent = `${index + 1} / ${currentGalleryImagesLocal.length}`;
+    modal.querySelectorAll('.itour-image-viewer__nav').forEach((button) => {
+      button.hidden = currentGalleryImagesLocal.length < 2;
+    });
+    modal.classList.add('visible', 'is-open');
     modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('itour-image-viewer-open');
   }
 
   function closeImageModalV2() {
     const modal = document.getElementById('des_imageModal');
     if (!modal) return;
     if (modal.contains(document.activeElement)) document.activeElement.blur();
-    modal.classList.remove('visible');
+    modal.classList.remove('visible', 'is-open');
     modal.setAttribute('aria-hidden', 'true');
+    if (!document.querySelector('.itour-image-viewer.is-open')) {
+      document.body.classList.remove('itour-image-viewer-open');
+    }
   }
 
   function changeImageV2(direction) {
@@ -1651,7 +1660,7 @@ place.activities.forEach(a => {
     if (currentImageIndexLocal < 0) currentImageIndexLocal = currentGalleryImagesLocal.length - 1;
     if (currentImageIndexLocal >= currentGalleryImagesLocal.length) currentImageIndexLocal = 0;
     document.getElementById('des_imageModalImg').src = currentGalleryImagesLocal[currentImageIndexLocal];
-    document.getElementById('des_imageCounter').textContent = `${currentImageIndexLocal + 1}/${currentGalleryImagesLocal.length}`;
+    document.getElementById('des_imageCounter').textContent = `${currentImageIndexLocal + 1} / ${currentGalleryImagesLocal.length}`;
   }
 
   function openResortImageModalV2(resortIndex, imageIndex) {
@@ -1668,17 +1677,24 @@ place.activities.forEach(a => {
     if (!modal || !image || !counter) return;
 
     image.src = currentResortImagesLocal[imageIndex];
-    counter.textContent = `${imageIndex + 1}/${currentResortImagesLocal.length}`;
-    modal.classList.add('visible');
+    counter.textContent = `${imageIndex + 1} / ${currentResortImagesLocal.length}`;
+    modal.querySelectorAll('.itour-image-viewer__nav').forEach((button) => {
+      button.hidden = currentResortImagesLocal.length < 2;
+    });
+    modal.classList.add('visible', 'is-open');
     modal.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('itour-image-viewer-open');
   }
 
   function closeResortImageModalV2() {
     const modal = document.getElementById('des_resortModal');
     if (!modal) return;
     if (modal.contains(document.activeElement)) document.activeElement.blur();
-    modal.classList.remove('visible');
+    modal.classList.remove('visible', 'is-open');
     modal.setAttribute('aria-hidden', 'true');
+    if (!document.querySelector('.itour-image-viewer.is-open')) {
+      document.body.classList.remove('itour-image-viewer-open');
+    }
   }
 
   function changeResortImageV2(direction) {
@@ -1687,7 +1703,7 @@ place.activities.forEach(a => {
     if (currentResortIndexLocal < 0) currentResortIndexLocal = currentResortImagesLocal.length - 1;
     if (currentResortIndexLocal >= currentResortImagesLocal.length) currentResortIndexLocal = 0;
     document.getElementById('des_resortModalImg').src = currentResortImagesLocal[currentResortIndexLocal];
-    document.getElementById('des_resortCounter').textContent = `${currentResortIndexLocal + 1}/${currentResortImagesLocal.length}`;
+    document.getElementById('des_resortCounter').textContent = `${currentResortIndexLocal + 1} / ${currentResortImagesLocal.length}`;
   }
 
   function mapZoomChangeV2(delta) {

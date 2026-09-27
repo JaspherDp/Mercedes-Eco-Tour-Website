@@ -214,6 +214,10 @@
     const modal = document.getElementById("feModal");
     const modalImage = document.getElementById("feModalImg");
     const closeButton = modal?.querySelector(".fe-close");
+    const modalPrevious = document.getElementById("feModalPrev");
+    const modalNext = document.getElementById("feModalNext");
+    const modalCounter = document.getElementById("feModalCounter");
+    const modalTriggers = Array.from(document.querySelectorAll("[data-gallery-image]"));
     if (!slides.length) return;
 
     let current = 0;
@@ -224,6 +228,8 @@
     let swipeStartY = 0;
     let swipeLastX = 0;
     let suppressSwipeClickUntil = 0;
+    let swipeDragging = false;
+    let modalCurrent = 0;
 
     const show = (index) => {
       current = (index + slides.length) % slides.length;
@@ -248,21 +254,37 @@
       }
     };
 
-    const openModal = (imageUrl, trigger) => {
-      if (!modal || !modalImage || !imageUrl) return;
+    const updateModal = (index) => {
+      if (!modalImage || !modalTriggers.length) return;
+      modalCurrent = (index + modalTriggers.length) % modalTriggers.length;
+      const activeTrigger = modalTriggers[modalCurrent];
+      modalImage.src = activeTrigger.dataset.galleryImage || "";
+      modalImage.alt = activeTrigger.querySelector("img")?.alt || "Expanded gallery view";
+      if (modalCounter) modalCounter.textContent = `${modalCurrent + 1} / ${modalTriggers.length}`;
+      const hasMultipleImages = modalTriggers.length > 1;
+      if (modalPrevious) modalPrevious.hidden = !hasMultipleImages;
+      if (modalNext) modalNext.hidden = !hasMultipleImages;
+    };
+
+    const openModal = (index, trigger) => {
+      if (!modal || !modalImage || !modalTriggers.length) return;
       lastFocused = trigger;
       stop();
-      modalImage.src = imageUrl;
+      updateModal(index);
       modal.hidden = false;
-      document.body.style.overflow = "hidden";
+      modal.classList.add("is-open");
+      modal.setAttribute("aria-hidden", "false");
+      document.body.classList.add("itour-image-viewer-open");
       closeButton?.focus();
     };
 
     const closeModal = () => {
       if (!modal || modal.hidden) return;
+      modal.classList.remove("is-open");
       modal.hidden = true;
+      modal.setAttribute("aria-hidden", "true");
       modalImage?.removeAttribute("src");
-      document.body.style.overflow = "";
+      document.body.classList.remove("itour-image-viewer-open");
       start();
       lastFocused?.focus();
     };
@@ -272,16 +294,20 @@
       start();
     }));
 
-    document.querySelectorAll("[data-gallery-image]").forEach((trigger) => {
-      trigger.addEventListener("click", () => openModal(trigger.dataset.galleryImage, trigger));
+    modalTriggers.forEach((trigger, index) => {
+      trigger.addEventListener("click", () => openModal(index, trigger));
     });
 
+    modalPrevious?.addEventListener("click", () => updateModal(modalCurrent - 1));
+    modalNext?.addEventListener("click", () => updateModal(modalCurrent + 1));
     closeButton?.addEventListener("click", closeModal);
     modal?.addEventListener("click", (event) => {
       if (event.target === modal) closeModal();
     });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") closeModal();
+      if (!modal?.hidden && event.key === "ArrowLeft") updateModal(modalCurrent - 1);
+      if (!modal?.hidden && event.key === "ArrowRight") updateModal(modalCurrent + 1);
     });
 
     const finishSwipe = (event, cancelled = false) => {
@@ -297,6 +323,7 @@
         slider.releasePointerCapture(swipePointerId);
       }
       swipePointerId = null;
+      swipeDragging = false;
       slider?.classList.remove("is-swiping");
 
       if (isHorizontalSwipe) {
@@ -313,8 +340,7 @@
       swipeStartY = event.clientY;
       swipeLastX = event.clientX;
       suppressSwipeClickUntil = 0;
-      slider.classList.add("is-swiping");
-      slider.setPointerCapture?.(event.pointerId);
+      swipeDragging = false;
       stop();
     });
 
@@ -323,6 +349,11 @@
       swipeLastX = event.clientX;
       const distanceX = swipeLastX - swipeStartX;
       const distanceY = event.clientY - swipeStartY;
+      if (!swipeDragging && Math.abs(distanceX) > 8 && Math.abs(distanceX) > Math.abs(distanceY)) {
+        swipeDragging = true;
+        slider.classList.add("is-swiping");
+        slider.setPointerCapture?.(event.pointerId);
+      }
       if (Math.abs(distanceX) > Math.abs(distanceY) && Math.abs(distanceX) > 8 && event.cancelable) {
         event.preventDefault();
       }

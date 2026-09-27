@@ -6936,4 +6936,39 @@ body.hotel-map-open {
     height: 11px;
     flex-basis: 11px;
   }
+
+  #carouselGuides {
+    align-items: stretch;
+  }
+
+  #carouselGuides .service-card--guide {
+    height: auto;
+    align-self: stretch;
+  }
+
+  #carouselGuides .service-card-facts {
+    min-height: 19px;
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+
+  #carouselGuides .service-card-chip {
+    min-width: 0;
+    max-width: none;
+  }
+
+  #carouselGuides .service-card-chip--fixed {
+    flex: 0 0 auto;
+  }
+
+  #carouselGuides .service-card-chip--experience {
+    flex: 1 1 auto;
+  }
+
+  #carouselGuides .service-card-chip-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
