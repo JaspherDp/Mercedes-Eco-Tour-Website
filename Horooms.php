@@ -2033,7 +2033,7 @@ $hoTopbarViewToggle = [
     <div class="ho-modal" id="roomModal<?= (int)$room['id'] ?>" aria-hidden="true">
       <div class="ho-modal-card ho-room-modal-card">
         <div class="ho-modal-head">
-          <div><h3>Edit Room</h3><p>Update room details, capacity, pricing, and photos.</p></div>
+          <div><h3>Edit Room “<?= htmlspecialchars((string)$room['room_name']) ?>”</h3><p>Update room details, capacity, pricing, and photos.</p></div>
           <button type="button" class="ho-close" data-close-modal>&times;</button>
         </div>
         <form method="post" class="ho-room-form" enctype="multipart/form-data">
@@ -2563,7 +2563,11 @@ $hoTopbarViewToggle = [
           if (!hasImageUpload || form.dataset.imageSubmitting === 'true') return;
           event.preventDefault();
           form.dataset.imageSubmitting = 'true';
-          const submitButton = form.querySelector('button[type="submit"]');
+          const submittedButton = event.submitter instanceof HTMLButtonElement && event.submitter.form === form
+            ? event.submitter
+            : null;
+          const submitButton = submittedButton
+            || form.querySelector('.ho-room-actions-main button[type="submit"], .ho-room-actions button.confirm[type="submit"]');
           ItourImageOptimizer.setButtonBusy(submitButton, true, 'Uploading images...');
           requestAnimationFrame(() => form.submit());
         });
