@@ -138,6 +138,13 @@ if ($isHotelAdminStaff) {
 if (!balanceCheckoutTableExists($pdo)) {
     balanceCheckoutResponse(503, ['success' => false, 'message' => 'Online payments are not ready because the payment migration has not been applied.']);
 }
+try {
+    $service = PayMongoService::fromEnvironment();
+    if (!$service->isConfigured()) throw new LogicException('PayMongo keys are not configured.');
+} catch (Throwable $exception) {
+    error_log('Balance checkout configuration error: ' . $exception->getMessage());
+    balanceCheckoutResponse(503, ['success' => false, 'message' => 'Online payment configuration is incomplete.']);
+}
 
 $requestedType = strtolower(trim((string)($_POST['type'] ?? '')));
 try {
@@ -242,6 +249,11 @@ if (($_POST['action'] ?? '') === 'cancel_pending') {
     }
 
     $pendingMetadata = json_decode((string)($pendingTransaction['metadata'] ?? ''), true);
+    try {
+        PaymentHelper::assertPayMongoTransactionMode($pendingMetadata);
+    } catch (Throwable $exception) {
+        balanceCheckoutResponse(409, ['success' => false, 'message' => 'This pending payment belongs to a different payment environment.']);
+    }
     $allowedSources = $isHotelAdminStaff
         ? ['admin_booking_payment', 'hotel_checkin_payment', 'hotel_checkout_payment']
         : [$isOperatorStaff ? 'operator_booking_payment' : ($isAdminStaff ? 'admin_booking_payment' : 'tourist_profile_balance')];
@@ -266,7 +278,7 @@ if (($_POST['action'] ?? '') === 'cancel_pending') {
     $checkoutSessionId = trim((string)($pendingTransaction['provider_checkout_session_id'] ?? ''));
     if ($checkoutSessionId !== '') {
         try {
-            PayMongoService::fromEnvironment()->expireCheckoutSession($checkoutSessionId);
+            $service->expireCheckoutSession($checkoutSessionId);
         } catch (Throwable $exception) {
             error_log('PayMongo pending checkout cancellation failed: ' . $exception->getMessage());
             balanceCheckoutResponse(409, [
@@ -519,6 +531,7 @@ try {
     $existing = $existingStmt->fetch(PDO::FETCH_ASSOC);
 
     if ($existing) {
+        PaymentHelper::assertPayMongoTransactionMode($existing['metadata'] ?? null);
         $existingMetadata = json_decode((string)($existing['metadata'] ?? ''), true);
         $existingSource = is_array($existingMetadata) ? (string)($existingMetadata['source'] ?? '') : '';
         $expectedSource = $isStaffPayment ? $staffPaymentSource : 'tourist_profile_balance';
@@ -609,10 +622,12 @@ try {
             ]);
         }
     } else {
+        PaymentHelper::assertPayMongoBookingMode($pdo, $bookingDomain, $bookingId);
         $merchantReference = 'PM-' . strtoupper(bin2hex(random_bytes(12)));
         $idempotencyKey = 'checkout_' . bin2hex(random_bytes(24));
         $returnToken = bin2hex(random_bytes(32));
         $metadataPayload = [
+            'paymongo_mode' => PaymentHelper::payMongoMode(),
             'source' => $isStaffPayment ? $staffPaymentSource : 'tourist_profile_balance',
             'booking_domain' => $bookingDomain,
             'booking_id' => (string)$bookingId,
@@ -668,7 +683,7 @@ try {
             $isHotelAdminStaff ? $requestHotelAdminId : ($isOperatorStaff ? $requestOperatorId : ($isAdminStaff ? (int)($_SESSION['admin_id'] ?? 0) : $touristId)),
             $isHotelAdminStaff ? (string)($_SESSION['hotel_admin_name'] ?? 'Hotel Administrator') : ($isOperatorStaff ? (string)($_SESSION['operator_name'] ?? 'Tour Operator') : ($isAdminStaff ? (string)($_SESSION['admin_name'] ?? 'Administrator') : ($touristName !== '' ? $touristName : 'Tourist'))),
             'Online Balance Payment Initiated',
-            'Initiated PayMongo test payment ' . $merchantReference . ' for booking ' . $bookingReference . '.',
+            'Initiated PayMongo ' . PaymentHelper::payMongoMode() . ' payment ' . $merchantReference . ' for booking ' . $bookingReference . '.',
             'Payments',
             $bookingId
         );
@@ -742,6 +757,7 @@ try {
         'show_description' => true,
         'show_line_items' => true,
         'metadata' => [
+            'paymongo_mode' => PaymentHelper::payMongoMode(),
             'payment_transaction_id' => (string)$transactionId,
             'booking_domain' => $bookingDomain,
             'booking_id' => (string)$bookingId,
@@ -753,7 +769,6 @@ try {
         $attributes['billing'] = $billing;
     }
 
-    $service = PayMongoService::fromEnvironment();
     $response = $service->createCheckoutSession($attributes, $idempotencyKey);
     $resource = is_array($response['data'] ?? null) ? $response['data'] : [];
     $resourceAttributes = is_array($resource['attributes'] ?? null) ? $resource['attributes'] : [];
@@ -768,27 +783,7 @@ try {
         throw new RuntimeException('PayMongo returned an invalid Checkout Session.');
     }
 
-    $save = $pdo->prepare(
-        "UPDATE payment_transactions
-         SET provider_checkout_session_id = ?, checkout_url = ?, status = 'pending',
-             failed_at = NULL, failure_code = NULL, failure_message = NULL
-         WHERE payment_transaction_id = ? AND tourist_id = ?"
-    );
-    $save->execute([$checkoutSessionId, $checkoutUrl, $transactionId, $touristId]);
-    if ($save->rowCount() !== 1) {
-        $verifySave = $pdo->prepare(
-            "SELECT provider_checkout_session_id, checkout_url
-             FROM payment_transactions
-             WHERE payment_transaction_id = ? AND tourist_id = ?"
-        );
-        $verifySave->execute([$transactionId, $touristId]);
-        $saved = $verifySave->fetch(PDO::FETCH_ASSOC);
-        if (!$saved
-            || !hash_equals($checkoutSessionId, (string)$saved['provider_checkout_session_id'])
-            || !hash_equals($checkoutUrl, (string)$saved['checkout_url'])) {
-            throw new RuntimeException('The Checkout Session could not be linked to its local transaction.');
-        }
-    }
+    PaymentHelper::linkPayMongoCheckout($pdo, $transactionId, $touristId, $checkoutSessionId, $checkoutUrl);
 
     $phoneNotification = $isStaffPayment
         ? ($isHotelAdminStaff

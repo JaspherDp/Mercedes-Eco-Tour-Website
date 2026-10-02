@@ -13,7 +13,8 @@ final class PayMongoException extends RuntimeException
         private array $response = [],
         ?Throwable $previous = null
     ) {
-        parent::__construct($message, $httpStatus, $previous);
+        $this->response = PaymentHelper::sanitizePayMongoDiagnostic($response);
+        parent::__construct(PaymentHelper::sanitizePayMongoDiagnostic($message), $httpStatus, $previous);
     }
 
     public function getHttpStatus(): int
@@ -42,13 +43,15 @@ final class PayMongoService
         private string $caBundlePath = '',
         private string $resolveIp = '',
         private string $dnsServers = '',
-        private string $caDirectoryPath = ''
+        private string $caDirectoryPath = '',
+        private string $mode = 'test'
     ) {
-        if ($secretKey !== '' && !str_starts_with($secretKey, 'sk_test_')) {
-            throw new InvalidArgumentException('Only a PayMongo sk_test_ secret key is permitted.');
+        $this->mode = PaymentHelper::normalizePayMongoMode($mode);
+        if ($secretKey !== '' && !preg_match('/^sk_' . $this->mode . '_[A-Za-z0-9_]+$/', $secretKey)) {
+            throw new InvalidArgumentException('PAYMONGO_SECRET_KEY does not match PAYMONGO_MODE.');
         }
-        if ($publicKey !== '' && !str_starts_with($publicKey, 'pk_test_')) {
-            throw new InvalidArgumentException('Only a PayMongo pk_test_ public key is permitted.');
+        if ($publicKey !== '' && !preg_match('/^pk_' . $this->mode . '_[A-Za-z0-9_]+$/', $publicKey)) {
+            throw new InvalidArgumentException('PAYMONGO_PUBLIC_KEY does not match PAYMONGO_MODE.');
         }
         if ($webhookSecret !== '' && !str_starts_with($webhookSecret, 'whsk_')) {
             throw new InvalidArgumentException('PAYMONGO_WEBHOOK_SECRET must be the secret issued by PayMongo.');
@@ -90,20 +93,20 @@ final class PayMongoService
             PaymentHelper::env('PAYMONGO_CA_BUNDLE', '', $envPath),
             PaymentHelper::env('PAYMONGO_API_RESOLVE', '', $envPath),
             PaymentHelper::env('PAYMONGO_DNS_SERVERS', '', $envPath),
-            PaymentHelper::env('PAYMONGO_CA_PATH', '', $envPath)
+            PaymentHelper::env('PAYMONGO_CA_PATH', '', $envPath),
+            PaymentHelper::payMongoMode($envPath)
         );
     }
 
     public function isConfigured(): bool
     {
-        return str_starts_with($this->secretKey, 'sk_test_')
-            && str_starts_with($this->publicKey, 'pk_test_');
+        return $this->secretKey !== '' && $this->publicKey !== '';
     }
 
     public function getPublicKey(): string
     {
-        if (!str_starts_with($this->publicKey, 'pk_test_')) {
-            throw new LogicException('PAYMONGO_PUBLIC_KEY is not configured with a test key.');
+        if ($this->publicKey === '') {
+            throw new LogicException('PAYMONGO_PUBLIC_KEY is not configured.');
         }
         return $this->publicKey;
     }
@@ -113,6 +116,11 @@ final class PayMongoService
         return $this->lastHttpStatus;
     }
 
+    public function isLiveMode(): bool
+    {
+        return $this->mode === 'live';
+    }
+
     public function publicUrl(string $path = ''): string
     {
         return PaymentHelper::publicHttpsUrl($this->publicBaseUrl, $path);
@@ -120,7 +128,7 @@ final class PayMongoService
 
     /**
      * Creates a PayMongo Hosted Checkout Session through the currently
-     * recommended V2 endpoint. This method is not connected to booking pages.
+     * V2 endpoint used by booking and balance payment pages.
      *
      * @param array<string, mixed> $attributes
      * @return array<string, mixed>
@@ -313,11 +321,20 @@ final class PayMongoService
 
     public function verifyTestWebhook(string $rawBody, string $signatureHeader, int $toleranceSeconds = 300): bool
     {
+        // Retained for legacy callers; a live service never accepts a test signature.
+        if ($this->isLiveMode()) return false;
         return PaymentHelper::verifyPayMongoTestSignature(
             $rawBody,
             $signatureHeader,
             $this->webhookSecret,
             $toleranceSeconds
+        );
+    }
+
+    public function verifyWebhook(string $rawBody, string $signatureHeader, int $toleranceSeconds = 300): bool
+    {
+        return PaymentHelper::verifyPayMongoSignature(
+            $rawBody, $signatureHeader, $this->webhookSecret, $this->isLiveMode(), $toleranceSeconds
         );
     }
 
@@ -404,7 +421,7 @@ final class PayMongoService
     {
         $this->lastHttpStatus = 0;
         if (!$this->isConfigured()) {
-            throw new LogicException('PayMongo test keys are not configured in the private server environment.');
+            throw new LogicException('PayMongo keys are not configured in the private server environment.');
         }
         if (!function_exists('curl_init')) {
             throw new LogicException('The PHP cURL extension is required for PayMongo API requests.');
@@ -503,6 +520,9 @@ final class PayMongoService
             throw new PayMongoException("PayMongo returned an unexpected response (HTTP {$httpStatus}).", $httpStatus);
         }
         if ($httpStatus < 200 || $httpStatus >= 300) {
+            $response = PaymentHelper::sanitizePayMongoDiagnostic($response, [
+                $this->secretKey, $this->webhookSecret, base64_encode($this->secretKey . ':'),
+            ]);
             $attributes = is_array($response['data']['attributes'] ?? null) ? $response['data']['attributes'] : [];
             $detail = trim((string)($response['errors'][0]['detail'] ?? $attributes['failure_message'] ?? $attributes['error_message'] ?? ''));
             if ($detail === '' && strtolower((string)($attributes['status'] ?? '')) === 'failed') {
@@ -512,9 +532,16 @@ final class PayMongoService
             throw new PayMongoException($detail, $httpStatus, $response);
         }
 
-        $livemode = $response['data']['attributes']['livemode'] ?? null;
-        if ($livemode === true) {
-            throw new PayMongoException('A live-mode PayMongo resource was rejected.', $httpStatus, $response);
+        try {
+            PaymentHelper::assertPayMongoResourceMode($response, $this->isLiveMode());
+            // Refund/webhook-management/list responses may omit livemode.
+            // Checkout and Payment resources must explicitly identify their mode.
+            if (preg_match('#^/v[12]/(?:checkout_sessions|payments)(?:/|$)#', $path)) {
+                PaymentHelper::assertPayMongoLivemode($response['data']['attributes']['livemode'] ?? null, $this->isLiveMode());
+            }
+        } catch (UnexpectedValueException $exception) {
+            PaymentHelper::logPayMongo('api_environment_rejected', ['mode' => $this->mode, 'http_status' => $httpStatus]);
+            throw new PayMongoException('PayMongo returned a resource for an invalid payment environment.', $httpStatus);
         }
 
         return $response;

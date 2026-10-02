@@ -230,16 +230,7 @@ function manualRefundMaskAccount(string $value): string
 
 function payMongoSanitizeDiagnosticValue(mixed $value): mixed
 {
-    if (!is_array($value)) return $value;
-    $blocked = '/(^|_)(authorization|api_?key|secret|secret_?key|client_?secret|access_?token|refresh_?token|password|signature|webhook_?secret|private_?key)($|_)/i';
-    foreach ($value as $key => $item) {
-        if (preg_match($blocked, (string)$key)) {
-            $value[$key] = '[REDACTED]';
-        } else {
-            $value[$key] = payMongoSanitizeDiagnosticValue($item);
-        }
-    }
-    return $value;
+    return PaymentHelper::sanitizePayMongoDiagnostic($value);
 }
 
 /** @return array<string,mixed> */
@@ -385,6 +376,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
             $rows->execute([$requestId]);
             $updated = 0;
             foreach ($rows->fetchAll(PDO::FETCH_ASSOC) as $refundRow) {
+                $sourceMode = $pdo->prepare('SELECT metadata FROM payment_transactions WHERE payment_transaction_id=? AND provider=\'paymongo\'');
+                $sourceMode->execute([(int)$refundRow['payment_transaction_id']]);
+                $sourceRecord = $sourceMode->fetch(PDO::FETCH_ASSOC);
+                if (!$sourceRecord) throw new UnexpectedValueException('The original PayMongo payment record could not be found.');
+                PaymentHelper::assertPayMongoTransactionMode($sourceRecord['metadata'] ?? null, $service->isLiveMode());
                 $refundMethod = strtolower((string)($refundRow['payment_method_type'] ?? ''));
                 $response = in_array($refundMethod, ['qrph', 'qr_code'], true)
                     ? $service->retrieveQrPhRefund((string)$refundRow['provider_refund_id'], (string)$refundRow['provider_payment_id'])
@@ -393,10 +389,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
                 if (bookingRefundProviderResponseDisposition($parsed['status']) === 'unexpected') {
                     throw new UnexpectedValueException('PayMongo returned an unknown or missing refund status while refreshing transaction #' . (int)$refundRow['payment_transaction_id'] . '.');
                 }
-                if (($parsed['payment_id'] !== '' && !hash_equals((string)$refundRow['provider_payment_id'], $parsed['payment_id']))
+                if (!hash_equals((string)$refundRow['provider_refund_id'], $parsed['id'])
+                    || ($parsed['payment_id'] !== '' && !hash_equals((string)$refundRow['provider_payment_id'], $parsed['payment_id']))
                     || ($parsed['amount_minor'] > 0 && $parsed['amount_minor'] !== (int)$refundRow['amount_minor'])
                     || ($parsed['currency'] !== '' && $parsed['currency'] !== 'PHP')
-                    || $parsed['livemode']) {
+                    || ($parsed['livemode'] !== null && $parsed['livemode'] !== $service->isLiveMode())) {
                     throw new UnexpectedValueException('PayMongo returned a refund resource that does not match the local refund transaction.');
                 }
                 $nextStatus = bookingRefundMonotonicProviderStatus((string)$refundRow['status'], $parsed['status']);
@@ -406,7 +403,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
                     && empty($response['data']['attributes']['transfer_link'])) {
                     $response['data']['attributes']['transfer_link'] = $existingTransferLink;
                 }
-                $update = $pdo->prepare("UPDATE booking_refunds SET status=?, provider_response=?, failure_code=CASE WHEN ?='failed' THEN COALESCE(failure_code,'provider_refund_failed') ELSE NULL END, failure_message=CASE WHEN ?='failed' THEN COALESCE(failure_message,'PayMongo reported that the refund failed.') ELSE NULL END, completed_at=CASE WHEN ?='succeeded' THEN NOW() ELSE completed_at END WHERE booking_refund_id=?");
+                $update = $pdo->prepare("UPDATE booking_refunds SET status=?, provider_response=?, failure_code=CASE WHEN ?='failed' THEN COALESCE(failure_code,'provider_refund_failed') ELSE NULL END, failure_message=CASE WHEN ?='failed' THEN COALESCE(failure_message,'PayMongo reported that the refund failed.') ELSE NULL END, completed_at=CASE WHEN ?='succeeded' THEN NOW() ELSE completed_at END WHERE booking_refund_id=? AND status<>'succeeded'");
                 $update->execute([$nextStatus, json_encode($response, JSON_UNESCAPED_SLASHES), $nextStatus, $nextStatus, $nextStatus, (int)$refundRow['booking_refund_id']]);
                 $updated++;
             }
@@ -445,6 +442,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
                 || !bookingRefundSupportsAutomaticPayMongoRefund($candidateMethod)) {
                 continue;
             }
+            PaymentHelper::assertPayMongoTransactionMode($candidate['metadata'] ?? null, $service->isLiveMode());
             $candidate['planned_refund_minor'] = bookingRefundAutomaticAllocation($candidateMethod, $plannedRemainingMinor, $candidateAvailableMinor);
             if ((int)$candidate['planned_refund_minor'] < 100) continue;
             $candidate['planned_operation'] = 'refund';
@@ -479,9 +477,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
             if (!in_array($remotePaymentStatus, ['paid', 'succeeded'], true)) {
                 throw new RuntimeException('PayMongo Payment ' . $remotePaymentId . ' is not paid or succeeded. Current status: ' . ($remotePaymentStatus ?: 'unknown') . '.');
             }
-            if (($paymentAttributes['livemode'] ?? false) === true) {
-                throw new RuntimeException('A live PayMongo Payment cannot be refunded with the configured test credentials.');
-            }
+            PaymentHelper::assertPayMongoLivemode($paymentAttributes['livemode'] ?? null, $service->isLiveMode());
             $remoteRefunds = bookingRefundRemoteRefundResources($paymentResource);
             if ($remoteRefunds !== []) {
                 $knownRefunds = $pdo->prepare("SELECT provider_refund_id FROM booking_refunds WHERE payment_transaction_id=? AND provider_refund_id IS NOT NULL");
@@ -531,8 +527,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
                 if (!hash_equals((string)$source['provider_payment_id'], $parsed['payment_id'])
                     || $parsed['amount_minor'] !== $amountMinor
                     || $parsed['currency'] !== 'PHP'
-                    || $parsed['livemode']) {
-                    throw new UnexpectedValueException('PayMongo returned a refund resource that does not match the requested payment, amount, currency, or test mode.');
+                    || ($parsed['livemode'] !== null && $parsed['livemode'] !== $service->isLiveMode())) {
+                    throw new UnexpectedValueException('PayMongo returned a refund resource that does not match the requested payment, amount, currency, or environment.');
                 }
                 $responseBindingValidated = true;
                 $disposition = bookingRefundProviderResponseDisposition($parsed['status']);
@@ -581,7 +577,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
                         && hash_equals((string)$source['provider_payment_id'], $failedParsed['payment_id'])
                         && $failedParsed['amount_minor'] === $amountMinor
                         && $failedParsed['currency'] === 'PHP'
-                        && !$failedParsed['livemode'];
+                        && ($failedParsed['livemode'] === null || $failedParsed['livemode'] === $service->isLiveMode());
                 }
                 $qrDiagnostic = $isQrPhRefund
                     ? payMongoQrRefundDiagnostic(

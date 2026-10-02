@@ -11,6 +11,7 @@ if (!preg_match('/^[a-f0-9]{64}$/', $token)) {
 }
 
 require_once __DIR__ . '/php/db_connection.php';
+require_once __DIR__ . '/payments/PaymentHelper.php';
 
 $lookup = $pdo->prepare(
     "SELECT checkout_url, status, metadata
@@ -21,6 +22,12 @@ $lookup = $pdo->prepare(
 $lookup->execute([$token]);
 $transaction = $lookup->fetch(PDO::FETCH_ASSOC);
 $metadata = $transaction ? json_decode((string)($transaction['metadata'] ?? ''), true) : null;
+try {
+    PaymentHelper::assertPayMongoTransactionMode($metadata);
+} catch (Throwable $exception) {
+    http_response_code(404);
+    exit('This payment QR is unavailable in the current payment environment.');
+}
 $checkoutUrl = trim((string)($transaction['checkout_url'] ?? ''));
 $urlParts = parse_url($checkoutUrl);
 $checkoutHost = strtolower((string)($urlParts['host'] ?? ''));

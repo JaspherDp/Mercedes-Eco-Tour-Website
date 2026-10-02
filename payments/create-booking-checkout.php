@@ -53,6 +53,13 @@ if ($csrf === '' || $sessionCsrf === '' || !hash_equals($sessionCsrf, $csrf)) {
 if (!BookingCheckoutService::tableExists($pdo)) {
     bookingCheckoutResponse(503, ['success' => false, 'message' => 'Booking-time online payments are not ready.']);
 }
+try {
+    $payMongo = PayMongoService::fromEnvironment();
+    if (!$payMongo->isConfigured()) throw new LogicException('PayMongo keys are not configured.');
+} catch (Throwable $exception) {
+    error_log('Booking checkout configuration error: ' . $exception->getMessage());
+    bookingCheckoutResponse(503, ['success' => false, 'message' => 'Online payment configuration is incomplete.']);
+}
 
 $input = json_decode((string)file_get_contents('php://input'), true);
 if (!is_array($input)) {
@@ -344,6 +351,7 @@ try {
         ? ('hotel_details.php?id=' . (int)$payload['hotel_resort_id'])
         : bookingCheckoutText($input['returnUrl'] ?? '', 500);
     $metadata = json_encode([
+        'paymongo_mode' => PaymentHelper::payMongoMode(),
         'source' => 'booking_checkout', 'booking_draft_id' => (string)$draftId,
         'booking_domain' => $domain, 'return_path' => $returnPath,
     ], JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
@@ -374,21 +382,22 @@ try {
         'show_description' => true, 'show_line_items' => true,
         'billing' => array_filter(['name' => (string)$tourist['full_name'], 'email' => (string)$tourist['email'], 'phone' => (string)$tourist['phone_number']]),
         'metadata' => [
+            'paymongo_mode' => PaymentHelper::payMongoMode(),
             'payment_transaction_id' => (string)$transactionId, 'booking_draft_id' => (string)$draftId,
             'booking_domain' => $domain, 'tourist_id' => (string)$touristId,
         ],
     ];
-    $result = PayMongoService::fromEnvironment()->createCheckoutSession($attributes, $idempotencyKey);
+    $result = $payMongo->createCheckoutSession($attributes, $idempotencyKey);
     $resource = is_array($result['data'] ?? null) ? $result['data'] : [];
     $resourceAttributes = is_array($resource['attributes'] ?? null) ? $resource['attributes'] : [];
     $sessionId = (string)($resource['id'] ?? '');
     $checkoutUrl = (string)($resourceAttributes['checkout_url'] ?? '');
     $host = strtolower((string)(parse_url($checkoutUrl, PHP_URL_HOST) ?: ''));
-    if (!str_starts_with($sessionId, 'cs_') || ($host !== 'checkout.paymongo.com' && !str_ends_with($host, '.paymongo.com'))) {
+    if (!str_starts_with($sessionId, 'cs_') || parse_url($checkoutUrl, PHP_URL_SCHEME) !== 'https'
+        || ($host !== 'checkout.paymongo.com' && !str_ends_with($host, '.paymongo.com'))) {
         throw new RuntimeException('PayMongo returned an invalid Checkout Session.');
     }
-    $save = $pdo->prepare('UPDATE payment_transactions SET provider_checkout_session_id=?, checkout_url=? WHERE payment_transaction_id=?');
-    $save->execute([$sessionId, $checkoutUrl, $transactionId]);
+    PaymentHelper::linkPayMongoCheckout($pdo, $transactionId, $touristId, $sessionId, $checkoutUrl);
     bookingCheckoutResponse(200, ['success' => true, 'checkout_url' => $checkoutUrl]);
 } catch (DomainException|InvalidArgumentException $exception) {
     if ($pdo->inTransaction()) $pdo->rollBack();
@@ -398,8 +407,8 @@ try {
     if ($pdo->inTransaction()) $pdo->rollBack();
     tourResourceUnlock($pdo, $resourceLock ?? '');
     if (isset($transactionId)) {
-        $pdo->prepare("UPDATE payment_transactions SET status='failed', failed_at=NOW(), failure_message=? WHERE payment_transaction_id=?")->execute([mb_substr($exception->getMessage(), 0, 1000), $transactionId]);
-        $pdo->prepare("UPDATE booking_checkout_drafts SET status='failed' WHERE booking_draft_id=?")->execute([$draftId]);
+        $pdo->prepare("UPDATE payment_transactions SET status='failed', failed_at=NOW(), failure_message=? WHERE payment_transaction_id=? AND status='pending'")->execute([mb_substr($exception->getMessage(), 0, 1000), $transactionId]);
+        $pdo->prepare("UPDATE booking_checkout_drafts SET status='failed' WHERE booking_draft_id=? AND status='pending'")->execute([$draftId]);
     }
     error_log('Booking checkout PayMongo error: ' . $exception->getMessage());
     bookingCheckoutResponse(502, ['success' => false, 'message' => 'PayMongo could not prepare the payment page. No booking was submitted.']);

@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../php/activity_logger.php';
 require_once __DIR__ . '/BookingCheckoutService.php';
+require_once __DIR__ . '/PaymentHelper.php';
 
 final class PaymentReconciler
 {
@@ -22,9 +23,9 @@ final class PaymentReconciler
         if (!str_starts_with($sessionId, 'cs_') || ($checkoutSession['type'] ?? '') !== 'checkout_session') {
             throw new UnexpectedValueException('The event does not contain a Checkout Session resource.');
         }
-        if (($attributes['livemode'] ?? null) !== false) {
-            throw new UnexpectedValueException('Only test-mode Checkout Sessions can be reconciled.');
-        }
+        $expectedLiveMode = PaymentHelper::payMongoIsLiveMode();
+        PaymentHelper::assertPayMongoLivemode($attributes['livemode'] ?? null, $expectedLiveMode);
+        PaymentHelper::assertPayMongoResourceMode($checkoutSession, $expectedLiveMode);
 
         $reference = trim((string)($attributes['reference_number'] ?? ''));
         $payments = is_array($attributes['payments'] ?? null) ? $attributes['payments'] : [];
@@ -46,10 +47,10 @@ final class PaymentReconciler
 
         $paymentId = trim((string)($paidPayment['id'] ?? ''));
         $paymentAttributes = is_array($paidPayment['attributes'] ?? null) ? $paidPayment['attributes'] : [];
-        $amountMinor = (int)($paymentAttributes['amount'] ?? 0);
+        $amountMinor = $paymentAttributes['amount'] ?? null;
         $currency = strtoupper(trim((string)($paymentAttributes['currency'] ?? '')));
-        $paymentLivemode = $paymentAttributes['livemode'] ?? false;
-        if (!str_starts_with($paymentId, 'pay_') || $amountMinor < 1 || $currency !== 'PHP' || $paymentLivemode === true) {
+        PaymentHelper::assertPayMongoLivemode($paymentAttributes['livemode'] ?? null, $expectedLiveMode);
+        if (!preg_match('/^pay_[A-Za-z0-9]+$/', $paymentId) || !is_int($amountMinor) || $amountMinor < 1 || $currency !== 'PHP') {
             throw new UnexpectedValueException('The paid Payment resource failed validation.');
         }
 
@@ -75,6 +76,11 @@ final class PaymentReconciler
             if (!$transaction) {
                 throw new UnexpectedValueException('No local payment transaction matches this Checkout Session.');
             }
+            if (($transaction['provider'] ?? '') !== 'paymongo') {
+                throw new UnexpectedValueException('The local payment provider does not match.');
+            }
+            PaymentHelper::assertPayMongoTransactionMode($transaction['metadata'] ?? null, $expectedLiveMode);
+            PaymentHelper::assertPayMongoBookingMode($pdo, (string)$transaction['booking_domain'], (int)$transaction['booking_id']);
             if ((string)$transaction['merchant_reference'] !== $reference) {
                 throw new UnexpectedValueException('PayMongo reference does not match the local transaction.');
             }
@@ -86,7 +92,19 @@ final class PaymentReconciler
                 throw new UnexpectedValueException('Paid amount or currency does not match the local transaction.');
             }
             if ((string)$transaction['status'] === 'paid') {
+                if (!hash_equals((string)$transaction['provider_payment_id'], $paymentId)) {
+                    throw new UnexpectedValueException('The Checkout Session was already credited with a different Payment ID.');
+                }
+                // The browser's verified API retrieval may have credited first.
+                if ($eventId !== '' && empty($transaction['provider_event_id'])) {
+                    $eventUpdate = $pdo->prepare('UPDATE payment_transactions SET provider_event_id=? WHERE payment_transaction_id=? AND provider_event_id IS NULL');
+                    $eventUpdate->execute([$eventId, (int)$transaction['payment_transaction_id']]);
+                }
                 $pdo->commit();
+                PaymentHelper::logPayMongo('payment_duplicate', [
+                    'transaction_id' => (int)$transaction['payment_transaction_id'],
+                    'session_id' => $sessionId, 'payment_id' => $paymentId, 'event_id' => $eventId, 'idempotent' => true,
+                ]);
                 return [
                     'transaction_id' => (int)$transaction['payment_transaction_id'],
                     'booking_id' => (int)$transaction['booking_id'],
@@ -288,6 +306,12 @@ final class PaymentReconciler
             );
 
             $pdo->commit();
+            PaymentHelper::logPayMongo('payment_reconciled', [
+                'mode' => $expectedLiveMode ? 'live' : 'test',
+                'transaction_id' => (int)$transaction['payment_transaction_id'],
+                'booking_id' => $bookingId, 'session_id' => $sessionId,
+                'payment_id' => $paymentId, 'event_id' => $eventId, 'status' => 'paid',
+            ]);
             return [
                 'transaction_id' => (int)$transaction['payment_transaction_id'],
                 'booking_id' => $bookingId,

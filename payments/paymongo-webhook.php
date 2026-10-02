@@ -15,6 +15,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') {
 
 try {
     $payMongo = PayMongoService::fromEnvironment(paymongo_env_path());
+    if (!$payMongo->isConfigured()) throw new LogicException('PayMongo keys are not configured.');
 } catch (Throwable $exception) {
     error_log('PayMongo webhook configuration error: ' . $exception->getMessage());
     paymongo_json_response(503, ['received' => false, 'error' => 'webhook_not_configured']);
@@ -28,7 +29,8 @@ $rawBody = file_get_contents('php://input');
 $rawBody = is_string($rawBody) ? $rawBody : '';
 $signature = paymongo_request_header('Paymongo-Signature');
 
-if (!$payMongo->verifyTestWebhook($rawBody, $signature)) {
+if (!$payMongo->verifyWebhook($rawBody, $signature)) {
+    PaymentHelper::logPayMongo('webhook_signature_rejected', ['http_status' => 401]);
     paymongo_json_response(401, ['received' => false, 'error' => 'invalid_signature']);
 }
 
@@ -54,9 +56,13 @@ $resource = is_array($attributes['data'] ?? null)
     ? $attributes['data']
     : (is_array($event['data'] ?? null) ? $event['data'] : []);
 $resourceAttributes = is_array($resource['attributes'] ?? null) ? $resource['attributes'] : [];
-$livemode = $attributes['livemode'] ?? $event['livemode'] ?? $resourceAttributes['livemode'] ?? false;
-if ($livemode === true || ($resourceAttributes['livemode'] ?? false) === true) {
-    paymongo_json_response(400, ['received' => false, 'error' => 'live_event_rejected']);
+try {
+    $livemode = $attributes['livemode'] ?? $event['livemode'] ?? $resourceAttributes['livemode'] ?? null;
+    PaymentHelper::assertPayMongoLivemode($livemode, $payMongo->isLiveMode());
+    PaymentHelper::assertPayMongoResourceMode($event, $payMongo->isLiveMode());
+} catch (UnexpectedValueException $exception) {
+    PaymentHelper::logPayMongo('webhook_environment_rejected', ['http_status' => 400]);
+    paymongo_json_response(400, ['received' => false, 'error' => 'environment_mismatch']);
 }
 
 if ($eventType === 'checkout_session.payment.paid') {
@@ -113,12 +119,22 @@ if (RefundWebhookReconciler::supportsEventType($eventType)) {
         $refunds = RefundWebhookReconciler::refundResourcesForEvent($eventType, $resource);
         $matched = false;
         $updated = false;
+        $allMatched = true;
         foreach ($refunds as $providerRefund) {
+            // Some refund resources omit livemode; the signed event supplies it.
+            $providerRefund['livemode'] = $livemode;
             $result = RefundWebhookReconciler::reconcile($pdo, $providerRefund);
             $matched = $matched || $result['matched'];
+            $allMatched = $allMatched && $result['matched'];
             $updated = $updated || $result['updated'];
         }
+        // A webhook can beat the API response that saves provider_refund_id.
+        // Retry unmatched refunds instead of permanently discarding that event.
+        if ($refunds !== [] && !$allMatched) {
+            paymongo_json_response(503, ['received' => false, 'error' => 'refund_not_linked_yet']);
+        }
         if ($eventId !== '') bookingRefundRecordWebhookEvent($pdo, $eventId, $eventType, $rawBody);
+        PaymentHelper::logPayMongo('refund_webhook_processed', ['event_id' => $eventId, 'idempotent' => !$updated]);
         paymongo_json_response(200, [
             'received' => true,
             'event_id' => $eventId,

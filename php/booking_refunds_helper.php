@@ -99,7 +99,8 @@ function bookingRefundDestinationKey(): string
  */
 function bookingRefundLegacyDestinationKey(): ?string
 {
-    $material = PaymentHelper::env('PAYMONGO_SECRET_KEY');
+    $material = PaymentHelper::env('REFUND_LEGACY_DESTINATION_ENCRYPTION_KEY');
+    if ($material === '') $material = PaymentHelper::env('PAYMONGO_SECRET_KEY');
     if ($material === '') return null;
     return hash_hkdf('sha256', $material, 32, 'itour-mercedes-refund-destination-v1');
 }
@@ -299,7 +300,7 @@ function bookingRefundTimeline(string $method, int $amountMinor = 0): array
     };
 }
 
-/** @return array{id:string,status:string,amount_minor:int,payment_id:string,currency:string,livemode:bool,transfer_link:string} */
+/** @return array{id:string,status:string,amount_minor:int,payment_id:string,currency:string,livemode:mixed,transfer_link:string} */
 function bookingRefundParsePayMongoResponse(array $response): array
 {
     $data = is_array($response['data'] ?? null) ? $response['data'] : [];
@@ -310,7 +311,9 @@ function bookingRefundParsePayMongoResponse(array $response): array
         'amount_minor' => max(0, (int)($attributes['amount'] ?? 0)),
         'payment_id' => trim((string)($attributes['payment_id'] ?? '')),
         'currency' => strtoupper(trim((string)($attributes['currency'] ?? ''))),
-        'livemode' => ($attributes['livemode'] ?? false) === true,
+        // Refund APIs may omit this field. Preserve explicit invalid values so
+        // callers can reject them instead of silently converting them to test.
+        'livemode' => $attributes['livemode'] ?? null,
         'transfer_link' => filter_var((string)($attributes['transfer_link'] ?? ''), FILTER_VALIDATE_URL) ? trim((string)$attributes['transfer_link']) : '',
     ];
 }

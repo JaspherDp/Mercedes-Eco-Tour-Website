@@ -68,6 +68,7 @@ final class RefundWebhookReconciler
     /** @return array{matched:bool,updated:bool,idempotent:bool,status:string} */
     public static function reconcile(PDO $pdo, array $providerRefund): array
     {
+        PaymentHelper::assertPayMongoLivemode($providerRefund['livemode'] ?? null);
         $refundId = trim((string)($providerRefund['id'] ?? ''));
         $paymentId = trim((string)($providerRefund['payment_id'] ?? ''));
         $amountMinor = (int)($providerRefund['amount_minor'] ?? 0);
@@ -82,9 +83,12 @@ final class RefundWebhookReconciler
         $pdo->beginTransaction();
         try {
             $find = $pdo->prepare(
-                'SELECT booking_refund_id,cancellation_request_id,provider,provider_refund_id,
-                        provider_payment_id,amount_minor,currency,status,provider_response
-                 FROM booking_refunds WHERE provider_refund_id=? LIMIT 1 FOR UPDATE'
+                'SELECT br.booking_refund_id,br.cancellation_request_id,br.provider,br.provider_refund_id,
+                        br.provider_payment_id,br.amount_minor,br.currency,br.status,br.provider_response,
+                        pt.metadata AS payment_metadata
+                 FROM booking_refunds br
+                 INNER JOIN payment_transactions pt ON pt.payment_transaction_id=br.payment_transaction_id
+                 WHERE br.provider_refund_id=? LIMIT 1 FOR UPDATE'
             );
             $find->execute([$refundId]);
             $local = $find->fetch(PDO::FETCH_ASSOC);
@@ -93,6 +97,7 @@ final class RefundWebhookReconciler
                 return ['matched' => false, 'updated' => false, 'idempotent' => true, 'status' => 'ignored'];
             }
             $providerStatus = self::validateBinding($providerRefund, $local);
+            PaymentHelper::assertPayMongoTransactionMode($local['payment_metadata'] ?? null);
             if ($paymentId === '') {
                 $paymentId = (string)$local['provider_payment_id'];
                 $providerRefund['payment_id'] = $paymentId;
@@ -145,6 +150,7 @@ final class RefundWebhookReconciler
         $attributes['amount'] = (int)($providerRefund['amount_minor'] ?? 0);
         $attributes['currency'] = strtoupper(trim((string)($providerRefund['currency'] ?? '')));
         $attributes['status'] = $status;
+        if (isset($providerRefund['livemode'])) $attributes['livemode'] = $providerRefund['livemode'];
         unset($attributes);
 
         return json_encode($existing, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
