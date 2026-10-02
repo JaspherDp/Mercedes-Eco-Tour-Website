@@ -171,6 +171,30 @@ function initLogSignEvents() {
   const loginBtn = document.getElementById("loginBtn");
   const loginFormError = document.getElementById("loginFormError");
   const signupBtn = document.getElementById("signupBtn");
+
+  function setModalAuthProcessing(button, label) {
+    if (!button || button.classList.contains("is-auth-processing")) return;
+    button.dataset.authOriginalHtml = button.innerHTML;
+    button.disabled = true;
+    button.classList.add("is-auth-processing");
+    button.setAttribute("aria-busy", "true");
+    button.innerHTML = `<span class="logsign-login-spinner" aria-hidden="true"></span><span>${label}</span>`;
+    document.documentElement.classList.add("logsign-auth-processing");
+  }
+
+  function clearModalAuthProcessing(button, restore = true) {
+    if (!button) return;
+    button.classList.remove("is-auth-processing");
+    button.removeAttribute("aria-busy");
+    if (restore && button.dataset.authOriginalHtml) {
+      button.innerHTML = button.dataset.authOriginalHtml;
+      button.disabled = false;
+    }
+    delete button.dataset.authOriginalHtml;
+    if (!document.querySelector(".is-auth-processing, .google-signin-btn.is-processing")) {
+      document.documentElement.classList.remove("logsign-auth-processing");
+    }
+  }
   const sendCodeBtn = document.getElementById("sendCodeBtn");
   const signupDetailsNextBtn = document.getElementById("signupDetailsNextBtn");
   const verifySignupCodeBtn = document.getElementById("verifySignupCodeBtn");
@@ -662,10 +686,7 @@ async function handleLogin(event) {
 
     // Disable button and show loading state
     const originalBtnText = loginBtn.textContent;
-    loginBtn.disabled = true;
-    loginBtn.textContent = 'Logging in...';
-    loginBtn.style.opacity = '0.6';
-    loginBtn.style.cursor = 'not-allowed';
+    setModalAuthProcessing(loginBtn, 'Logging in...');
 
     const formData = new FormData();
     formData.append('email', email);
@@ -742,6 +763,7 @@ async function handleLogin(event) {
         showLoginFormError(err.message || 'Something went wrong. Please try again.');
     } finally {
         window.ItourTurnstile?.reset('modal-login');
+        clearModalAuthProcessing(loginBtn, loginBtn?.dataset.locked !== "true");
     }
 }
 
@@ -958,8 +980,7 @@ if (false) {
       return;
     }
     const originalBtnText = signupBtn.textContent;
-    signupBtn.disabled = true;
-    signupBtn.textContent = "Creating account...";
+    setModalAuthProcessing(signupBtn, "Signing up...");
     let rateLimited = false;
     try {
       const formData = new FormData();
@@ -986,8 +1007,9 @@ if (false) {
     } finally {
       window.ItourTurnstile?.reset("modal-signup-complete");
       if (!rateLimited) {
-        signupBtn.disabled = false;
-        signupBtn.textContent = originalBtnText;
+        clearModalAuthProcessing(signupBtn);
+      } else {
+        clearModalAuthProcessing(signupBtn, false);
       }
     }
   }
@@ -1042,6 +1064,9 @@ function handleGoogleSignIn(button, redirectUrl) {
     button.querySelector('.google-signin-spinner')?.remove();
     if (googleLogo) googleLogo.hidden = false;
     textSpan.textContent = originalText;
+    if (!document.querySelector(".is-auth-processing, .google-signin-btn.is-processing")) {
+      document.documentElement.classList.remove("logsign-auth-processing");
+    }
   };
 
   button.addEventListener("click", () => {
@@ -1050,6 +1075,7 @@ function handleGoogleSignIn(button, redirectUrl) {
     button.disabled = true;
     button.classList.add('is-processing');
     button.setAttribute('aria-busy', 'true');
+    document.documentElement.classList.add("logsign-auth-processing");
 
     const spinner = document.createElement('span');
     spinner.className = 'google-signin-spinner';

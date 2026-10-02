@@ -853,6 +853,9 @@ place.activities.forEach(a => {
   let destinationFullMapLocal = null;
   let destinationPreviewLayerLocal = null;
   let destinationFullLayerLocal = null;
+  let destinationOpenedFromExternalPage = false;
+  let destinationReturnUrl = '';
+  let destinationReturnUsesHistory = false;
   const destinationMarkerLookupLocal = new Map();
 
   const iconMap = activityIcons || {};
@@ -879,6 +882,54 @@ place.activities.forEach(a => {
     const nextState = { ...(history.state || {}) };
     delete nextState.destination;
     history.replaceState(nextState, '', url);
+  }
+
+  function safeSameSiteUrlV2(value) {
+    if (!value) return '';
+    try {
+      const url = new URL(value, window.location.href);
+      if (url.origin !== window.location.origin) return '';
+      const current = new URL(window.location.href);
+      const linksToDestinationDetail = url.pathname === current.pathname && Boolean(url.searchParams.get('destination'));
+      return linksToDestinationDetail ? '' : url.href;
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function destinationBackLabelV2(targetUrl) {
+    if (!targetUrl) return 'Back to destinations';
+    const target = new URL(targetUrl);
+    if (target.pathname.endsWith('/')) return 'Back to home';
+    const path = target.pathname.replace(/\/+$/, '').toLowerCase();
+    const page = path.split('/').pop() || '';
+    if (page === '' || page === 'index.php' || page === 'homepage.php') return 'Back to home';
+    if (page === 'destination.php' && !target.searchParams.get('destination')) return 'Back to destinations';
+    return 'Back to previous page';
+  }
+
+  function updateDestinationBackButtonV2(label) {
+    const button = document.querySelector('.des_place-page-header .des_close-btn');
+    const text = button?.querySelector('[data-destination-back-label]');
+    if (text) text.textContent = label;
+    if (button) button.setAttribute('aria-label', label);
+  }
+
+  function configureExternalDestinationEntryV2() {
+    const parameters = new URLSearchParams(window.location.search);
+    const explicitReturn = safeSameSiteUrlV2(parameters.get('return'));
+    const referringPage = safeSameSiteUrlV2(document.referrer);
+    destinationReturnUrl = explicitReturn || referringPage || new URL('destination.php', window.location.href).href;
+    destinationReturnUsesHistory = Boolean(referringPage && referringPage === destinationReturnUrl && window.history.length > 1);
+    destinationOpenedFromExternalPage = true;
+    updateDestinationBackButtonV2(destinationBackLabelV2(destinationReturnUrl));
+  }
+
+  function configureDirectoryDestinationEntryV2() {
+    destinationOpenedFromExternalPage = false;
+    destinationReturnUrl = '';
+    destinationReturnUsesHistory = false;
+    updateDestinationBackButtonV2('Back to destinations');
   }
 
   function normalizePlaceImageSources() {
@@ -1527,6 +1578,9 @@ place.activities.forEach(a => {
     if (!place) return;
     const placeLabel = placeLabelFromId(placeId);
 
+    if (options.externalEntry === true) configureExternalDestinationEntryV2();
+    else if (!destinationOpenedFromExternalPage) configureDirectoryDestinationEntryV2();
+
     currentPlaceIdLocal = placeId;
     currentGalleryImagesLocal = Array.isArray(place.gallery) ? place.gallery.slice() : [];
     currentGalleryPageLocal = 0;
@@ -1600,6 +1654,13 @@ place.activities.forEach(a => {
 
   function closePlacePageV2() {
     closeDestinationMapV2();
+    if (destinationOpenedFromExternalPage) {
+      const returnUrl = destinationReturnUrl || new URL('destination.php', window.location.href).href;
+      destinationOpenedFromExternalPage = false;
+      if (destinationReturnUsesHistory) window.history.back();
+      else window.location.assign(returnUrl);
+      return;
+    }
     const page = document.getElementById('des_placePage');
     if (page?.contains(document.activeElement)) {
       document.activeElement.blur();
@@ -1782,7 +1843,7 @@ place.activities.forEach(a => {
     initDestinationSearchV2();
     const requestedDestination = new URLSearchParams(window.location.search).get('destination');
     if (requestedDestination && placesData[requestedDestination]) {
-      openPlacePageV2(requestedDestination, { updateUrl: false });
+      openPlacePageV2(requestedDestination, { updateUrl: false, externalEntry: true });
     } else if (requestedDestination) {
       clearDestinationUrlV2();
     }

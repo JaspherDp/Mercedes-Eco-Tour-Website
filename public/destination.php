@@ -52,7 +52,7 @@ foreach (destinationRows($pdo, true) as $destination) {
     <meta name="description" content="Explore beautiful islands, beaches, and tourist destinations in Mercedes, Camarines Norte. Discover places to visit and plan your next adventure." />
     <link rel="canonical" href="https://itourmercedes.com/destination.php" />
     <title>Tourist Destinations in Mercedes, Camarines Norte | iTour Mercedes</title>
-    <link rel="icon" type="image/png" href="img/newlogo.png" />
+    <link rel="icon" type="image/png" href="<?= is_file(__DIR__ . '/../img/favicon-64-v1.png') ? 'img/favicon-64-v1.png' : 'img/newlogo.png' ?>" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://unpkg.com" crossorigin />
@@ -163,9 +163,9 @@ foreach (destinationRows($pdo, true) as $destination) {
     <!-- Header Image -->
     <div class="des_place-page-header" id="placeHeader">
       <img id="des_pageHeaderImg" src="" alt="" />
-      <button class="des_close-btn" type="button" aria-label="Back to all destinations" onclick="closePlacePage()">
+      <button class="des_close-btn" type="button" aria-label="Back to destinations" onclick="closePlacePage()">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5-7 7 7 7"></path></svg>
-        <span>Back to destinations</span>
+        <span data-destination-back-label>Back to destinations</span>
       </button>
     </div>
 

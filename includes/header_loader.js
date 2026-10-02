@@ -65,13 +65,18 @@
     try {
       await injectHtml("footer", "footer.php");
       await loadScriptOnce(
-        "js/legal-policy-modal.js?v=1",
+        "js/legal-policy-modal.js?v=2",
         "legal-policy-modal",
         () => typeof window.initLegalPolicyModal === "function"
       );
       if (typeof window.initLegalPolicyModal === "function") {
         window.initLegalPolicyModal();
       }
+      await loadScriptOnce(
+        "js/cookie-consent-banner.js?v=2",
+        "cookie-consent-banner",
+        () => Boolean(window.ItourCookiePreferences)
+      );
     } catch (error) {
       console.error(error);
     }

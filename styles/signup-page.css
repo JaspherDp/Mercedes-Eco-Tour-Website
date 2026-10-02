@@ -350,9 +350,10 @@ body.tourist-auth-page {
 .tourist-auth-error svg { width: 19px; height: 19px; flex: 0 0 auto; margin-top: 1px; }
 .tourist-auth-error.is-success { color: #176b55; border-color: #b9dfd1; background: #edf9f4; }
 .tourist-primary-button.is-login-locked { background: #8b9391; box-shadow: none; opacity: 1; }
-.tourist-primary-button.is-login-locked,.tourist-primary-button.is-login-loading { display: inline-flex; align-items: center; justify-content: center; gap: 9px; }
+.tourist-primary-button.is-login-locked,.tourist-primary-button.is-login-loading,.tourist-primary-button.is-auth-processing { display: inline-flex; align-items: center; justify-content: center; gap: 9px; }
 .tourist-login-spinner { width: 17px; height: 17px; flex: 0 0 17px; border: 2px solid rgba(255,255,255,.38); border-top-color: #fff; border-right-color: #fff; border-radius: 50%; animation: touristLoginSpin .72s linear infinite; }
 @keyframes touristLoginSpin { to { transform: rotate(360deg); } }
+html.tourist-auth-processing, html.tourist-auth-processing * { cursor: progress !important; }
 
 button, .tourist-google-button { font-family: inherit; }
 .tourist-primary-button, .tourist-secondary-button, .tourist-send-button {
@@ -441,6 +442,8 @@ button, .tourist-google-button { font-family: inherit; }
 .tourist-google-button { min-height: 46px; display: flex; align-items: center; justify-content: center; gap: 10px; color: #263d36; border: 1.5px solid #d1ddd9; border-radius: 10px; background: #fff; font-size: .78rem; font-weight: 700; text-decoration: none; transition: background .18s ease, border-color .18s ease, transform .18s ease; }
 .tourist-google-button img { width: 20px; height: 20px; }
 .tourist-google-button:hover { transform: translateY(-1px); border-color: #a6bdb5; background: #f7faf9; }
+.tourist-google-button.is-auth-processing { pointer-events: none; transform: none; border-color: #9fc8ba; background: #f3faf7; }
+.tourist-google-spinner { width: 18px; height: 18px; flex: 0 0 18px; border: 2px solid #cbd7d3; border-top-color: var(--auth-green); border-right-color: var(--auth-green); border-radius: 50%; animation: touristLoginSpin .72s linear infinite; }
 
 .tourist-auth-switch { margin: 16px 0 0; color: var(--auth-muted); font-size: .72rem; text-align: center; }
 .tourist-auth-switch button { padding: 2px; color: var(--auth-green); border: 0; background: transparent; font: inherit; font-weight: 800; cursor: pointer; }

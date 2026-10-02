@@ -1,7 +1,6 @@
 :root {
   --itour-loader-green: #08745b;
   --itour-loader-deep: #035344;
-  --itour-loader-line: #dce9e4;
 }
 
 html.itour-page-loading,
@@ -34,65 +33,75 @@ html.itour-page-loading body {
 
 .itour-loader-scene {
   position: relative;
-  width: clamp(174px, 22vw, 214px);
-  height: 116px;
+  width: clamp(154px, 20vw, 184px);
+  height: clamp(154px, 20vw, 184px);
+  display: grid;
+  place-items: center;
+}
+
+.itour-loader-route {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  animation: itour-route-drift 9s linear infinite;
+}
+
+.itour-loader-route circle {
+  fill: none;
+  stroke: rgba(69, 169, 145, .7);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 7 7;
+  transform-origin: center;
+}
+
+.itour-loader-logo-halo {
+  position: absolute;
+  width: 104px;
+  height: 104px;
+  border: 1px solid rgba(8, 116, 91, .12);
+  border-radius: 50%;
+  background: rgba(240, 249, 246, .9);
+  box-shadow: 0 10px 35px rgba(3, 83, 68, .12), inset 0 0 0 7px #fff;
+  animation: itour-logo-breathe 2s ease-in-out infinite;
+}
+
+.itour-loader-logo {
+  position: relative;
+  z-index: 2;
+  width: 86px;
+  height: 86px;
+  object-fit: contain;
+  animation: itour-logo-bob 2s ease-in-out infinite;
+}
+
+.itour-loader-orbit {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  border-radius: 50%;
+  animation: itour-boat-orbit 1.75s linear infinite;
 }
 
 .itour-loader-boat {
+  width: 43px;
+  height: 31px;
   position: absolute;
-  z-index: 2;
+  top: -1px;
   left: 50%;
-  top: 0;
-  width: 172px;
-  max-width: 84%;
-  transform: translateX(-50%);
   overflow: visible;
-  transform-origin: 50% 76%;
-  animation: itour-boat-float 1.8s ease-in-out infinite;
+  filter: drop-shadow(0 4px 5px rgba(3, 83, 68, .2));
+  transform: translateX(-50%) rotate(8deg);
+  transform-origin: center;
+  animation: itour-boat-upright 1.75s linear infinite;
 }
 
-.itour-loader-outrigger,
-.itour-loader-hull-line,
-.itour-loader-mast {
-  fill: none;
-  stroke: var(--itour-loader-deep);
-  stroke-width: 4;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.itour-loader-hull { fill: var(--itour-loader-green); }
-.itour-loader-hull-line { stroke: rgba(255, 255, 255, .82); stroke-width: 2.3; }
-.itour-loader-mast { stroke-width: 4.5; }
-.itour-loader-sail { fill: #fff; stroke: var(--itour-loader-green); stroke-width: 3; stroke-linejoin: round; }
-.itour-loader-sail-accent { fill: #83cdb5; stroke: var(--itour-loader-green); stroke-width: 3; stroke-linejoin: round; }
-
-.itour-loader-wave {
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  width: 100%;
-  height: 29px;
-  transform: translateX(-50%);
-  overflow: visible;
-}
-
-.itour-loader-wave path {
-  fill: none;
-  stroke: #1688a0;
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-dasharray: 48 10;
-  animation: itour-wave-flow 1.7s linear infinite;
-}
-
-.itour-loader-wave path:last-child {
-  stroke: #73c4ca;
-  stroke-width: 2.4;
-  opacity: .72;
-  animation-duration: 2.15s;
-  animation-direction: reverse;
-}
+.itour-loader-boat-sail { fill: #fff; stroke: var(--itour-loader-deep); stroke-width: 2.2; stroke-linejoin: round; }
+.itour-loader-boat-sail-accent { fill: #7dc8b0; stroke: var(--itour-loader-deep); stroke-width: 2.2; stroke-linejoin: round; }
+.itour-loader-boat-hull { fill: var(--itour-loader-green); stroke: var(--itour-loader-deep); stroke-width: 2; stroke-linejoin: round; }
+.itour-loader-boat-detail { fill: none; stroke: #fff; stroke-width: 1.7; stroke-linecap: round; }
 
 .itour-loader-copy {
   display: grid;
@@ -100,37 +109,36 @@ html.itour-page-loading body {
   gap: 5px;
 }
 
-.itour-loader-copy img {
+.itour-loader-wordmark {
+  position: relative;
   display: block;
   width: clamp(170px, 23vw, 215px);
+}
+
+.itour-loader-wordmark img {
+  display: block;
+  width: 100%;
   height: auto;
 }
 
-.itour-loader-copy span {
+.itour-loader-wordmark-light {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent 42%, rgba(202, 255, 237, .25) 46%, #eafff8 48.5%, #fff 50%, #eafff8 51.5%, rgba(202, 255, 237, .25) 54%, transparent 58%);
+  background-position: 135% 0;
+  background-size: 250% 100%;
+  -webkit-mask: url("../img/textlogo2-transparent.png") center / contain no-repeat;
+  mask: url("../img/textlogo2-transparent.png") center / contain no-repeat;
+  filter: drop-shadow(0 0 2px rgba(255, 255, 255, .8));
+  animation: itour-wordmark-write 2.4s ease-in-out infinite;
+}
+
+.itour-loader-caption {
   color: #688078;
   font: 600 10px/1.2 Inter, Poppins, sans-serif;
   letter-spacing: .12em;
   text-transform: uppercase;
-}
-
-.itour-loader-progress {
-  position: relative;
-  width: clamp(178px, 24vw, 224px);
-  height: 3px;
-  margin-top: 3px;
-  overflow: hidden;
-  border-radius: 999px;
-  background: var(--itour-loader-line);
-}
-
-.itour-loader-progress span {
-  position: absolute;
-  inset-block: 0;
-  left: 0;
-  width: 38%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, transparent, var(--itour-loader-green) 24%, #41aa8c 76%, transparent);
-  animation: itour-progress 1.25s cubic-bezier(.45, 0, .55, 1) infinite;
 }
 
 .itour-loader-sr {
@@ -145,28 +153,48 @@ html.itour-page-loading body {
   border: 0;
 }
 
-@keyframes itour-boat-float {
-  0%, 100% { transform: translateX(-50%) translateY(2px) rotate(-.7deg); }
-  50% { transform: translateX(-50%) translateY(-4px) rotate(.7deg); }
+@keyframes itour-boat-orbit {
+  to { transform: rotate(360deg); }
 }
 
-@keyframes itour-wave-flow {
-  to { stroke-dashoffset: -58; }
+@keyframes itour-boat-upright {
+  from { transform: translateX(-50%) rotate(8deg); }
+  to { transform: translateX(-50%) rotate(-352deg); }
 }
 
-@keyframes itour-progress {
-  0% { transform: translateX(-110%); }
-  55% { width: 52%; }
-  100% { transform: translateX(285%); width: 38%; }
+@keyframes itour-route-drift {
+  to { transform: rotate(-360deg); }
+}
+
+@keyframes itour-logo-breathe {
+  0%, 100% { transform: scale(.98); opacity: .82; }
+  50% { transform: scale(1.04); opacity: 1; }
+}
+
+@keyframes itour-logo-bob {
+  0%, 100% { transform: translateY(1px); }
+  50% { transform: translateY(-2px); }
+}
+
+@keyframes itour-wordmark-write {
+  0% { background-position: 135% 0; opacity: .45; }
+  8% { opacity: 1; }
+  72% { background-position: -35% 0; opacity: 1; }
+  84%, 100% { background-position: -35% 0; opacity: 0; }
 }
 
 @media (max-width: 600px) {
   .itour-page-loader { gap: 11px; }
-  .itour-loader-scene { height: 108px; }
+  .itour-loader-scene { width: 148px; height: 148px; }
+  .itour-loader-logo-halo { width: 96px; height: 96px; }
+  .itour-loader-logo { width: 80px; height: 80px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .itour-loader-orbit,
+  .itour-loader-route,
   .itour-loader-boat,
-  .itour-loader-wave path,
-  .itour-loader-progress span { animation: none; }
+  .itour-loader-logo-halo,
+  .itour-loader-logo,
+  .itour-loader-wordmark-light { animation: none; }
 }

@@ -111,12 +111,24 @@
     const location = document.getElementById("heroVisualLocation");
     const action = visual.querySelector(".hero-visual-action");
     const options = Array.from(visual.querySelectorAll(".hero-destination-option"));
+    const selectorViewport = visual.querySelector(".hero-selector-viewport");
     const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (!summary || !image || !options.length) return;
 
     let activeIndex = 0;
     let autoTimer = 0;
     let paused = false;
+
+    const updateSelectorWindow = () => {
+      if (!selectorViewport) return;
+      const viewportBounds = selectorViewport.getBoundingClientRect();
+      const selectedBounds = options[activeIndex].getBoundingClientRect();
+      const top = selectedBounds.top - viewportBounds.top - 8;
+      const bottom = selectedBounds.bottom - viewportBounds.bottom + 8;
+      if (top < 0 || bottom > 0) {
+        selectorViewport.scrollBy({ top: top < 0 ? top : bottom, behavior: reduceMotion ? "instant" : "smooth" });
+      }
+    };
 
     options.forEach((option) => {
       const preload = new Image();
@@ -140,7 +152,7 @@
     const selectDestination = (index, moveFocus = false) => {
       activeIndex = (index + options.length) % options.length;
       const selected = options[activeIndex];
-      visual.dataset.activeStop = String(activeIndex);
+      visual.dataset.activeStop = selected.dataset.stop || String(activeIndex % 3);
 
       options.forEach((option, optionIndex) => {
         const active = optionIndex === activeIndex;
@@ -149,26 +161,31 @@
         option.tabIndex = active ? 0 : -1;
       });
 
+      if (action) {
+        action.href = selected.dataset.url || "destination.php";
+        action.setAttribute("aria-label", `Explore ${selected.dataset.title || "this destination"}`);
+      }
       summary.classList.add("is-changing");
       window.setTimeout(() => {
         image.src = selected.dataset.image || image.src;
         image.alt = selected.dataset.alt || selected.dataset.title || "Mercedes island destination";
         if (title) title.textContent = selected.dataset.title || "Mercedes Island";
         if (location) location.textContent = selected.dataset.location || "Mercedes, Camarines Norte";
-        if (action) action.setAttribute("aria-label", `Explore ${selected.dataset.title || "this destination"}`);
         window.requestAnimationFrame(() => summary.classList.remove("is-changing"));
       }, reduceMotion ? 0 : 170);
 
-      if (moveFocus) selected.focus();
+      updateSelectorWindow();
+      if (moveFocus) selected.focus({ preventScroll: true });
       scheduleNext();
     };
 
     options.forEach((option, index) => {
       option.addEventListener("click", () => selectDestination(index));
       option.addEventListener("keydown", (event) => {
-        if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+        if (!["ArrowRight", "ArrowLeft", "ArrowUp", "ArrowDown"].includes(event.key)) return;
         event.preventDefault();
-        selectDestination(activeIndex + (event.key === "ArrowRight" ? 1 : -1), true);
+        const forward = event.key === "ArrowRight" || event.key === "ArrowDown";
+        selectDestination(activeIndex + (forward ? 1 : -1), true);
       });
     });
 

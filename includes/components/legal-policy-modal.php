@@ -13,7 +13,10 @@
           <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.8 2.8 8.4 7 10 4.2-1.6 7-5.2 7-10V6l-7-3Z"></path></svg>Official website policy</span>
         </p>
       </div>
-      <button type="button" class="legal-policy-modal__close" data-legal-policy-close aria-label="Close legal information"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button>
+      <div class="legal-policy-modal__header-actions">
+        <button type="button" class="legal-policy-modal__cookie-settings" data-cookie-settings hidden>Change Cookie Selection</button>
+        <button type="button" class="legal-policy-modal__close" data-legal-policy-close aria-label="Close legal information"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"></path></svg></button>
+      </div>
     </header>
 
     <div class="legal-policy-modal__tabs" role="tablist" aria-label="Legal information">

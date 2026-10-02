@@ -120,7 +120,7 @@ $activeTab = isset($SEARCH_TABS[$requestedTab]) ? $requestedTab : 'hotels';
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>iTour Mercedes - Discover & Book Adventures</title>
-  <link rel="icon" type="image/png" href="img/newlogo.png" />
+  <link rel="icon" type="image/png" href="<?= is_file(__DIR__ . '/../img/favicon-64-v1.png') ? 'img/favicon-64-v1.png' : 'img/newlogo.png' ?>" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles/homepage.css" />
   <link rel="stylesheet" href="styles/unified_search.css" />

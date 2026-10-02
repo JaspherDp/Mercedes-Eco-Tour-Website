@@ -40,6 +40,17 @@ function resolveHomepageImage(?string $rawPath, string $fallback = 'img/sampleim
     return $fallback;
 }
 
+function getDestinationProfileImage(PDO $pdo, string $slug, string $fallback): string
+{
+    try {
+        $stmt = $pdo->prepare('SELECT card_image FROM destinations WHERE slug = ? LIMIT 1');
+        $stmt->execute([$slug]);
+        return resolveHomepageImage($stmt->fetchColumn() ?: '', $fallback);
+    } catch (Throwable $error) {
+        return $fallback;
+    }
+}
+
 $description1  = getLatestFieldValue($pdo, 'description1');
 $description2  = getLatestFieldValue($pdo, 'description2');
 $footerText    = getLatestFieldValue($pdo, 'footer_text');
@@ -50,6 +61,43 @@ for ($index = 1; $index <= 4; $index++) {
 }
 $smallImage1 = getLatestFieldValue($pdo, 'small_image1') ?: 'img/Apuao Pequeña.png';
 $smallImage2 = getLatestFieldValue($pdo, 'small_image2') ?: 'img/sampleimagesec.png';
+$apuaoGrandeProfileImage = getDestinationProfileImage($pdo, 'apuao-grande-island', 'imagess/Apuao Grande.jpg');
+$apuaoPequenaProfileImage = getDestinationProfileImage($pdo, 'apuao-pequena-island', 'imagess/Apuao Pequena.jpg');
+
+$heroDestinations = [];
+try {
+    $heroDestinationStmt = $pdo->query("
+        SELECT slug, title, destination_type, location, card_image
+        FROM destinations
+        WHERE status = 'published'
+        ORDER BY sort_order ASC, destination_id ASC
+    ");
+    foreach ($heroDestinationStmt ? $heroDestinationStmt->fetchAll(PDO::FETCH_ASSOC) : [] as $destination) {
+        $slug = trim((string)($destination['slug'] ?? ''));
+        $title = trim((string)($destination['title'] ?? ''));
+        if ($slug === '' || $title === '') continue;
+        $type = trim((string)($destination['destination_type'] ?? '')) ?: 'Destination';
+        $locationName = trim((string)($destination['location'] ?? '')) ?: 'Mercedes, Camarines Norte';
+        $heroDestinations[] = [
+            'slug' => $slug,
+            'title' => $title,
+            'location' => $type . ' · ' . $locationName,
+            'image' => resolveHomepageImage((string)($destination['card_image'] ?? ''), 'img/sampleimage.png'),
+            'url' => 'destination.php?destination=' . rawurlencode($slug) . '&return=' . rawurlencode('./'),
+        ];
+    }
+} catch (Throwable $error) {
+    $heroDestinations = [];
+}
+
+if (!$heroDestinations) {
+    $heroDestinations = [
+        ['slug' => 'apuao-grande-island', 'title' => 'Apuao Grande', 'location' => 'Island retreat · Mercedes', 'image' => 'imagess/Apuao Grande.jpg', 'url' => 'destination.php?destination=apuao-grande-island&return=.%2F'],
+        ['slug' => 'caringo-island', 'title' => 'Caringo Island', 'location' => 'White sand beach · Mercedes', 'image' => 'imagess/Caringo.jpg', 'url' => 'destination.php?destination=caringo-island&return=.%2F'],
+        ['slug' => 'quinapaguian-island', 'title' => 'Quinapaguian Island', 'location' => 'Quiet coastline · Mercedes', 'image' => 'imagess/Quinapaguian.jpg', 'url' => 'destination.php?destination=quinapaguian-island&return=.%2F'],
+    ];
+}
+$initialHeroDestination = $heroDestinations[0];
 
 $popularTours = [];
 try {
@@ -125,7 +173,7 @@ try {
   <meta name="description" content="Discover Mercedes, Camarines Norte with iTour Mercedes. Explore tourist destinations, island hopping tours, hotels, resorts, and local tourism experiences.">
   <link rel="canonical" href="https://itourmercedes.com/">
   <title>iTour Mercedes | Tourism Guide to Mercedes, Camarines Norte</title>
-  <link rel="icon" type="image/png" href="img/newlogo.png">
+  <link rel="icon" type="image/png" href="<?= is_file(__DIR__ . '/../img/favicon-64-v1.png') ? 'img/favicon-64-v1.png' : 'img/newlogo.png' ?>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -202,35 +250,37 @@ try {
             </span>
 
             <figure class="hero-visual-card">
-              <img id="heroVisualImage" src="imagess/Apuao Grande.jpg" alt="Apuao Grande island">
+              <img id="heroVisualImage" src="<?= htmlspecialchars($initialHeroDestination['image'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($initialHeroDestination['title'], ENT_QUOTES, 'UTF-8') ?>">
               <div class="hero-card-shade"></div>
               <figcaption aria-live="polite">
                 <span>Featured island escape</span>
-                <strong id="heroVisualTitle">Apuao Grande</strong>
-                <small id="heroVisualLocation">Island retreat · Mercedes</small>
+                <strong id="heroVisualTitle"><?= htmlspecialchars($initialHeroDestination['title'], ENT_QUOTES, 'UTF-8') ?></strong>
+                <small id="heroVisualLocation"><?= htmlspecialchars($initialHeroDestination['location'], ENT_QUOTES, 'UTF-8') ?></small>
               </figcaption>
-              <a class="hero-visual-action" href="destination.php" aria-label="Explore Apuao Grande">Explore <span aria-hidden="true">↗</span></a>
+              <a class="hero-visual-action" href="<?= htmlspecialchars($initialHeroDestination['url'], ENT_QUOTES, 'UTF-8') ?>" aria-label="Explore <?= htmlspecialchars($initialHeroDestination['title'], ENT_QUOTES, 'UTF-8') ?>">Explore <span aria-hidden="true">↗</span></a>
             </figure>
 
             <div class="hero-float-note hero-float-note--favorite">
               <span>★</span><div><strong>Local favorite</strong><small>Curated island experience</small></div>
             </div>
-            <div class="hero-float-note hero-float-note--islands"><strong>7+</strong><span>islands to discover</span></div>
+            <div class="hero-float-note hero-float-note--islands"><strong><?= count($heroDestinations) ?></strong><span>places to discover</span></div>
 
-            <div class="hero-island-selector" role="tablist" aria-label="Choose a featured island">
+            <div class="hero-island-selector" aria-label="Choose a featured destination">
               <span class="hero-selector-label">Explore route</span>
-              <button class="hero-destination-option active" type="button" role="tab" aria-selected="true" title="Apuao Grande"
-                      data-stop="0" data-title="Apuao Grande" data-location="Island retreat · Mercedes" data-image="imagess/Apuao Grande.jpg">
-                <img src="imagess/Apuao Grande.jpg" alt=""><span>01</span>
-              </button>
-              <button class="hero-destination-option" type="button" role="tab" aria-selected="false" title="Caringo Island"
-                      data-stop="1" data-title="Caringo Island" data-location="White sand beach · Mercedes" data-image="imagess/Caringo.jpg">
-                <img src="imagess/Caringo.jpg" alt=""><span>02</span>
-              </button>
-              <button class="hero-destination-option" type="button" role="tab" aria-selected="false" title="Quinapaguian Island"
-                      data-stop="2" data-title="Quinapaguian Island" data-location="Quiet coastline · Mercedes" data-image="imagess/Quinapaguian.jpg">
-                <img src="imagess/Quinapaguian.jpg" alt=""><span>03</span>
-              </button>
+              <div class="hero-selector-viewport">
+                <div class="hero-selector-track" role="tablist" aria-label="Featured destinations" aria-orientation="vertical">
+                  <?php foreach ($heroDestinations as $destinationIndex => $destination): ?>
+                    <button class="hero-destination-option<?= $destinationIndex === 0 ? ' active' : '' ?>" type="button" role="tab" aria-selected="<?= $destinationIndex === 0 ? 'true' : 'false' ?>" title="<?= htmlspecialchars($destination['title'], ENT_QUOTES, 'UTF-8') ?>"
+                            data-stop="<?= $destinationIndex % 3 ?>"
+                            data-title="<?= htmlspecialchars($destination['title'], ENT_QUOTES, 'UTF-8') ?>"
+                            data-location="<?= htmlspecialchars($destination['location'], ENT_QUOTES, 'UTF-8') ?>"
+                            data-image="<?= htmlspecialchars($destination['image'], ENT_QUOTES, 'UTF-8') ?>"
+                            data-url="<?= htmlspecialchars($destination['url'], ENT_QUOTES, 'UTF-8') ?>">
+                      <img src="<?= htmlspecialchars($destination['image'], ENT_QUOTES, 'UTF-8') ?>" alt=""><span><?= str_pad((string)($destinationIndex + 1), 2, '0', STR_PAD_LEFT) ?></span>
+                    </button>
+                  <?php endforeach; ?>
+                </div>
+              </div>
             </div>
             <span class="hero-switch-progress" aria-hidden="true"><span></span></span>
           </div>
@@ -552,8 +602,8 @@ try {
           <span class="dest-floating-boat dest-floating-boat--two" aria-hidden="true">
             <svg viewBox="0 0 42 42"><path d="M7 24.5h28l-5.6 8.2H12.5L7 24.5Zm10.8-15 10.7 12H17.8v-12Zm-2.7 2.3v9.7H8.8l6.3-9.7Z"></path><path class="boat-wave" d="M7 35c3 2 5 2 8 0 3 2 5 2 8 0 3 2 5 2 8 0"></path></svg>
           </span>
-          <img class="dest-image-main" src="imagess/Apuao Grande_header-img.png" alt="Aerial view of an island in Mercedes" loading="lazy">
-          <img class="dest-image-small" src="imagess/Caringo_header-img.png" alt="Clear coastal water in Mercedes" loading="lazy">
+          <img class="dest-image-main" src="<?= htmlspecialchars($apuaoPequenaProfileImage, ENT_QUOTES, 'UTF-8') ?>" alt="Apuao Pequena Island" loading="lazy">
+          <img class="dest-image-small" src="<?= htmlspecialchars($apuaoGrandeProfileImage, ENT_QUOTES, 'UTF-8') ?>" alt="Apuao Grande Island" loading="lazy">
           <div class="dest-note"><strong>Nature feels closer here</strong><span>Beaches · islands · local culture</span></div>
         </div>
         <div class="dest-text">

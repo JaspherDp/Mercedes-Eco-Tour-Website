@@ -9,10 +9,22 @@
     const scrollArea = modal.querySelector("[data-legal-policy-scroll]");
     const tabs = Array.from(modal.querySelectorAll("[data-legal-policy-tab]"));
     const panels = Array.from(modal.querySelectorAll("[data-legal-policy-panel]"));
+    const cookieSettingsButton = modal.querySelector("[data-cookie-settings]");
     let returnFocus = null;
+    let selectedPolicy = "privacy";
+
+    function hasSavedCookieSelection() {
+      return Boolean(window.ItourCookiePreferences?.hasSavedConsent?.());
+    }
+
+    function updateCookieSettingsButton() {
+      if (!cookieSettingsButton) return;
+      cookieSettingsButton.hidden = selectedPolicy !== "cookies" || !hasSavedCookieSelection();
+    }
 
     function selectPolicy(policy, focusTab) {
       const selected = ["privacy", "terms", "cookies"].includes(policy) ? policy : "privacy";
+      selectedPolicy = selected;
       tabs.forEach((tab) => {
         const active = tab.dataset.legalPolicyTab === selected;
         tab.setAttribute("aria-selected", active ? "true" : "false");
@@ -25,6 +37,7 @@
       const titles = { privacy: "Privacy Policy", terms: "Terms & Conditions", cookies: "Cookie Notice" };
       title.textContent = titles[selected];
       if (scrollArea) scrollArea.scrollTop = 0;
+      updateCookieSettingsButton();
     }
 
     function openModal(policy, trigger) {
@@ -54,6 +67,16 @@
     modal.querySelectorAll("[data-legal-policy-close]").forEach((button) => {
       button.addEventListener("click", closeModal);
     });
+
+    cookieSettingsButton?.addEventListener("click", () => {
+      const preferences = window.ItourCookiePreferences;
+      if (!preferences?.hasSavedConsent?.()) return;
+      closeModal();
+      preferences.open();
+    });
+
+    document.addEventListener("itour:cookie-consent", updateCookieSettingsButton);
+    document.addEventListener("itour:cookie-preferences-ready", updateCookieSettingsButton);
 
     tabs.forEach((tab, index) => {
       tab.addEventListener("click", () => selectPolicy(tab.dataset.legalPolicyTab, false));

@@ -1,0 +1,137 @@
+.admin-portal-card {
+  width: min(100%, 570px);
+  max-width: calc(100vw - 36px);
+  position: relative;
+  z-index: 1;
+  padding: 38px 42px 32px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, .76);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, .98);
+  box-shadow: 0 28px 70px rgba(2, 31, 24, .32);
+  animation: authCardIn .45s cubic-bezier(.2, .75, .25, 1) both;
+}
+
+.admin-portal-card::before {
+  height: 5px;
+  position: absolute;
+  inset: 0 0 auto;
+  display: block;
+  content: "";
+  background: linear-gradient(90deg, var(--auth-primary), #51b798);
+}
+
+.admin-portal-brand { margin-bottom: 24px; }
+.admin-portal-brand .adlog-brand-logo {
+  width: 70px;
+  height: 70px;
+  flex-basis: 70px;
+  padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+}
+.admin-portal-brand .adlog-brand-wordmark {
+  width: 220px;
+  height: 64px;
+  filter: none;
+}
+
+.admin-portal-heading {
+  margin-bottom: 27px;
+  text-align: center;
+}
+
+.admin-portal-eyebrow {
+  display: block;
+  margin-bottom: 7px;
+  color: var(--auth-primary);
+  font-size: .68rem;
+  font-weight: 800;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+
+.admin-portal-heading h1 {
+  margin: 0;
+  color: var(--auth-ink);
+  font-size: clamp(1.65rem, 5vw, 2rem);
+  line-height: 1.2;
+  letter-spacing: -.035em;
+}
+
+.admin-portal-options {
+  width: min(100%, 410px);
+  display: grid;
+  gap: 11px;
+  margin-inline: auto;
+}
+
+.admin-portal-option {
+  min-height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 15px;
+  color: #fff;
+  border: 0;
+  border-radius: 13px;
+  background: #2b7a66;
+  box-shadow: 0 9px 22px rgba(2, 31, 24, .2);
+  text-decoration: none;
+  transition: border-color .2s ease, background .2s ease, box-shadow .2s ease, transform .2s ease;
+}
+
+.admin-portal-option:hover {
+  background: #176b55;
+  box-shadow: 0 12px 25px rgba(2, 31, 24, .24);
+  transform: translateY(-2px);
+}
+
+.admin-portal-option:focus-visible {
+  outline: 3px solid rgba(44, 139, 112, .23);
+  outline-offset: 2px;
+  border-color: var(--auth-primary);
+}
+
+.admin-portal-copy { min-width: 0; text-align: center; }
+.admin-portal-copy strong { display: block; }
+.admin-portal-copy strong { font-size: 1.12rem; line-height: 1.35; }
+
+.admin-portal-back {
+  width: max-content;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 23px auto 0;
+  color: #526b64;
+  font-size: .75rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.admin-portal-back svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.admin-portal-back:hover { color: var(--auth-primary); }
+
+@media (max-width: 560px) {
+  body.admin-portal-page { padding: 18px 12px; }
+  .admin-portal-card { max-width: calc(100vw - 24px); padding: 30px 20px 25px; border-radius: 18px; }
+  .admin-portal-brand { margin-bottom: 18px; }
+  .admin-portal-heading { margin-bottom: 20px; }
+  .admin-portal-option { min-height: 66px; padding: 10px 12px; }
+  .admin-portal-copy strong { font-size: 1.02rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-portal-card { animation: none; }
+  .admin-portal-option { transition: none; }
+}

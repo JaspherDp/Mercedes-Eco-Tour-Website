@@ -3,6 +3,8 @@ chdir(__DIR__ . '/..');
 require_once __DIR__ . '/../php/session_security.php';
 AppSessionStart();
 require 'php/db_connection.php';
+require_once __DIR__ . '/../php/office_details_helper.php';
+$officeDetails = loadPublicOfficeDetails($pdo);
 
 // Fetch ALL about_gallery items (no fixed IDs)
 try {
@@ -22,7 +24,7 @@ try {
   <meta name="description" content="Learn about iTour Mercedes, a web-based tourism management platform designed to help visitors explore Mercedes, Camarines Norte.">
   <link rel="canonical" href="https://itourmercedes.com/about.php">
   <title>About iTour Mercedes | Mercedes, Camarines Norte Tourism</title>
-  <link rel="icon" type="image/png" href="img/newlogo.png">
+  <link rel="icon" type="image/png" href="<?= is_file(__DIR__ . '/../img/favicon-64-v1.png') ? 'img/favicon-64-v1.png' : 'img/newlogo.png' ?>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
@@ -147,21 +149,22 @@ try {
     <div class="map-info">
         <p class="about-eyebrow">Plan your visit</p>
         <h2 id="visitHeading">Visit the Tourism Office</h2>
-        <p>Our office is conveniently located near the Mercedes-Manguisoc Port, making it easy for visitors arriving by sea to access our services immediately upon arrival.</p>
+        <p>Find our office using the address, landmark, and map below. Our team can help visitors arriving by sea plan their stay in Mercedes.</p>
         <p>We welcome walk-in visitors during office hours and are always happy to provide tourism information, brochures, and assistance with tour bookings and accommodations.</p>
         
         <div class="contact-details">
-            <div><span>Address</span><strong>Municipal Tourism Office, Mercedes, Camarines Norte</strong></div>
-            <div><span>Landmark</span><strong>Near Mercedes-Manguisoc Port</strong></div>
-            <div><span>Office hours</span><strong>Monday&ndash;Friday, 8:00 AM&ndash;5:00 PM</strong></div>
-            <div><span>Email</span><a href="mailto:tourism@mercedes.gov.ph">tourism@mercedes.gov.ph</a></div>
+            <div><span>Address</span><strong><?= htmlspecialchars($officeDetails['office_address'], ENT_QUOTES, 'UTF-8') ?></strong></div>
+            <div><span>Landmark</span><strong><?= htmlspecialchars($officeDetails['office_landmark'], ENT_QUOTES, 'UTF-8') ?></strong></div>
+            <div><span>Office hours</span><strong><?= htmlspecialchars($officeDetails['office_hours'], ENT_QUOTES, 'UTF-8') ?></strong></div>
+            <div><span>Email</span><a href="mailto:<?= htmlspecialchars($officeDetails['office_email'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($officeDetails['office_email'], ENT_QUOTES, 'UTF-8') ?></a></div>
         </div>
-        <a class="about-button about-button--primary about-directions" href="https://maps.app.goo.gl/KbuTauSSe7rLZ2mX9" target="_blank" rel="noopener">Open Map <span aria-hidden="true">&nearr;</span></a>
+        <a class="about-button about-button--primary about-directions" href="<?= htmlspecialchars($officeDetails['office_map_url'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener">Open Map <span aria-hidden="true">&nearr;</span></a>
     </div>
     <div class="map-container">
     <div class="about-map-label"><span>Municipal Tourism Office</span><strong>Mercedes, Camarines Norte</strong></div>
     <iframe 
-        src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d459.7506012181713!2d123.01277317345628!3d14.108871259920196!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x3398adb7b671f4a3%3A0x2292aae9d5fbe681!2sMercedes-Manguisoc%20Port!5e1!3m2!1sen!2sph!4v1760714493461!5m2!1sen!2sph"
+        src="<?= htmlspecialchars($officeDetails['office_map_embed_url'], ENT_QUOTES, 'UTF-8') ?>"
+        title="Map showing Mercedes Tourism Office in Mercedes, Camarines Norte"
         allowfullscreen=""
         loading="lazy"
         referrerpolicy="no-referrer-when-downgrade">

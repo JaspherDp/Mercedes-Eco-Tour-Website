@@ -62,7 +62,7 @@
       </div>
 
       <div class="cookie-consent__details-actions">
-        <p>Your choice will be remembered for 180 days. You can clear this website's cookies in your browser to choose again sooner.</p>
+        <p id="cookieConsentRetention" aria-live="polite">Your choice will be remembered for 180 days. You can clear this website's cookies in your browser to choose again sooner.</p>
       </div>
 
       <section class="cookie-consent__notice" aria-labelledby="cookieConsentNoticeTitle">

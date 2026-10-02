@@ -6,7 +6,7 @@
     <!-- LOGIN FORM -->
     <form class="logsign-form-container" id="loginForm">
       <div class="logsign-login-brand">
-        <img class="logsign-login-logo" src="img/newlogo.png" alt="">
+        <img class="logsign-login-logo" src="img/newlogo-ui-v1.png" alt="" onerror="this.onerror=null;this.src='img/newlogo.png';">
         <img class="logsign-login-wordmark" src="img/textlogo2.png" alt="iTour Mercedes">
       </div>
       <div class="logsign-form-heading">
@@ -403,6 +403,19 @@
   opacity: 1;
   transform: none;
   cursor: not-allowed;
+}
+
+#loginBtn.is-auth-processing,
+#signupBtn.is-auth-processing {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+
+html.logsign-auth-processing,
+html.logsign-auth-processing * {
+  cursor: progress !important;
 }
 
 .logsign-login-spinner {

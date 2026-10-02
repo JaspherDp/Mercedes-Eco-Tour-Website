@@ -551,7 +551,7 @@ unset($hotel);
   <meta name="description" content="<?= htmlspecialchars($seoDescription, ENT_QUOTES, 'UTF-8') ?>" />
   <link rel="canonical" href="<?= htmlspecialchars($seoCanonical, ENT_QUOTES, 'UTF-8') ?>" />
   <title><?= htmlspecialchars($seoTitle, ENT_QUOTES, 'UTF-8') ?></title>
-  <link rel="icon" type="image/png" href="img/newlogo.png" />
+  <link rel="icon" type="image/png" href="<?= is_file(__DIR__ . '/../img/favicon-64-v1.png') ? 'img/favicon-64-v1.png' : 'img/newlogo.png' ?>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
@@ -566,7 +566,6 @@ unset($hotel);
   <script>document.documentElement.classList.add('itour-page-loading');</script>
   <link rel="stylesheet" href="styles/page-loader.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/page-loader.css') ?>" />
   <script src="js/page-loader.js?v=<?= (int)@filemtime(__DIR__ . '/../js/page-loader.js') ?>"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/feather-icons/dist/feather.min.css" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
 
@@ -597,7 +596,7 @@ unset($hotel);
   aria-modal="true">
   <div class="service-drawer-topbar">
     <a class="service-drawer-brand" href="./" aria-label="iTour Mercedes home">
-      <img class="service-drawer-brand-seal" src="img/newlogo.png" alt="">
+      <img class="service-drawer-brand-seal" src="img/newlogo-ui-v1.png" alt="" onerror="this.onerror=null;this.src='img/newlogo.png';">
       <img class="service-drawer-brand-wordmark" src="img/textlogo2.png" alt="iTour Mercedes">
     </a>
     <div class="service-drawer-actions">

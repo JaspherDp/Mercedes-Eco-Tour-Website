@@ -55,3 +55,6 @@ uploads/profile_pictures/
 
 dist/
 build/
+
+# Local-only visual test pages
+/loader_preview.php

@@ -338,7 +338,7 @@ $favoritesCsrf = favoriteCsrfToken();
   <!-- SweetAlert2 CSS -->
 <link href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" rel="stylesheet">
 
-  <link rel="icon" type="image/png" href="img/newlogo.png">
+  <link rel="icon" type="image/png" href="<?= is_file(__DIR__ . '/../img/favicon-64-v1.png') ? 'img/favicon-64-v1.png' : 'img/newlogo.png' ?>">
   <link rel="stylesheet" href="styles/favorites.css">
   <style>
 body {

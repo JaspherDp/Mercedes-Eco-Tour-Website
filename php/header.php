@@ -405,7 +405,7 @@ if (
     <!-- Mobile navigation and brand -->
     <div class="head-nav-left">
       <button type="button" class="head-nav-mobile-toggle" id="headNavMobileToggle" aria-label="Open navigation menu" aria-expanded="false" aria-controls="headNavPrimary"><span class="hamburger" aria-hidden="true"><span class="bar"></span><span class="bar"></span><span class="bar"></span></span></button>
-      <img src="img/newlogo.png" class="head-nav-logo" alt="Mercedes tourism logo">
+      <img src="img/newlogo-ui-v1.png" class="head-nav-logo" alt="Mercedes tourism logo" onerror="this.onerror=null;this.src='img/newlogo.png';">
       <img src="img/textlogo2.png" class="head-navtext-logo" alt="iTour Mercedes">
     </div>
 
@@ -542,7 +542,7 @@ if (
       <?php if (!empty($popularDestinations)): ?>
         <?php foreach ($popularDestinations as $destination): ?>
           <a href="<?= htmlspecialchars($destination['url']) ?>" class="head-subnav-popup-item">
-            <img src="<?= htmlspecialchars(headSubnavResolveImage($destination['image'], 'img/sampleimage.png')) ?>" alt="<?= htmlspecialchars($destination['title']) ?>">
+            <img src="<?= htmlspecialchars(headSubnavResolveImage($destination['image'], 'img/sampleimage.png')) ?>" alt="<?= htmlspecialchars($destination['title']) ?>" loading="lazy">
             <div>
               <span><?= htmlspecialchars($destination['label']) ?></span>
               <strong><?= htmlspecialchars($destination['title']) ?></strong>
@@ -567,7 +567,7 @@ if (
       <?php if (!empty($popularPackages)): ?>
         <?php foreach ($popularPackages as $package): ?>
           <a href="package_details.php?package_id=<?= (int)$package['package_id'] ?>" class="head-subnav-popup-item">
-            <img src="<?= htmlspecialchars(headSubnavResolveImage($package['package_image'] ?? '', 'img/packageshome.png')) ?>" alt="<?= htmlspecialchars((string)($package['package_title'] ?? 'Package')) ?>">
+            <img src="<?= htmlspecialchars(headSubnavResolveImage($package['package_image'] ?? '', 'img/packageshome.png')) ?>" alt="<?= htmlspecialchars((string)($package['package_title'] ?? 'Package')) ?>" loading="lazy">
             <div>
               <span>Top package</span>
               <strong><?= htmlspecialchars((string)($package['package_title'] ?? 'Package')) ?></strong>
@@ -592,7 +592,7 @@ if (
       <?php if (!empty($popularHotels)): ?>
         <?php foreach ($popularHotels as $hotel): ?>
           <a href="hotel_details.php?id=<?= (int)$hotel['hotel_resort_id'] ?>&amp;source=popular" class="head-subnav-popup-item">
-            <img src="<?= htmlspecialchars(headSubnavResolveImage($hotel['image_path'] ?? '', 'img/hotelshome.png')) ?>" alt="<?= htmlspecialchars((string)($hotel['name'] ?? 'Hotel')) ?>">
+            <img src="<?= htmlspecialchars(headSubnavResolveImage($hotel['image_path'] ?? '', 'img/hotelshome.png')) ?>" alt="<?= htmlspecialchars((string)($hotel['name'] ?? 'Hotel')) ?>" loading="lazy">
             <div>
               <span>Top stays</span>
               <strong><?= htmlspecialchars((string)($hotel['name'] ?? 'Hotel & Resort')) ?></strong>
@@ -1102,7 +1102,7 @@ body {
   display: flex;
   align-items: center;
   gap: 22px;
-  padding: 10px 0 10px 75px;
+  padding: 10px 0 10px 65px;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
   position: fixed;
   top: 69px; /* adjust if your main navbar height is different */

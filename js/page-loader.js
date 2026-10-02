@@ -2,8 +2,8 @@
   'use strict';
 
   var startedAt = Date.now();
-  var minimumDisplayMs = 180;
-  var maximumDisplayMs = 900;
+  var minimumDisplayMs = 480;
+  var maximumDisplayMs = 1400;
   var dismissed = false;
 
   function removeLoader() {

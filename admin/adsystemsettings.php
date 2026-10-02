@@ -67,6 +67,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         'office_email' => mb_substr(trim((string)($_POST['office_email'] ?? '')), 0, 150),
         'office_phone' => mb_substr(trim((string)($_POST['office_phone'] ?? '')), 0, 40),
         'office_address' => mb_substr(trim((string)($_POST['office_address'] ?? '')), 0, 220),
+        'office_landmark' => mb_substr(trim((string)($_POST['office_landmark'] ?? '')), 0, 160),
+        'office_hours' => mb_substr(trim((string)($_POST['office_hours'] ?? '')), 0, 120),
+        'office_facebook_url' => trim((string)($_POST['office_facebook_url'] ?? '')),
+        'office_map_url' => trim((string)($_POST['office_map_url'] ?? '')),
+        'office_map_embed_url' => trim((string)($_POST['office_map_embed_url'] ?? '')),
         'timezone' => in_array($_POST['timezone'] ?? '', $allowedTimezones, true) ? $_POST['timezone'] : 'Asia/Manila',
         'currency' => in_array($_POST['currency'] ?? '', $allowedCurrencies, true) ? $_POST['currency'] : 'PHP',
         'date_format' => in_array($_POST['date_format'] ?? '', $allowedDateFormats, true) ? $_POST['date_format'] : 'M d, Y',
@@ -88,8 +93,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($candidate['site_name'] === '') {
         adminManagementRedirect($pageFile, 'error', 'The portal name is required.');
     }
-    if ($candidate['office_email'] !== '' && !filter_var($candidate['office_email'], FILTER_VALIDATE_EMAIL)) {
+    if (!filter_var($candidate['office_email'], FILTER_VALIDATE_EMAIL)) {
         adminManagementRedirect($pageFile, 'error', 'Enter a valid tourism office email address.');
+    }
+    foreach (['office_phone' => 'Contact number', 'office_address' => 'Tourism address', 'office_landmark' => 'Landmark', 'office_hours' => 'Office hours'] as $key => $label) {
+        if ($candidate[$key] === '') {
+            adminManagementRedirect($pageFile, 'error', $label . ' is required.');
+        }
+    }
+    if (!preg_match('/^[+0-9() .-]{7,40}$/', $candidate['office_phone']) || strlen(preg_replace('/\D/', '', $candidate['office_phone'])) < 7) {
+        adminManagementRedirect($pageFile, 'error', 'Enter a valid contact number.');
+    }
+    if (strlen($candidate['office_facebook_url']) > 1000 || strlen($candidate['office_map_url']) > 1000 || strlen($candidate['office_map_embed_url']) > 5000) {
+        adminManagementRedirect($pageFile, 'error', 'A map or social link is too long.');
+    }
+    try {
+        $candidate['office_facebook_url'] = officeDetailsExternalUrl($candidate['office_facebook_url'], 'facebook');
+        $candidate['office_map_url'] = officeDetailsExternalUrl($candidate['office_map_url'], 'map');
+        $candidate['office_map_embed_url'] = officeDetailsEmbedUrl($candidate['office_map_embed_url']);
+    } catch (InvalidArgumentException $error) {
+        adminManagementRedirect($pageFile, 'error', $error->getMessage());
     }
 
     try {
@@ -151,8 +174,6 @@ if (!empty($settingsMeta['updated_by'])) {
     </header>
 
     <div class="admin-management-content"><div class="am-shell">
-      <?php if ($flash): ?><div class="am-flash <?= ($flash['status'] ?? '') === 'error' ? 'error' : '' ?>"><span><?= adminManagementEscape($flash['message'] ?? '') ?></span><button type="button" aria-label="Dismiss" onclick="this.parentElement.remove()">&times;</button></div><?php endif; ?>
-
       <section class="am-summary-grid" aria-label="System health">
         <article class="am-summary-card"><div class="am-summary-top"><span class="am-summary-icon"><svg viewBox="0 0 24 24"><path d="M4 6c0-2 3.6-3.5 8-3.5S20 4 20 6s-3.6 3.5-8 3.5S4 8 4 6Z"/><path d="M4 6v6c0 2 3.6 3.5 8 3.5s8-1.5 8-3.5V6M4 12v6c0 2 3.6 3.5 8 3.5s8-1.5 8-3.5v-6"/></svg></span><span class="am-status">Connected</span></div><strong>Database healthy</strong><p><?= number_format($tableCount) ?> tables · <?= number_format($dbSizeMb, 1) ?> MB</p></article>
         <article class="am-summary-card"><div class="am-summary-top"><span class="am-summary-icon"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4zM8 2v4M16 2v4M2 9h20"/></svg></span><span class="am-status">Configured</span></div><strong><?= adminManagementEscape($settings['timezone']) ?></strong><p>Portal timezone · <?= adminManagementEscape($settings['currency']) ?> currency</p></article>
@@ -166,6 +187,7 @@ if (!empty($settingsMeta['updated_by'])) {
           <nav class="am-nav" aria-label="Settings sections">
             <div class="am-nav-label">Configuration</div>
             <button type="button" class="active" data-panel="general"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg>General</button>
+            <button type="button" data-panel="about"><svg viewBox="0 0 24 24"><path d="M12 21s7-5.3 7-11a7 7 0 1 0-14 0c0 5.7 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>About details</button>
             <button type="button" data-panel="bookings"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>Booking rules</button>
             <button type="button" data-panel="notifications"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>Notifications</button>
             <button type="button" data-panel="security"><svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.4 8 8 9 4.6-1 8-4 8-9V6l-8-3Z"/><path d="m8.5 12 2.3 2.3 4.7-4.8"/></svg>Security & data</button>
@@ -175,17 +197,29 @@ if (!empty($settingsMeta['updated_by'])) {
 
           <div class="am-panels">
             <section class="am-panel active" data-panel-content="general">
-              <article class="am-card"><header class="am-card-header"><div class="am-card-heading"><span class="am-card-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg></span><div><h3>Portal identity</h3><p>Official name and contact information used by the tourism office</p></div></div></header><div class="am-card-body am-grid-2">
+              <article class="am-card"><header class="am-card-header"><div class="am-card-heading"><span class="am-card-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg></span><div><h3>Portal identity</h3><p>Official name and visitor support message</p></div></div></header><div class="am-card-body am-grid-2">
                 <div class="am-field"><label for="site_name">Portal name</label><input id="site_name" name="site_name" maxlength="100" required value="<?= adminManagementEscape($settings['site_name']) ?>"></div>
-                <div class="am-field"><label for="office_email">Official email <span>(optional)</span></label><input id="office_email" name="office_email" type="email" maxlength="150" value="<?= adminManagementEscape($settings['office_email']) ?>" placeholder="tourism@mercedes.gov.ph"></div>
-                <div class="am-field"><label for="office_phone">Contact number <span>(optional)</span></label><input id="office_phone" name="office_phone" maxlength="40" value="<?= adminManagementEscape($settings['office_phone']) ?>" placeholder="+63 9XX XXX XXXX"></div>
-                <div class="am-field"><label for="office_address">Office address</label><input id="office_address" name="office_address" maxlength="220" value="<?= adminManagementEscape($settings['office_address']) ?>"></div>
                 <div class="am-field full"><label for="support_message">Visitor support message</label><textarea id="support_message" name="support_message" maxlength="300"><?= adminManagementEscape($settings['support_message']) ?></textarea><div class="am-field-help">A concise contact instruction that can be reused on confirmations and support views.</div></div>
               </div></article>
               <article class="am-card"><header class="am-card-header"><div class="am-card-heading"><span class="am-card-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span><div><h3>Regional formatting</h3><p>Default timezone, currency, and date presentation</p></div></div></header><div class="am-card-body am-grid-3">
                 <div class="am-field"><label for="timezone">Timezone</label><select id="timezone" name="timezone"><?php foreach ($allowedTimezones as $item): ?><option value="<?= adminManagementEscape($item) ?>" <?= $settings['timezone'] === $item ? 'selected' : '' ?>><?= adminManagementEscape($item) ?></option><?php endforeach; ?></select></div>
                 <div class="am-field"><label for="currency">Currency</label><select id="currency" name="currency"><?php foreach ($allowedCurrencies as $item): ?><option value="<?= $item ?>" <?= $settings['currency'] === $item ? 'selected' : '' ?>><?= $item === 'PHP' ? 'PHP — Philippine Peso' : 'USD — US Dollar' ?></option><?php endforeach; ?></select></div>
                 <div class="am-field"><label for="date_format">Date format</label><select id="date_format" name="date_format"><?php foreach ($allowedDateFormats as $item): ?><option value="<?= adminManagementEscape($item) ?>" <?= $settings['date_format'] === $item ? 'selected' : '' ?>><?= adminManagementEscape(date($item)) ?></option><?php endforeach; ?></select></div>
+              </div></article>
+            </section>
+
+            <section class="am-panel" data-panel-content="about">
+              <article class="am-card"><header class="am-card-header"><div class="am-card-heading"><span class="am-card-icon"><svg viewBox="0 0 24 24"><path d="M12 21s7-5.3 7-11a7 7 0 1 0-14 0c0 5.7 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg></span><div><h3>Tourism office details</h3><p>Shared by the About page and footer</p></div></div></header><div class="am-card-body am-grid-2">
+                <div class="am-field full"><label for="office_address">Tourism address</label><input id="office_address" name="office_address" maxlength="220" required value="<?= adminManagementEscape($settings['office_address']) ?>"><div class="am-field-help">Shown on the About page and as the footer location.</div></div>
+                <div class="am-field"><label for="office_email">Tourism email</label><input id="office_email" name="office_email" type="email" maxlength="150" required value="<?= adminManagementEscape($settings['office_email']) ?>"><div class="am-field-help">One email address for the About page and footer.</div></div>
+                <div class="am-field"><label for="office_phone">Contact number</label><input id="office_phone" name="office_phone" type="tel" maxlength="40" required value="<?= adminManagementEscape($settings['office_phone']) ?>"></div>
+                <div class="am-field"><label for="office_landmark">Landmark</label><input id="office_landmark" name="office_landmark" maxlength="160" required value="<?= adminManagementEscape($settings['office_landmark']) ?>"></div>
+                <div class="am-field"><label for="office_hours">Office hours</label><input id="office_hours" name="office_hours" maxlength="120" required value="<?= adminManagementEscape($settings['office_hours']) ?>"></div>
+              </div></article>
+              <article class="am-card"><header class="am-card-header"><div class="am-card-heading"><span class="am-card-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM4 10h16M10 5v14M14 13l2 2 3-3"/></svg></span><div><h3>Map and social links</h3><p>Links used by the About page and footer contact list</p></div></div></header><div class="am-card-body am-grid-2">
+                <div class="am-field full"><label for="office_map_embed_url">Google Maps embed link</label><textarea id="office_map_embed_url" name="office_map_embed_url" required><?= adminManagementEscape($settings['office_map_embed_url']) ?></textarea><div class="am-field-help">Paste the Google Maps embed URL or the full iframe code. The map on the About page updates after saving.</div></div>
+                <div class="am-field full"><label for="office_map_url">Google Maps location link</label><input id="office_map_url" name="office_map_url" type="url" required value="<?= adminManagementEscape($settings['office_map_url']) ?>"><div class="am-field-help">Used by Open Map on the About page and by the footer location.</div></div>
+                <div class="am-field full"><label for="office_facebook_url">Facebook page link</label><input id="office_facebook_url" name="office_facebook_url" type="url" required value="<?= adminManagementEscape($settings['office_facebook_url']) ?>"></div>
               </div></article>
             </section>
 
@@ -235,6 +269,18 @@ if (!empty($settingsMeta['updated_by'])) {
 
 <script>
 (() => {
+  const settingsFlash = <?= json_encode($flash, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE) ?>;
+  if (settingsFlash && window.Swal) {
+    const saved = settingsFlash.status === 'success';
+    Swal.fire({
+      icon: saved ? 'success' : 'error',
+      title: saved ? 'Settings saved' : 'Unable to save settings',
+      text: settingsFlash.message,
+      confirmButtonText: 'OK',
+      confirmButtonColor: '#176b58'
+    });
+  }
+
   const tabs = [...document.querySelectorAll('[data-panel]')];
   const panels = [...document.querySelectorAll('[data-panel-content]')];
   const activate = name => {

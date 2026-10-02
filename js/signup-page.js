@@ -22,6 +22,28 @@
     window.RequestLimitModal?.handle(response, payload, { button, defaultText })
   );
 
+  function setAuthProcessing(button, label, google = false) {
+    if (!button || button.classList.contains("is-auth-processing")) return;
+    button.dataset.authOriginalHtml = button.innerHTML;
+    button.classList.add("is-auth-processing");
+    button.setAttribute("aria-busy", "true");
+    if ("disabled" in button) button.disabled = true;
+    button.innerHTML = `<span class="${google ? "tourist-google-spinner" : "tourist-login-spinner"}" aria-hidden="true"></span><span>${label}</span>`;
+    document.documentElement.classList.add("tourist-auth-processing");
+  }
+
+  function clearAuthProcessing(button, restore = true) {
+    if (!button) return;
+    button.classList.remove("is-auth-processing");
+    button.removeAttribute("aria-busy");
+    if (restore && button.dataset.authOriginalHtml) {
+      button.innerHTML = button.dataset.authOriginalHtml;
+      if ("disabled" in button) button.disabled = false;
+    }
+    delete button.dataset.authOriginalHtml;
+    if (!document.querySelector(".is-auth-processing")) document.documentElement.classList.remove("tourist-auth-processing");
+  }
+
   async function addTurnstileToken(body, widgetName) {
     const token = await window.ItourTurnstile.token(widgetName);
     if (token) body.append("cf-turnstile-response", token);
@@ -455,7 +477,8 @@
     const termsConsent = byId("pageSignupTermsConsent");
     if (reportFirstInvalid([privacyConsent, termsConsent])) return;
     if (!passwordChecks()) { showAlert("warning", "Check your password", "Use at least 6 characters with a letter and number, then confirm it correctly."); return; }
-    const button = byId("pageCreateAccount"); button.disabled = true; button.textContent = "Creating account...";
+    const button = byId("pageCreateAccount");
+    setAuthProcessing(button, "Signing up...");
     let rateLimited = false;
     try {
       const body = new FormData();
@@ -472,7 +495,10 @@
       await showAlert("success", "Account created", "Welcome to iTour Mercedes!");
       window.location.href = result.redirect_url || "./";
     } catch (error) { showAlert("error", "Signup failed", error.message); }
-    finally { window.ItourTurnstile.reset("page-signup-complete"); if (!rateLimited) { button.disabled = false; button.textContent = "Create account"; } }
+    finally {
+      window.ItourTurnstile.reset("page-signup-complete");
+      clearAuthProcessing(button, !rateLimited);
+    }
   });
 
   const loginEmail = byId("pageLoginEmail");
@@ -575,9 +601,8 @@
     if (!loginFormElement.checkValidity()) { loginFormElement.reportValidity(); return; }
     const email = loginEmail.value.trim(); const password = loginPassword.value;
     const button = byId("pageLoginButton");
-    button.disabled = true;
+    setAuthProcessing(button, "Logging in...");
     button.classList.add("is-login-loading");
-    button.innerHTML = '<span class="tourist-login-spinner" aria-hidden="true"></span><span>Logging in...</span>';
     try {
       const body = new FormData(); body.append("email", email); body.append("password", password);
       await addTurnstileToken(body, "page-login");
@@ -601,8 +626,22 @@
     finally {
       window.ItourTurnstile.reset("page-login");
       button.classList.remove("is-login-loading");
-      if (loginFormElement.dataset.locked !== "true") { button.disabled = false; button.textContent = "Login"; }
+      clearAuthProcessing(button, loginFormElement.dataset.locked !== "true");
     }
+  });
+
+  document.querySelectorAll(".tourist-google-button").forEach(button => {
+    button.addEventListener("click", event => {
+      if (button.classList.contains("is-auth-processing")) {
+        event.preventDefault();
+        return;
+      }
+      setAuthProcessing(button, "Connecting to Google...", true);
+    });
+  });
+
+  window.addEventListener("pageshow", () => {
+    document.querySelectorAll(".tourist-google-button.is-auth-processing").forEach(button => clearAuthProcessing(button));
   });
 
   try {

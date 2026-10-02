@@ -134,7 +134,7 @@ $additionalFees = getAdditionalFees($pdo);
   <meta charset="utf-8"/>
   <meta content="width=device-width, initial-scale=1" name="viewport"/>
   <title>iTour Mercedes</title>
-  <link rel="icon" type="image/png" href="img/newlogo.png">
+  <link rel="icon" type="image/png" href="<?= is_file(__DIR__ . '/../img/favicon-64-v1.png') ? 'img/favicon-64-v1.png' : 'img/newlogo.png' ?>">
   <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="styles/tourss.css">
   <link rel="stylesheet" href="styles/homepage.css">

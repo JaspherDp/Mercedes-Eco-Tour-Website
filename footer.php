@@ -4,7 +4,10 @@ if (session_status() === PHP_SESSION_NONE) {
     AppSessionStart();
 }
 require_once __DIR__ . '/php/db_connection.php'; // adjust path if needed
+require_once __DIR__ . '/php/office_details_helper.php';
 require_once __DIR__ . '/php/complaints_incidents_helper.php';
+$officeDetails = loadPublicOfficeDetails($pdo);
+$officePhoneHref = preg_replace('/[^0-9+]/', '', $officeDetails['office_phone']);
 $complaintLoggedIn = !empty($_SESSION['tourist_id']);
 $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
 ?>
@@ -14,7 +17,6 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="styles/complaint-modal.css?v=<?= (int)@filemtime(__DIR__ . '/styles/complaint-modal.css') ?>">
   <link rel="stylesheet" href="styles/legal-policy-modal.css?v=<?= (int)@filemtime(__DIR__ . '/styles/legal-policy-modal.css') ?>">
   <link rel="stylesheet" href="styles/cookie-consent-banner.css?v=<?= (int)@filemtime(__DIR__ . '/styles/cookie-consent-banner.css') ?>">
@@ -34,18 +36,23 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
   <footer class="site-footer<?= ($footerVariant ?? '') === 'tours' ? ' footer--tours' : '' ?>">
     <div class="footer-content">
 
-      <!-- LEFT SIDE: LOGOS ABOVE TAGLINE -->
-<div class="footer-section footer-logos">
-  <div class="logo-wrapper">
-    <img src="img/mercedeslogo.png" alt="Logo 1">
-    <img src="img/TourismLogo.png" alt="Logo 2">
-    <img src="img/newlogo.png" alt="iTour Mercedes logo">
-  </div>
-  <p class="footer-tagline">
-    Catering to travel agencies, tour operators,<br>
-    or vacation planning services
-  </p>
-</div>
+      <!-- BRAND AND COLLABORATORS -->
+      <div class="footer-section footer-logos">
+        <div class="footer-brand" aria-label="iTour Mercedes">
+          <img class="footer-brand__icon" src="img/newlogo-ui-v1.png" alt="" loading="lazy" onerror="this.onerror=null;this.src='img/newlogo.png';">
+          <div class="footer-brand__copy">
+            <img class="footer-brand__wordmark" src="img/textlogo2-white.png" alt="iTour Mercedes" loading="lazy">
+            <span class="footer-brand__caption">ITOUR MERCEDES &middot; MERCEDES TOURISM OFFICE</span>
+          </div>
+        </div>
+        <div class="footer-collaborators">
+          <p>In collaboration with</p>
+          <div class="footer-collaborators__logos">
+            <img src="img/mercedeslogo.png" alt="Municipality of Mercedes official seal" loading="lazy">
+            <img src="img/TourismLogo.png" alt="Municipal Tourism Development Operation Center logo" loading="lazy">
+          </div>
+        </div>
+      </div>
 
 
       <!-- CENTER: QUICK LINKS -->
@@ -57,9 +64,7 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
           <li><a href="#legalPolicyModal" data-legal-policy="privacy">Privacy Policy</a></li>
           <li><a href="#legalPolicyModal" data-legal-policy="cookies">Cookie Notice</a></li>
           <li><a href="#complaintIncidentModal" id="openComplaintModal">Submit Complaint &amp; Incident</a></li>
-          <li><a href="php/operator_login.php" target="_blank" rel="noopener noreferrer">Operator Login</a></li>
-          <li><a href="php/admin_login.php" target="_blank" rel="noopener noreferrer">Admin Login</a></li>
-          <li><a href="php/hotel_admin_login.php" target="_blank" rel="noopener noreferrer">Hotel Admin Login</a></li>
+          <li><a href="admin_portal.php" target="_blank" rel="noopener noreferrer">Admin Portal</a></li>
         </ul>
       </div>
 
@@ -67,25 +72,25 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
       <div class="footer-section">
         <h3>Contact Info</h3>
 
-        <a href="https://www.facebook.com/mercedes.tourism.2024" target="_blank" class="contact-line">
+        <a href="<?= htmlspecialchars($officeDetails['office_facebook_url'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" class="contact-line">
           <i class="fab fa-facebook-f contact-icon"></i>
           Municipal Tourism Office - LGU Mercedes
         </a>
 
         <div class="contact-line">
           <i class="fa-solid fa-phone contact-icon"></i>
-          <a href="tel:+639123456789">+63 912 345 6789</a>
+          <a href="tel:<?= htmlspecialchars($officePhoneHref, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($officeDetails['office_phone'], ENT_QUOTES, 'UTF-8') ?></a>
         </div>
 
         <div class="contact-line">
           <i class="fa-solid fa-envelope contact-icon"></i>
-          <a href="mailto:baliksiglamercedes@gmail.com">baliksiglamercedes@gmail.com</a>
+          <a href="mailto:<?= htmlspecialchars($officeDetails['office_email'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($officeDetails['office_email'], ENT_QUOTES, 'UTF-8') ?></a>
         </div>
 
         <div class="contact-line">
           <i class="fa-solid fa-location-dot contact-icon"></i>
-          <a href="https://maps.app.goo.gl/KbuTauSSe7rLZ2mX9" target="_blank">
-            Municipal Hall, Mercedes, Camarines Norte
+          <a href="<?= htmlspecialchars($officeDetails['office_map_url'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer">
+            <?= htmlspecialchars($officeDetails['office_address'], ENT_QUOTES, 'UTF-8') ?>
           </a>
         </div>
 
@@ -99,7 +104,7 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
 
     <!-- Footer Bottom -->
     <div class="footer-bottom">
-      <p>&copy; 2024 Municipal Tourism Office - Mercedes. All rights reserved.</p>
+      <p>&copy; 2024-2026 iTour Mercedes &middot; Municipal Tourism Office, Mercedes, Camarines Norte. All rights reserved.</p>
     </div>
   </footer>
 
@@ -238,8 +243,8 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
       <header class="developers-modal__header">
         <div class="developers-modal__header-content">
           <div class="developers-modal__brand" aria-label="iTour Mercedes">
-            <img class="developers-modal__brand-logo" src="img/newlogo.png" alt="iTour Mercedes logo">
-            <img class="developers-modal__wordmark" src="img/textlogo2-white.png" alt="iTour Mercedes">
+            <img class="developers-modal__brand-logo" src="img/newlogo-ui-v1.png" alt="iTour Mercedes logo" loading="lazy" onerror="this.onerror=null;this.src='img/newlogo.png';">
+            <img class="developers-modal__wordmark" src="img/textlogo2-white.png" alt="iTour Mercedes" loading="lazy">
           </div>
           <div class="developers-modal__heading">
             <h2 id="developersModalTitle">Development Team</h2>
@@ -251,7 +256,7 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
 
       <div class="developers-modal__grid">
         <article class="developer-profile-card">
-          <div class="developer-profile-avatar"><img src="img/jaspher.png" alt="John Jaspher O. Dela Pacion"></div>
+          <div class="developer-profile-avatar"><img src="img/jaspher.png" alt="John Jaspher O. Dela Pacion" loading="lazy"></div>
           <div class="developer-profile-details">
             <span class="developer-profile-role"><i class="fa-solid fa-code" aria-hidden="true"></i> Platform Developer</span>
             <h3>John Jaspher O. Dela Pacion</h3>
@@ -263,7 +268,7 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
           </div>
         </article>
         <article class="developer-profile-card">
-          <div class="developer-profile-avatar"><img src="img/jacqueline.png" alt="Jacqueline Alyzza G. Asis"></div>
+          <div class="developer-profile-avatar"><img src="img/jacqueline.png" alt="Jacqueline Alyzza G. Asis" loading="lazy"></div>
           <div class="developer-profile-details">
             <span class="developer-profile-role"><i class="fa-solid fa-code" aria-hidden="true"></i> Platform Developer</span>
             <h3>Jacqueline Alyzza G. Asis</h3>
@@ -275,7 +280,7 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
           </div>
         </article>
         <article class="developer-profile-card">
-          <div class="developer-profile-avatar"><img src="img/oliver.png" alt="Mark Oliver Coronel"></div>
+          <div class="developer-profile-avatar"><img src="img/oliver.png" alt="Mark Oliver Coronel" loading="lazy"></div>
           <div class="developer-profile-details">
             <span class="developer-profile-role"><i class="fa-solid fa-code" aria-hidden="true"></i> Platform Developer</span>
             <h3>Mark Oliver Coronel</h3>
@@ -406,11 +411,11 @@ footer {
 }
 
 .footer-content {
-  max-width: 1280px;
+  max-width: 1320px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: 1.1fr 0.9fr 1fr;
-  gap: 46px;
+  grid-template-columns: minmax(0, 1.15fr) minmax(225px, .65fr) minmax(0, 1.15fr);
+  gap: clamp(56px, 5.5vw, 84px);
   align-items: start;
 }
 
@@ -426,36 +431,74 @@ footer {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
+  gap: 28px;
 }
 
-.logo-wrapper {
+.footer-brand {
   display: flex;
-  gap: 16px;
-  margin-bottom: 16px;
+  align-items: center;
+  gap: 14px;
+  max-width: 100%;
 }
 
-.logo-wrapper img {
-  width: 120px;
-  height: 120px;
+.footer-brand__icon {
+  width: 92px;
+  height: 92px;
+  flex: 0 0 92px;
   object-fit: contain;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  padding: 8px;
-  transition: transform 260ms ease, box-shadow 260ms ease;
 }
 
-.logo-wrapper img:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.25);
+.footer-brand__copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  min-width: 0;
 }
 
-.footer-tagline {
-  margin: 0;
-  color: #d0deea;
-  font-size: 0.98rem;
-  line-height: 1.7;
-  max-width: 350px;
+.footer-brand__wordmark {
+  display: block;
+  width: min(260px, 100%);
+  height: 68px;
+  min-width: 0;
+  object-fit: contain;
+  object-position: left center;
+}
+
+.footer-brand__caption {
+  color: #c9e8db;
+  font-size: .64rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  line-height: 1.4;
+}
+
+.footer-collaborators {
+  width: 100%;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.16);
+}
+
+.footer-collaborators p {
+  margin: 0 0 12px;
+  color: #b8cbd9;
+  font-size: .76rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.footer-collaborators__logos {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.footer-collaborators__logos img {
+  width: 76px;
+  height: 76px;
+  object-fit: contain;
 }
 
 .quick-links ul {
@@ -589,7 +632,7 @@ footer {
 .developer-profile-meta a:hover, .developer-profile-meta a:focus-visible { color: #08765a; text-decoration: underline; }
 
 .footer-bottom {
-  max-width: 1280px;
+  max-width: 1320px;
   margin: 28px auto 0;
   border-top: 1px solid rgba(255, 255, 255, 0.16);
   padding-top: 16px;
@@ -639,7 +682,7 @@ footer {
 }
 
 /* Tablet/iPad layout. Phone and desktop layouts remain unchanged. */
-@media (min-width: 600px) and (max-width: 1100px) {
+@media (min-width: 681px) and (max-width: 1100px) {
   .about-page .wave-container.site-footer-waves {
     background: #fff;
   }
@@ -714,23 +757,11 @@ footer {
     text-align: left;
   }
 
-  .site-footer .logo-wrapper {
-    justify-content: flex-start;
-    gap: 10px;
-    margin: 0;
-    flex: 0 0 auto;
-  }
-
-  .site-footer .logo-wrapper img {
-    width: 104px;
-    height: 104px;
-    padding: 7px;
-  }
-
-  .site-footer .footer-tagline {
-    max-width: 320px;
-    font-size: .94rem;
-    line-height: 1.6;
+  .site-footer .footer-collaborators {
+    width: auto;
+    padding: 0 0 0 26px;
+    border-top: 0;
+    border-left: 1px solid rgba(255, 255, 255, 0.16);
   }
 
   .site-footer .footer-section h3 {
@@ -834,27 +865,48 @@ footer {
   .footer-logos {
     grid-column: auto;
     align-items: center;
+    gap: 20px;
     padding-bottom: 22px;
     border-bottom: 1px solid rgba(255, 255, 255, .12);
     text-align: center;
   }
 
-  .logo-wrapper {
+  .footer-brand {
     justify-content: center;
-    gap: 14px;
-    margin-bottom: 12px;
+    gap: 10px;
   }
 
-  .logo-wrapper img {
-    width: 78px;
-    height: 78px;
-    padding: 5px;
+  .footer-brand__icon {
+    width: 72px;
+    height: 72px;
+    flex-basis: 72px;
   }
 
-  .footer-tagline {
-    max-width: 275px;
-    font-size: .72rem;
-    line-height: 1.55;
+  .footer-brand__wordmark {
+    width: min(170px, calc(100vw - 130px));
+    height: 46px;
+  }
+
+  .footer-brand__caption {
+    max-width: none;
+    font-size: .44rem;
+    letter-spacing: .015em;
+    text-align: left;
+    white-space: nowrap;
+  }
+
+  .footer-collaborators {
+    width: 100%;
+    padding-top: 16px;
+  }
+
+  .footer-collaborators__logos {
+    justify-content: center;
+  }
+
+  .footer-collaborators__logos img {
+    width: 66px;
+    height: 66px;
   }
 
   .footer-section h3 {

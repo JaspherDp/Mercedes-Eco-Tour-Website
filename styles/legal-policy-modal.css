@@ -74,6 +74,24 @@
 .legal-policy-modal__meta span { display: inline-flex; align-items: center; gap: 6px; }
 .legal-policy-modal__meta svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 
+.legal-policy-modal__header-actions { display: flex; align-items: center; justify-content: flex-end; gap: 9px; }
+
+.legal-policy-modal__cookie-settings {
+  min-height: 40px;
+  padding: 8px 15px;
+  border: 1px solid #176f58;
+  border-radius: 9px;
+  color: #fff;
+  background: #176f58;
+  font: inherit;
+  font-size: .75rem;
+  font-weight: 800;
+  cursor: pointer;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+
+.legal-policy-modal__cookie-settings:hover { border-color: #0c4f3e; background: #0c4f3e; transform: translateY(-1px); }
+
 .legal-policy-modal__close {
   width: 40px;
   height: 40px;
@@ -91,6 +109,7 @@
 .legal-policy-modal__close svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; }
 .legal-policy-modal__close:hover { color: #fff; background: #246f59; transform: rotate(8deg); }
 .legal-policy-modal__close:focus-visible,
+.legal-policy-modal__cookie-settings:focus-visible,
 .legal-policy-modal__tabs button:focus-visible,
 .legal-policy-modal__footer button:focus-visible { outline: 3px solid rgba(89, 202, 169, .42); outline-offset: 2px; }
 
@@ -207,6 +226,8 @@ body.legal-policy-modal-open { overflow: hidden; }
   .legal-policy-modal__header h2 { font-size: 1.125rem; }
   .legal-policy-modal__meta { margin-top: 6px; font-size: .62rem; }
   .legal-policy-modal__meta span:last-child { display: none; }
+  .legal-policy-modal__header-actions { gap: 6px; }
+  .legal-policy-modal__cookie-settings { min-height: 36px; padding-inline: 10px; font-size: .64rem; }
   .legal-policy-modal__close { width: 36px; height: 36px; }
   .legal-policy-modal__tabs { gap: 7px; padding: 9px 10px; }
   .legal-policy-modal__tabs button { min-height: 47px; gap: 7px; padding: 7px 8px; text-align: center; }

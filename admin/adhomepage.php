@@ -1407,7 +1407,7 @@ body {
   white-space: nowrap;
 }
 
-.upcoming-customer span {
+.upcoming-customer > div > span {
   display: block;
   margin-top: 2px;
   color: #758780;
@@ -1757,7 +1757,7 @@ body {
   line-height: 1.35;
 }
 
-.dashboard-content .upcoming-customer span {
+.dashboard-content .upcoming-customer > div > span {
   font-size: 10px;
   line-height: 1.4;
 }

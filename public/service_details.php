@@ -38,7 +38,7 @@ function serviceDetailRating(array $item): string {
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><?= serviceDetailH($pageTitle) ?></title>
-  <link rel="icon" type="image/png" href="img/newlogo.png">
+  <link rel="icon" type="image/png" href="<?= is_file(__DIR__ . '/../img/favicon-64-v1.png') ? 'img/favicon-64-v1.png' : 'img/newlogo.png' ?>">
   <link rel="stylesheet" href="styles/hotel_resorts.css">
   <link rel="stylesheet" href="styles/favorites.css">
   <link rel="stylesheet" href="styles/service_details.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/service_details.css') ?>">

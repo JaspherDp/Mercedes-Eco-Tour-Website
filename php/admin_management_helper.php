@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/office_details_helper.php';
 
 function ensureAdminManagementTables(PDO $pdo): void
 {
@@ -26,11 +27,8 @@ function ensureAdminManagementTables(PDO $pdo): void
 
 function adminSettingsDefaults(): array
 {
-    return [
+    return array_merge([
         'site_name' => 'iTour Mercedes',
-        'office_email' => '',
-        'office_phone' => '',
-        'office_address' => 'Mercedes, Camarines Norte',
         'timezone' => 'Asia/Manila',
         'currency' => 'PHP',
         'date_format' => 'M d, Y',
@@ -47,7 +45,7 @@ function adminSettingsDefaults(): array
         'audit_retention_days' => 365,
         'session_timeout_minutes' => 60,
         'support_message' => 'For assistance, contact the Municipal Tourism Office.',
-    ];
+    ], officeDetailsDefaults());
 }
 
 function loadAdminSystemSettings(PDO $pdo): array
@@ -60,7 +58,8 @@ function loadAdminSystemSettings(PDO $pdo): array
             return [$defaults, null];
         }
         $saved = json_decode((string)$row['settings_json'], true);
-        return [array_replace($defaults, is_array($saved) ? $saved : []), $row];
+        $settings = array_replace($defaults, is_array($saved) ? $saved : []);
+        return [array_replace($settings, officeDetailsFromSettings($settings)), $row];
     } catch (Throwable $e) {
         error_log('Admin settings could not be loaded: ' . $e->getMessage());
         return [$defaults, null];
