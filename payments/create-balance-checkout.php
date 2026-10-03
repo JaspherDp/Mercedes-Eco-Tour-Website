@@ -10,6 +10,7 @@ require_once __DIR__ . '/../php/operator_auth_helper.php';
 require_once __DIR__ . '/../php/tourist_auth_helper.php';
 require_once __DIR__ . '/../php/activity_logger.php';
 require_once __DIR__ . '/../php/firebase_admin_messaging.php';
+require_once __DIR__ . '/../php/app_url_helper.php';
 require_once __DIR__ . '/../php/input_validation.php';
 require_once __DIR__ . '/PayMongoService.php';
 
@@ -618,7 +619,7 @@ try {
                 'status' => 'pending',
                 'reused' => true,
                 'phone_notification' => $phoneNotification,
-                'return_token' => $isStaffPayment ? $returnToken : null,
+                'return_token' => $returnToken,
             ]);
         }
     } else {
@@ -724,7 +725,7 @@ try {
         $activePhone->execute([$isHotelAdminStaff ? $requestHotelAdminId : ($isOperatorStaff ? $requestOperatorId : $requestAdminId)]);
         $useAdminPhoneHandoff = (bool)$activePhone->fetchColumn();
     }
-    $publicAppUrl = PaymentHelper::env('PUBLIC_APP_URL');
+    $publicAppUrl = ItourAppIsProduction() ? ItourPaymentPhoneAppUrl() : PaymentHelper::env('PUBLIC_APP_URL');
     $successPath = $useAdminPhoneHandoff
         ? '/payments/payment-phone-return.php?result=success&token=' . rawurlencode($returnToken)
         : '/payments/payment-success.php?token=' . rawurlencode($returnToken);
@@ -799,7 +800,7 @@ try {
         'status' => 'pending',
         'reused' => $reusedTransaction,
         'phone_notification' => $phoneNotification,
-        'return_token' => $isStaffPayment ? $returnToken : null,
+        'return_token' => $returnToken,
     ]);
 } catch (PayMongoException $exception) {
     $status = $exception->getHttpStatus();

@@ -421,6 +421,7 @@ if (isset($_GET['get_pending_count'])) {
 }
 .admin-account-meta {
   min-width: 0;
+  flex: 1 1 auto;
 }
 .admin-account-meta strong {
   display: block;
@@ -434,7 +435,9 @@ if (isset($_GET['get_pending_count'])) {
   margin-top: 2px;
   font-size: 10px;
   color: #b7d7ca;
-  word-break: break-word;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   line-height: 1.2;
 }
 
@@ -947,6 +950,30 @@ document.querySelectorAll('.admin-nav-toggle').forEach(toggle => {
         const willOpen = toggle.getAttribute('aria-expanded') !== 'true';
         toggle.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
         items.hidden = !willOpen;
+
+        if (willOpen) {
+            requestAnimationFrame(() => {
+                const scroller = toggle.closest('.admin-navlinks');
+                const group = toggle.closest('.admin-nav-group');
+                if (!scroller || !group) return;
+
+                const scrollerRect = scroller.getBoundingClientRect();
+                const groupRect = group.getBoundingClientRect();
+                const edgeSpace = 10;
+                let scrollBy = 0;
+                if (groupRect.height > scrollerRect.height - edgeSpace * 2) {
+                    scrollBy = groupRect.top - scrollerRect.top - edgeSpace;
+                } else if (groupRect.bottom > scrollerRect.bottom - edgeSpace) {
+                    scrollBy = groupRect.bottom - scrollerRect.bottom + edgeSpace;
+                }
+                if (scrollBy > 0) {
+                    scroller.scrollTo({
+                        top: scroller.scrollTop + scrollBy,
+                        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth'
+                    });
+                }
+            });
+        }
     });
 });
 

@@ -2104,7 +2104,7 @@ if(isset($_GET['action']) && $_GET['action'] === 'fetchBookings') {
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <link rel="stylesheet" href="styles/admin_panel_theme.css" />
-<link rel="stylesheet" href="styles/adbookings.css?v=31" />
+<link rel="stylesheet" href="styles/adbookings.css?v=32" />
 <link rel="stylesheet" href="styles/admin_receipt.css?v=2" />
 </head>
 <style>
@@ -5179,7 +5179,7 @@ async function monitorAdminPhoneQrPayment(token, bookingId = 0) {
         return false;
       }
     } catch (_) {
-      // Keep polling through brief ngrok, PayMongo, or network interruptions.
+      // Keep polling through brief PayMongo or network interruptions.
     }
     await new Promise(resolve => setTimeout(resolve, 2500));
   }
@@ -5348,10 +5348,10 @@ document.getElementById('paymentModal')?.addEventListener('mousedown', event => 
   if (event.target.id === 'paymentModal') closePaymentModal();
 });
 
-async function handleAdminPayMongoReturn() {
+async function handleAdminPayMongoReturn(historyToken = '') {
   const params = new URLSearchParams(window.location.search);
-  const returnType = params.get('payment_return');
-  const token = params.get('payment_return_token') || '';
+  const returnType = historyToken ? 'paymongo' : params.get('payment_return');
+  const token = historyToken || params.get('payment_return_token') || '';
   if (!['paymongo', 'cancelled'].includes(returnType) || !/^[a-f0-9]{64}$/.test(token)) return;
   sessionStorage.removeItem(adminPayMongoPendingKey);
 
@@ -5361,11 +5361,7 @@ async function handleAdminPayMongoReturn() {
     url.searchParams.delete('payment_return_token');
     history.replaceState({}, '', url.href);
   };
-  if (returnType === 'cancelled') {
-    cleanReturnUrl();
-    Swal.fire('QR Payment Cancelled', 'No payment was recorded and the booking balance was not changed.', 'info');
-    return;
-  }
+
 
   Swal.fire({
     title: 'Verifying QR Payment',
@@ -5394,7 +5390,7 @@ async function handleAdminPayMongoReturn() {
         window.location.reload();
         return;
       }
-      if (['failed', 'cancelled'].includes(result.status)) {
+      if (['failed', 'expired', 'cancelled'].includes(result.status)) {
         cleanReturnUrl();
         Swal.fire('Payment Not Completed', 'PayMongo did not verify a payment. The booking balance was not changed.', 'warning');
         return;
@@ -5426,22 +5422,9 @@ window.addEventListener('pageshow', async event => {
   try {
     const pending = JSON.parse(pendingRaw);
     if (!pending?.id) return;
-    const form = new FormData();
-    form.append('action', 'cancel_pending');
-    form.append('type', 'tour');
-    form.append('id', String(pending.id));
-    form.append('return_token', String(pending.token || ''));
-    form.append('csrf_token', adminPayMongoCsrf);
-    const response = await fetch(adminPayMongoCheckoutEndpoint, {
-      method: 'POST',
-      body: form,
-      headers: {Accept: 'application/json'}
-    });
-    const result = await readAdminPaymentJson(response, 'The pending QR payment could not be closed.');
-    if (!response.ok || !result.success) throw new Error(result.message || 'The pending QR payment could not be closed.');
-    Swal.fire('QR Payment Cancelled', 'No payment was recorded. A new QR payment can be started when needed.', 'info');
+    await handleAdminPayMongoReturn(String(pending.token || ''));
   } catch (error) {
-    Swal.fire('Payment Status Notice', 'The payment was not recorded. Refresh before starting another QR payment.', 'info');
+    Swal.fire('Payment Status Notice', 'Refresh the page to verify payment status before starting another QR payment.', 'info');
   }
 });
 
@@ -5997,7 +5980,7 @@ function generateReportHTML() {
   const orientation = document.getElementById('reportOrientation').value || 'portrait';
   const paperSize = document.getElementById('reportPaperSize').value;
   const printSize = paperSize === 'letter' ? 'letter' : paperSize === 'long' ? 'legal' : 'A4';
-  const stylesheet = new URL('styles/adbookings.css?v=31', window.location.href).href;
+  const stylesheet = new URL('styles/adbookings.css?v=32', window.location.href).href;
 
   return `
     <!doctype html><html>

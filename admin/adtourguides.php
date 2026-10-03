@@ -410,7 +410,6 @@ $catalogResourceSummary = catalogResourceSummary($pdo, 'tourguide', $guideTotal,
         <span class="catalog-metric booked" title="Tour guides assigned to future accepted tours"><strong><?= $guideBooked ?></strong><small>Booked</small></span>
       </div>
       <div class="catalog-toolbar-actions">
-        <?php include __DIR__ . '/service_prices_modal.php'; ?>
         <button id="jg_guide_add_btn" class="jg_guide-save catalog-primary-btn" type="button">+ Add tour guide</button>
       </div>
     </div>

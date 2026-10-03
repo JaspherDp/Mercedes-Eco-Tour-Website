@@ -5,6 +5,7 @@ require_once __DIR__ . '/paymongo-config.php';
 require_once __DIR__ . '/../php/db_connection.php';
 require_once __DIR__ . '/PayMongoService.php';
 require_once __DIR__ . '/PaymentReconciler.php';
+require_once __DIR__ . '/PaymentReturnStatus.php';
 require_once __DIR__ . '/../php/app_url_helper.php';
 
 header('Cache-Control: no-store');
@@ -35,6 +36,20 @@ function bookingPaymentAppendQuery(string $path, array $params): string
 
 $token = strtolower(trim((string)($_GET['token'] ?? '')));
 try {
+    $transaction = PaymentReturnStatus::resolve($pdo, $token);
+} catch (Throwable $exception) {
+    error_log('PayMongo return status unavailable: ' . get_class($exception));
+    http_response_code(503);
+    exit('Payment verification is temporarily unavailable. Please check your booking before paying again.');
+}
+if (($_GET['format'] ?? '') === 'json') {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Referrer-Policy: no-referrer');
+    if (!$transaction) http_response_code(404);
+    echo json_encode(['success' => (bool)$transaction, 'status' => $transaction['status'] ?? 'unknown']);
+    exit;
+}
+try {
     $returnBaseUrl = ItourPaymentReturnBaseUrl();
 } catch (Throwable $exception) {
     error_log('PayMongo success return URL configuration error: ' . $exception->getMessage());
@@ -51,9 +66,6 @@ $bookingCheckoutReference = '';
 $bookingCheckoutDomain = '';
 if (preg_match('/^[a-f0-9]{64}$/', $token)) {
     try {
-        $stmt = $pdo->prepare('SELECT metadata, status, provider_checkout_session_id FROM payment_transactions WHERE return_token = ? LIMIT 1');
-        $stmt->execute([$token]);
-        $transaction = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
         $metadata = json_decode((string)($transaction['metadata'] ?? ''), true);
         $isAdminPayment = is_array($metadata)
             && in_array((string)($metadata['source'] ?? ''), ['admin_booking_payment', 'hotel_checkin_payment', 'hotel_checkout_payment', 'operator_booking_payment'], true);
@@ -61,18 +73,6 @@ if (preg_match('/^[a-f0-9]{64}$/', $token)) {
         $isOperatorPayment = $isAdminPayment && ($metadata['staff_type'] ?? '') === 'operator';
         $isBookingCheckout = is_array($metadata) && ($metadata['source'] ?? '') === 'booking_checkout';
 
-        // Webhooks remain authoritative. This retrieval is a safe fallback for
-        // local/ngrok test setups where the browser returns before the webhook.
-        if (($transaction['status'] ?? '') === 'pending'
-            && str_starts_with((string)($transaction['provider_checkout_session_id'] ?? ''), 'cs_')) {
-            $checkout = PayMongoService::fromEnvironment()->retrieveCheckoutSession((string)$transaction['provider_checkout_session_id']);
-            $resource = is_array($checkout['data'] ?? null) ? $checkout['data'] : [];
-            $attributes = is_array($resource['attributes'] ?? null) ? $resource['attributes'] : [];
-            $status = strtolower((string)($attributes['payment_status'] ?? $attributes['status'] ?? ''));
-            if (in_array($status, ['paid', 'completed'], true) || !empty($attributes['payments'])) {
-                PaymentReconciler::reconcilePaidCheckout($pdo, $resource);
-            }
-        }
         if ($isBookingCheckout) {
             $refetch = $pdo->prepare('SELECT status, booking_reference, booking_domain, booking_id FROM payment_transactions WHERE return_token = ? LIMIT 1');
             $refetch->execute([$token]);
@@ -127,7 +127,7 @@ if ($bookingCheckoutReturnPath !== '' && $bookingCheckoutStatus === 'paid') {
 
 $params = ['section' => 'bookings', 'payment_return' => 'latest'];
 if (preg_match('/^[a-f0-9]{64}$/', $token)) {
-    $params['payment_return'] = 'token';
+    $params['payment_return'] = !empty($paymentReturnCancelled) ? 'cancelled' : 'token';
     $params['payment_return_token'] = $token;
 }
 

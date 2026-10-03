@@ -1417,6 +1417,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
   <link rel="stylesheet" href="styles/Ho_panel.css?v=notifications-4" />
   <link rel="stylesheet" href="styles/required-fields.css" />
   <script src="js/required-fields.js" defer></script>
+  <script src="js/paymongo-return-navigation.js"></script>
 </head>
 <style>
   .ho-walkin-partial-field select{width:100%;min-height:46px;margin-top:8px;padding:10px 12px;border:1px solid #cfded8;border-radius:9px;background:#fff;color:#294b41;font-size:14px}
@@ -2562,7 +2563,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
         return Boolean(result.cancelled);
       };
 
-      const pollHotelPayMongo = async (token, bookingId = 0) => {
+      const pollHotelPayMongo = async (token, bookingId = 0, maxAttempts = 120) => {
         if (!/^[a-f0-9]{64}$/.test(String(token || ''))) return false;
         let trackedBookingId = Number(bookingId || 0);
         let cancelRequested = false;
@@ -2579,7 +2580,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
         }).then(result => {
           if (result.dismiss === Swal.DismissReason.cancel) cancelRequested = true;
         });
-        for (let attempt = 0; attempt < 120; attempt += 1) {
+        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
           if (cancelRequested) {
             sessionStorage.removeItem(hotelPayMongoPendingKey);
             try {
@@ -2672,7 +2673,10 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
           cancelButtonText: 'Keep Booking Unpaid',
           confirmButtonColor: '#2b7a66'
         });
-        if (choice.isConfirmed) window.location.assign(checkoutUrl.href);
+        if (choice.isConfirmed) {
+          window.ItourPayMongoNavigation?.remember(token);
+          window.location.assign(checkoutUrl.href);
+        }
         return false;
       };
 
@@ -2685,8 +2689,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
         cleanReturnUrl.searchParams.delete('payment_return');
         cleanReturnUrl.searchParams.delete('payment_return_token');
         window.history.replaceState({}, document.title, cleanReturnUrl.href);
-        if (paymentReturn === 'paymongo') pollHotelPayMongo(paymentReturnToken);
-        else Swal.fire('Payment Not Completed', 'The PayMongo QR payment was cancelled. No amount was applied to the booking.', 'warning');
+        pollHotelPayMongo(paymentReturnToken, 0, 4);
       } else {
         // A regular refresh must not reopen the waiting dialog. PayMongo still
         // tracks the transaction server-side and reconciliation remains active.

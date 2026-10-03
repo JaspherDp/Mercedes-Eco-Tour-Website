@@ -680,6 +680,14 @@ textarea:focus {
   z-index: auto !important;
 }
 
+/* Keep every admin page heading and its actions visible during page scroll. */
+.main-content > .admin-header.admin-page-header,
+.featured-main > .featured-header.admin-page-header {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 90 !important;
+}
+
 .admin-header-nav {
   display: inline-flex !important;
   align-items: center !important;

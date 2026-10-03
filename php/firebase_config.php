@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../payments/PaymentHelper.php';
+require_once __DIR__ . '/app_url_helper.php';
 
 /**
  * Returns only Firebase values that are safe to expose in browser JavaScript.
@@ -11,10 +12,7 @@ require_once __DIR__ . '/../payments/PaymentHelper.php';
  */
 function firebase_public_configuration(): array
 {
-    $appUrl = PaymentHelper::env('APP_URL');
-    if ($appUrl === '') {
-        $appUrl = PaymentHelper::env('PUBLIC_APP_URL');
-    }
+    $appUrl = ItourPaymentPhoneAppUrl();
     $appUrl = rtrim($appUrl, '/');
 
     $firebase = [

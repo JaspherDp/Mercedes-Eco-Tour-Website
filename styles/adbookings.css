@@ -679,7 +679,7 @@ tbody tr:hover{background:linear-gradient(90deg, rgba(46,125,102,0.03), rgba(0,0
 html,
 body {
   max-width: 100%;
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .admin-container {

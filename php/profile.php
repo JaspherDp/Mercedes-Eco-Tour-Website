@@ -237,11 +237,15 @@ if (($_GET['billing_action'] ?? '') === 'payment_status') {
         $statusStmt->execute([$token, $tourist_id]);
         $payment = $statusStmt->fetch(PDO::FETCH_ASSOC);
         $paymentMetadata = json_decode((string)($payment['metadata'] ?? ''), true);
-        if (!$payment || !is_array($paymentMetadata) || ($paymentMetadata['source'] ?? '') !== 'tourist_profile_balance') {
+        if (!$payment || !is_array($paymentMetadata)
+            || !in_array($paymentMetadata['source'] ?? '', ['tourist_profile_balance', 'booking_checkout'], true)) {
             throw new RuntimeException('Payment reference not found.');
         }
+        require_once __DIR__ . '/../payments/PaymentReturnStatus.php';
+        $payment = PaymentReturnStatus::resolve($pdo, $token);
         echo json_encode([
             'success' => true,
+            'source' => $paymentMetadata['source'],
             'status' => strtolower((string)$payment['status']),
             'booking_reference' => (string)$payment['booking_reference'],
             'amount' => ((int)$payment['amount_minor']) / 100,
@@ -1115,6 +1119,7 @@ while ($row = $feedback_stmt->fetch(PDO::FETCH_ASSOC)) {
 <!doctype html>
 <html lang="en">
 <head>
+  <script src="../js/paymongo-return-navigation.js"></script>
 <meta charset="utf-8">
 <title>iTour Mercedes - My Profile</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -7306,6 +7311,7 @@ document.getElementById('profileConfirmPayment')?.addEventListener('click', asyn
       throw new Error('PayMongo returned an invalid checkout address.');
     }
     redirectingToPayMongo = true;
+    window.ItourPayMongoNavigation?.remember(result.return_token);
     window.location.assign(checkoutUrl.href);
   } catch (error) { Swal.fire('Payment Failed', error.message, 'error'); }
   finally {
@@ -7329,16 +7335,25 @@ async function handleProfilePayMongoReturn() {
   params.delete('payment_return_token');
   const cleanQuery = params.toString();
   history.replaceState({}, '', `${window.location.pathname}${cleanQuery ? `?${cleanQuery}` : ''}${window.location.hash}`);
+  window.ItourPayMongoNavigation?.remember(token);
 
-  if (result === 'cancelled') {
-    await Swal.fire('Payment Cancelled', 'The PayMongo payment was cancelled. No payment was recorded.', 'error');
-    return;
-  }
   try {
-    const response = await fetch(`profile.php?billing_action=payment_status&token=${encodeURIComponent(token)}`, {headers: {Accept: 'application/json'}});
-    const payment = await response.json();
-    if (!response.ok || !payment.success) throw new Error(payment.message || 'The payment status could not be verified.');
+    let payment;
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      const response = await fetch(`profile.php?billing_action=payment_status&token=${encodeURIComponent(token)}`, {cache: 'no-store', headers: {Accept: 'application/json'}});
+      payment = await response.json();
+      if (!response.ok || !payment.success) throw new Error(payment.message || 'The payment status could not be verified.');
+      if (payment.status !== 'pending') break;
+      if (attempt < 3) {
+        if (attempt === 0) Swal.fire({title: 'Verifying Payment', text: 'Checking your payment status. Please wait.', allowOutsideClick: false, didOpen: () => Swal.showLoading()});
+        await new Promise(resolve => setTimeout(resolve, 1500));
+      }
+    }
     if (payment.status === 'paid') {
+      if (payment.source === 'booking_checkout') {
+        window.location.replace(`../payments/payment-success.php?token=${encodeURIComponent(token)}`);
+        return;
+      }
       await Swal.fire({
         icon: 'success',
         title: 'Payment Successful',
@@ -7346,6 +7361,10 @@ async function handleProfilePayMongoReturn() {
         confirmButtonColor: '#2e7d66'
       });
       window.location.reload();
+      return;
+    }
+    if (['failed', 'expired', 'cancelled'].includes(payment.status)) {
+      await Swal.fire('Payment Cancelled', 'The payment was not completed. No payment was recorded for this attempt.', 'error');
       return;
     }
     await Swal.fire('Verification Pending', 'PayMongo has not confirmed the payment yet. Your balance will update only after verification.', 'info');

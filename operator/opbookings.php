@@ -3750,10 +3750,10 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
         }
       });
 
-      const handleOperatorPayMongoReturn = async () => {
+      const handleOperatorPayMongoReturn = async (historyToken = '') => {
         const params = new URLSearchParams(window.location.search);
-        const returnType = params.get('payment_return');
-        const token = params.get('payment_return_token') || '';
+        const returnType = historyToken ? 'paymongo' : params.get('payment_return');
+        const token = historyToken || params.get('payment_return_token') || '';
         if (!['paymongo', 'cancelled'].includes(returnType) || !/^[a-f0-9]{64}$/.test(token)) return;
         sessionStorage.removeItem('itour_operator_paymongo_pending');
         const cleanReturnUrl = () => {
@@ -3762,11 +3762,7 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
           url.searchParams.delete('payment_return_token');
           history.replaceState({}, '', url.href);
         };
-        if (returnType === 'cancelled') {
-          cleanReturnUrl();
-          await Swal.fire('QR Payment Cancelled', 'No payment was recorded and the booking balance was not changed.', 'info');
-          return;
-        }
+
 
         Swal.fire({
           title: 'Verifying QR Payment',
@@ -3795,7 +3791,7 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
               window.location.reload();
               return;
             }
-            if (['failed', 'cancelled'].includes(result.status)) {
+            if (['failed', 'expired', 'cancelled'].includes(result.status)) {
               cleanReturnUrl();
               await Swal.fire('Payment Not Completed', 'PayMongo did not verify a payment. The booking balance was not changed.', 'warning');
               return;
@@ -3821,16 +3817,7 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
         try {
           const pending = JSON.parse(pendingRaw);
           if (!pending?.id) return;
-          const cancellation = new FormData();
-          cancellation.append('action', 'cancel_pending');
-          cancellation.append('type', 'tour');
-          cancellation.append('id', String(pending.id));
-          cancellation.append('return_token', String(pending.token || ''));
-          cancellation.append('csrf_token', opPayMongoCsrf);
-          const response = await fetch(opPayMongoEndpoint, { method: 'POST', body: cancellation, headers: { Accept: 'application/json' } });
-          const result = await readPaymentJson(response);
-          if (!response.ok || !result.success) throw new Error(result.message || 'The pending QR payment could not be closed.');
-          await Swal.fire('QR Payment Cancelled', 'No payment was recorded. A new QR payment can be started when needed.', 'info');
+          await handleOperatorPayMongoReturn(String(pending.token || ''));
         } catch (error) {
           await Swal.fire('Payment Status Notice', 'Refresh the page before starting another QR payment.', 'info');
         }

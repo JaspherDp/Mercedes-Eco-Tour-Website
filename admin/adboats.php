@@ -614,7 +614,6 @@ body {
         <span class="catalog-metric booked" title="Boats assigned to future accepted tours"><strong><?= $boatBooked ?></strong><small>Booked</small></span>
       </div>
       <div class="catalog-toolbar-actions">
-        <?php include __DIR__ . '/service_prices_modal.php'; ?>
         <button id="add-boat-btn" class="catalog-primary-btn" type="button">+ Add boat</button>
       </div>
     </div>

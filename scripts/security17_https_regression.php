@@ -7,6 +7,7 @@ if (PHP_SAPI !== 'cli') {
 }
 
 require_once __DIR__ . '/../php/app_url_helper.php';
+require_once __DIR__ . '/../php/firebase_config.php';
 require_once __DIR__ . '/../php/session_security.php';
 
 function security17Assert(bool $condition, string $message): void
@@ -42,7 +43,25 @@ try {
         'APP_URL' => 'https://travel.example/app',
     ]);
     security17Assert(ItourCanonicalAppUrl() === 'https://travel.example/app', 'Production rejected a valid HTTPS APP_URL.');
-    security17Assert(ItourPaymentReturnBaseUrl() === 'https://travel.example/app', 'Production payment return is not canonical HTTPS.');
+    security17Assert(ItourPaymentReturnBaseUrl() === 'https://itourmercedes.com', 'Production payment return must use the permanent domain.');
+    security17Assert(ItourPaymentPhoneAppUrl() === 'https://itourmercedes.com', 'Production payment phone URL must use the permanent domain.');
+    security17SetEnvironment([
+        'APP_ENV' => 'production',
+        'APP_URL' => 'https://old-tunnel.ngrok-free.app',
+        'PUBLIC_APP_URL' => 'https://old-tunnel.ngrok-free.app',
+    ]);
+    security17Assert(firebase_public_configuration()['app_url'] === 'https://itourmercedes.com', 'Firebase phone setup still uses a tunnel URL.');
+    security17Assert(ItourPaymentReturnBaseUrl() === 'https://itourmercedes.com', 'Payment return still uses a tunnel URL.');
+    foreach (['admin-phone-setup.php', 'hotel-admin-phone-setup.php', 'operator-phone-setup.php', 'admin-payment-handoff.php'] as $path) {
+        security17Assert(
+            ItourAppUrl($path, ItourPaymentPhoneAppUrl()) === 'https://itourmercedes.com/' . $path,
+            'A staff phone or payment link still uses a tunnel URL.'
+        );
+    }
+    security17SetEnvironment([
+        'APP_ENV' => 'production',
+        'APP_URL' => 'https://travel.example/app',
+    ]);
     security17Assert(ItourAppUrl('google_callback.php') === 'https://travel.example/app/google_callback.php', 'Production OAuth callback is incorrect.');
     security17Assert(ItourAppUrl('admin-phone-setup.php') === 'https://travel.example/app/admin-phone-setup.php', 'Production phone setup URL is incorrect.');
     security17Assert(ItourAppUrl('admin-payment-handoff.php?token=' . str_repeat('a', 64)) === 'https://travel.example/app/admin-payment-handoff.php?token=' . str_repeat('a', 64), 'Production payment handoff URL is incorrect.');

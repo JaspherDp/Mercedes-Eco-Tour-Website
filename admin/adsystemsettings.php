@@ -7,6 +7,7 @@ require_once __DIR__ . '/../php/activity_logger.php';
 require_once __DIR__ . '/../php/admin_management_helper.php';
 require_once __DIR__ . '/../php/input_validation.php';
 require_once __DIR__ . '/../php/project_path_helper.php';
+require_once __DIR__ . '/../php/additional_fees_helper.php';
 
 adminManagementRequireLogin();
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
@@ -21,6 +22,28 @@ $allowedDateFormats = ['M d, Y', 'd M Y', 'm/d/Y', 'd/m/Y'];
 $allowedStatuses = ['pending', 'confirmed'];
 
 [$settings, $settingsMeta] = loadAdminSystemSettings($pdo);
+$servicePrices = [];
+try {
+    $priceRows = $pdo->query("SELECT service_type, day_tour_price, overnight_price FROM service_prices WHERE service_type IN ('boat', 'tourguide') AND is_active = 1")->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($priceRows as $priceRow) {
+        $servicePrices[$priceRow['service_type']] = $priceRow;
+    }
+} catch (Throwable $error) {
+    error_log('Service prices could not be loaded: ' . $error->getMessage());
+}
+$additionalFeeGroups = [];
+$additionalFeesInstalled = false;
+try {
+    $additionalFeesInstalled = additionalFeeTableExists($pdo);
+    foreach (getAdditionalFees($pdo) as $feeCode => $fee) {
+        $additionalFeeGroups[$fee['category']][$feeCode] = $fee;
+    }
+} catch (Throwable $error) {
+    error_log('Additional fees could not be loaded: ' . $error->getMessage());
+}
+$servicePricesReady = isset($servicePrices['boat'], $servicePrices['tourguide']) && $additionalFeesInstalled && $additionalFeeGroups !== [];
+$servicePricesCsrf = AppCsrfToken('admin', 'catalog_content');
+$priceUpdateUrl = $assetPrefix . 'php/update_service_prices.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!verifyAdminManagementCsrf()) {
@@ -156,7 +179,7 @@ if (!empty($settingsMeta['updated_by'])) {
   <link rel="icon" type="image/png" href="<?= $assetPrefix ?>img/newlogo.png?v=2">
   <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="<?= $assetPrefix ?>styles/admin_panel_theme.css">
-  <link rel="stylesheet" href="<?= $assetPrefix ?>styles/admin_management.css?v=5">
+  <link rel="stylesheet" href="<?= $assetPrefix ?>styles/admin_management.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/admin_management.css') ?>">
 </head>
 <body>
 <div class="admin-container">
@@ -169,7 +192,7 @@ if (!empty($settingsMeta['updated_by'])) {
       </div>
       <div class="admin-header-right am-header-actions">
         <form method="post"><input type="hidden" name="csrf_token" value="<?= adminManagementEscape($csrfToken) ?>"><input type="hidden" name="action" value="export_settings"><button class="am-button" type="submit"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg>Export</button></form>
-        <button class="am-save-button" type="submit" form="settingsForm"><svg viewBox="0 0 24 24"><path d="M5 4h12l2 2v14H5V4Z"/><path d="M8 4v6h8V4M8 20v-6h8v6"/></svg>Save changes</button>
+        <button class="am-save-button" id="settingsSaveButton" type="submit" form="settingsForm"><svg viewBox="0 0 24 24"><path d="M5 4h12l2 2v14H5V4Z"/><path d="M8 4v6h8V4M8 20v-6h8v6"/></svg><span>Save changes</span></button>
       </div>
     </header>
 
@@ -188,6 +211,7 @@ if (!empty($settingsMeta['updated_by'])) {
             <div class="am-nav-label">Configuration</div>
             <button type="button" class="active" data-panel="general"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg>General</button>
             <button type="button" data-panel="about"><svg viewBox="0 0 24 24"><path d="M12 21s7-5.3 7-11a7 7 0 1 0-14 0c0 5.7 7 11 7 11Z"/><circle cx="12" cy="10" r="2.5"/></svg>About details</button>
+            <button type="button" data-panel="prices"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5c-.7-.7-1.8-1-3-1-1.7 0-3 .8-3 2s1.1 1.8 3 2.1 3 1 3 2.3-1.3 2.2-3.1 2.2c-1.2 0-2.4-.4-3.2-1.2M12.4 5.8v12.4"/></svg>Service prices</button>
             <button type="button" data-panel="bookings"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>Booking rules</button>
             <button type="button" data-panel="notifications"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg>Notifications</button>
             <button type="button" data-panel="security"><svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.4 8 8 9 4.6-1 8-4 8-9V6l-8-3Z"/><path d="m8.5 12 2.3 2.3 4.7-4.8"/></svg>Security & data</button>
@@ -221,6 +245,30 @@ if (!empty($settingsMeta['updated_by'])) {
                 <div class="am-field full"><label for="office_map_url">Google Maps location link</label><input id="office_map_url" name="office_map_url" type="url" required value="<?= adminManagementEscape($settings['office_map_url']) ?>"><div class="am-field-help">Used by Open Map on the About page and by the footer location.</div></div>
                 <div class="am-field full"><label for="office_facebook_url">Facebook page link</label><input id="office_facebook_url" name="office_facebook_url" type="url" required value="<?= adminManagementEscape($settings['office_facebook_url']) ?>"></div>
               </div></article>
+            </section>
+
+            <section class="am-panel" data-panel-content="prices">
+              <?php if (!$servicePricesReady): ?>
+                <div class="am-callout warning"><svg viewBox="0 0 24 24"><path d="M12 3 2.8 20h18.4L12 3Z"/><path d="M12 9v5M12 17.5h.01"/></svg><div>Service rates are unavailable. Check that boat, tour guide, and additional fee records are installed before editing prices.</div></div>
+              <?php else: ?>
+                <div class="am-prices-grid">
+                  <?php foreach (['boat' => ['Boat rates', 'Base rates for vessel services.'], 'tourguide' => ['Tour guide rates', 'Base rates for guide services.']] as $serviceType => [$title, $description]): ?>
+                    <article class="am-card"><header class="am-card-header"><div class="am-card-heading"><span class="am-card-icon" aria-hidden="true">₱</span><div><h3><?= adminManagementEscape($title) ?></h3><p><?= adminManagementEscape($description) ?></p></div></div></header><div class="am-card-body am-grid-2">
+                      <?php foreach (['day_tour_price' => ['Day tour', $serviceType . '_day'], 'overnight_price' => ['Overnight', $serviceType . '_overnight']] as $priceKey => [$label, $fieldName]): ?>
+                        <div class="am-field"><label for="price_<?= $fieldName ?>"><?= adminManagementEscape($label) ?></label><div class="am-price-input"><span aria-hidden="true">₱</span><input id="price_<?= $fieldName ?>" form="servicePricesForm" name="<?= $fieldName ?>" type="number" min="0" step="0.01" required value="<?= adminManagementEscape(number_format((float)$servicePrices[$serviceType][$priceKey], 2, '.', '')) ?>"></div></div>
+                      <?php endforeach; ?>
+                    </div></article>
+                  <?php endforeach; ?>
+                  <?php foreach ($additionalFeeGroups as $category => $fees): ?>
+                    <article class="am-card"><header class="am-card-header"><div class="am-card-heading"><span class="am-card-icon" aria-hidden="true">₱</span><div><h3><?= adminManagementEscape($category) ?> fees</h3><p><?= adminManagementEscape($category === 'Environmental' ? 'Rates per eligible visitor.' : ($category === 'Entrance' ? 'Destination entrance rates per head.' : ($category === 'Docking' ? 'Landing rates charged per boat.' : 'Daily equipment rental rates.'))) ?></p></div></div></header><div class="am-card-body am-grid-2">
+                      <?php foreach ($fees as $feeCode => $fee): ?>
+                        <div class="am-field"><label for="price_<?= adminManagementEscape($feeCode) ?>"><?= adminManagementEscape($fee['label']) ?> <span>(<?= adminManagementEscape($fee['unit']) ?>)</span></label><div class="am-price-input"><span aria-hidden="true">₱</span><input id="price_<?= adminManagementEscape($feeCode) ?>" form="servicePricesForm" name="additional_fees[<?= adminManagementEscape($feeCode) ?>]" type="number" min="0" step="0.01" required value="<?= adminManagementEscape(number_format((float)$fee['amount'], 2, '.', '')) ?>"></div></div>
+                      <?php endforeach; ?>
+                    </div></article>
+                  <?php endforeach; ?>
+                </div>
+                <div class="am-prices-actions"><span>These rates are used in public tour estimates and booking calculations.</span><button class="am-save-button" type="submit" form="servicePricesForm">Save prices</button></div>
+              <?php endif; ?>
             </section>
 
             <section class="am-panel" data-panel-content="bookings">
@@ -259,6 +307,7 @@ if (!empty($settingsMeta['updated_by'])) {
           </div>
         </div>
       </form>
+      <form id="servicePricesForm" method="post" action="<?= adminManagementEscape($priceUpdateUrl) ?>"><input type="hidden" name="csrf_token" value="<?= adminManagementEscape($servicePricesCsrf) ?>"></form>
     </div></div>
   </main>
 </div>
@@ -283,9 +332,15 @@ if (!empty($settingsMeta['updated_by'])) {
 
   const tabs = [...document.querySelectorAll('[data-panel]')];
   const panels = [...document.querySelectorAll('[data-panel-content]')];
+  const saveButton = document.getElementById('settingsSaveButton');
+  const saveLabel = saveButton.querySelector('span');
+  const pricesReady = <?= $servicePricesReady ? 'true' : 'false' ?>;
   const activate = name => {
     tabs.forEach(tab => tab.classList.toggle('active', tab.dataset.panel === name));
     panels.forEach(panel => panel.classList.toggle('active', panel.dataset.panelContent === name));
+    saveButton.setAttribute('form', name === 'prices' ? 'servicePricesForm' : 'settingsForm');
+    saveButton.disabled = name === 'prices' && !pricesReady;
+    saveLabel.textContent = name === 'prices' ? 'Save prices' : 'Save changes';
     try { sessionStorage.setItem('itour-settings-panel', name); } catch (error) {}
   };
   tabs.forEach(tab => tab.addEventListener('click', () => activate(tab.dataset.panel)));
@@ -297,11 +352,29 @@ if (!empty($settingsMeta['updated_by'])) {
   document.addEventListener('keydown', event => { if (event.key === 'Escape') document.querySelectorAll('.am-modal.open').forEach(modal => modal.classList.remove('open')); });
 
   const form = document.getElementById('settingsForm');
-  let clean = new FormData(form);
+  const pricesForm = document.getElementById('servicePricesForm');
   let dirty = false;
-  form.addEventListener('input', () => { dirty = true; });
+  let priceDirty = false;
+  form.addEventListener('input', event => { if (event.target.form === form) dirty = true; });
+  document.querySelectorAll('[form="servicePricesForm"]').forEach(input => input.addEventListener('input', () => { priceDirty = true; }));
   form.addEventListener('submit', () => { dirty = false; });
-  window.addEventListener('beforeunload', event => { if (dirty) { event.preventDefault(); event.returnValue = ''; } });
+  pricesForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    const priceButtons = [...document.querySelectorAll('[form="servicePricesForm"][type="submit"]')];
+    priceButtons.forEach(button => { button.disabled = true; });
+    try {
+      const response = await fetch(pricesForm.action, { method: 'POST', body: new FormData(pricesForm), credentials: 'same-origin' });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || 'Service prices could not be saved.');
+      priceDirty = false;
+      await Swal.fire({ icon: 'success', title: 'Service prices saved', text: result.message || 'Prices updated successfully.', confirmButtonColor: '#176b58' });
+    } catch (error) {
+      await Swal.fire({ icon: 'error', title: 'Unable to save prices', text: error.message || 'Please try again.', confirmButtonColor: '#176b58' });
+    } finally {
+      priceButtons.forEach(button => { button.disabled = false; });
+    }
+  });
+  window.addEventListener('beforeunload', event => { if (dirty || priceDirty) { event.preventDefault(); event.returnValue = ''; } });
 })();
 </script>
 </body>

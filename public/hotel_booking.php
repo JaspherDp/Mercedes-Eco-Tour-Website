@@ -335,6 +335,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script src="js/paymongo-return-navigation.js"></script>
   <script src="js/request-limit.js?v=<?= (int)@filemtime(__DIR__ . '/../js/request-limit.js') ?>"></script>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -1175,6 +1176,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
           if (!response.ok || !result?.success || !result?.checkout_url) {
             throw new Error(result?.message || "The payment page could not be opened.");
           }
+          window.ItourPayMongoNavigation?.remember(result.return_token);
           window.location.assign(result.checkout_url);
         } catch (error) {
           hasSubmitted = false;

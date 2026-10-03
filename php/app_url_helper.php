@@ -70,10 +70,18 @@ function ItourCanonicalAppUrl(): string
     throw new RuntimeException('The production application URL is not configured.');
 }
 
+/** The permanent public origin for production payment and phone links. */
+function ItourPaymentPhoneAppUrl(): string
+{
+    return ItourAppIsProduction()
+        ? 'https://itourmercedes.com'
+        : (PaymentHelper::env('APP_URL') ?: PaymentHelper::env('PUBLIC_APP_URL'));
+}
+
 /** Return the explicit browser destination used after a PayMongo return. */
 function ItourPaymentReturnBaseUrl(): string
 {
-    if (ItourAppIsProduction()) return ItourCanonicalAppUrl();
+    if (ItourAppIsProduction()) return ItourPaymentPhoneAppUrl();
     $local = PaymentHelper::env('LOCAL_APP_URL', 'http://localhost/Mercedes%20Eco%20Tour%20Website');
     $local = ItourValidateAppBaseUrl($local, false);
     $host = strtolower((string)(parse_url($local, PHP_URL_HOST) ?? ''));

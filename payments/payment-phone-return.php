@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../php/db_connection.php';
+require_once __DIR__ . '/PaymentReturnStatus.php';
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Referrer-Policy: no-referrer');
@@ -30,6 +31,8 @@ if (!is_array($metadata)
 $isOperatorPayment = ($metadata['staff_type'] ?? '') === 'operator';
 $bookingsScreenLabel = $isOperatorPayment ? 'Operator Bookings screen' : 'Admin Bookings screen';
 
+PaymentReturnStatus::resolve($pdo, $token);
+
 $statusQuery = $pdo->prepare(
     'SELECT status, booking_reference, amount_minor FROM payment_transactions WHERE return_token = ? LIMIT 1'
 );
@@ -51,13 +54,13 @@ if (($_GET['format'] ?? '') === 'json') {
 
 $paymentStatus = strtolower((string)$transaction['status']);
 $isPaid = $paymentStatus === 'paid';
-$isCancelled = !$isPaid && ($paymentStatus === 'cancelled' || $result === 'cancelled');
-$title = $isPaid ? 'Payment Verified' : ($isCancelled ? 'Payment Cancelled' : 'Payment Submitted');
+$isCancelled = !$isPaid && in_array($paymentStatus, ['failed', 'expired', 'cancelled'], true);
+$title = $isPaid ? 'Payment Verified' : ($isCancelled ? 'Payment Cancelled' : 'Verifying Payment');
 $message = $isPaid
     ? 'The booking payment was verified and the ' . $bookingsScreenLabel . ' has been updated.'
     : ($isCancelled
         ? 'The QR payment was cancelled. No payment was applied to the booking.'
-        : 'PayMongo accepted the payment. Verification is in progress and the ' . $bookingsScreenLabel . ' will update automatically.');
+        : 'Payment verification is in progress. The ' . $bookingsScreenLabel . ' will update after confirmation.');
 $reference = trim((string)$transaction['booking_reference']);
 ?>
 <!doctype html>
@@ -73,7 +76,7 @@ $reference = trim((string)$transaction['booking_reference']);
 </head>
 <body>
   <main class="result-card">
-    <div class="result-icon" id="paymentResultIcon"><?= $isCancelled ? '&times;' : '&#10003;' ?></div>
+    <div class="result-icon" id="paymentResultIcon"><?= $isPaid ? '&#10003;' : ($isCancelled ? '&times;' : '&#8230;') ?></div>
     <h1 id="paymentResultTitle"><?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?></h1>
     <p id="paymentResultMessage"><?= htmlspecialchars($message, ENT_QUOTES, 'UTF-8') ?></p>
     <?php if ($reference !== ''): ?><p class="result-ref">Booking <?= htmlspecialchars($reference, ENT_QUOTES, 'UTF-8') ?></p><?php endif; ?>
@@ -84,20 +87,34 @@ $reference = trim((string)$transaction['booking_reference']);
   <script>
     const statusUrl = new URL(window.location.href);
     statusUrl.searchParams.set('format', 'json');
-    const timer = window.setInterval(async () => {
+    const checkPhonePayment = async () => {
+      for (let attempt = 0; attempt < 4; attempt += 1) {
       try {
         const response = await fetch(statusUrl.href, { cache: 'no-store', headers: { Accept: 'application/json' } });
         const data = await response.json();
         if (data.status === 'paid') {
-          window.clearInterval(timer);
+          document.getElementById('paymentResultIcon').textContent = '\u2713';
           document.getElementById('paymentResultTitle').textContent = 'Payment Verified';
           document.getElementById('paymentResultMessage').textContent = <?= json_encode('The booking payment was verified and the ' . $bookingsScreenLabel . ' has been updated.', JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+          return;
+        }
+        if (['failed', 'expired', 'cancelled'].includes(data.status)) {
+          window.location.reload();
+          return;
         }
       } catch (_) {}
-    }, 2000);
+      if (attempt < 3) await new Promise(resolve => window.setTimeout(resolve, 1500));
+      }
+      document.getElementById('paymentResultTitle').textContent = 'Verification Pending';
+      document.getElementById('paymentResultMessage').textContent = 'Confirmation is taking longer than expected. Check the booking payment status before trying another payment.';
+    };
+    checkPhonePayment();
   </script>
   <?php endif; ?>
   <script>
+    window.addEventListener('pageshow', event => {
+      if (event.persisted) window.location.reload();
+    });
     document.getElementById('closePaymentResult').addEventListener('click', () => {
       window.close();
       window.setTimeout(() => {

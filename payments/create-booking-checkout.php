@@ -11,6 +11,7 @@ require_once __DIR__ . '/../php/package_checkout_authority_helper.php';
 require_once __DIR__ . '/../php/tour_resource_availability_helper.php';
 require_once __DIR__ . '/../php/request_rate_limiter.php';
 require_once __DIR__ . '/../php/input_validation.php';
+require_once __DIR__ . '/../php/app_url_helper.php';
 require_once __DIR__ . '/PayMongoService.php';
 require_once __DIR__ . '/BookingCheckoutService.php';
 
@@ -367,7 +368,7 @@ try {
     tourResourceUnlock($pdo, $resourceLock ?? '');
 
     session_write_close();
-    $publicAppUrl = PaymentHelper::env('PUBLIC_APP_URL');
+    $publicAppUrl = ItourAppIsProduction() ? ItourPaymentPhoneAppUrl() : PaymentHelper::env('PUBLIC_APP_URL');
     $attributes = [
         'line_items' => [[
             'name' => mb_substr($serviceName, 0, 120), 'description' => mb_substr($lineDescription, 0, 255),
@@ -398,7 +399,7 @@ try {
         throw new RuntimeException('PayMongo returned an invalid Checkout Session.');
     }
     PaymentHelper::linkPayMongoCheckout($pdo, $transactionId, $touristId, $sessionId, $checkoutUrl);
-    bookingCheckoutResponse(200, ['success' => true, 'checkout_url' => $checkoutUrl]);
+    bookingCheckoutResponse(200, ['success' => true, 'checkout_url' => $checkoutUrl, 'return_token' => $returnToken]);
 } catch (DomainException|InvalidArgumentException $exception) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     tourResourceUnlock($pdo, $resourceLock ?? '');

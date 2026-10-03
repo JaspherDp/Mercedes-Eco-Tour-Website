@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../payments/PaymentHelper.php';
 require_once __DIR__ . '/secure_dns_resolver.php';
+require_once __DIR__ . '/app_url_helper.php';
 
 function firebaseBase64UrlEncode(string $value): string
 {
@@ -46,6 +47,39 @@ function firebaseApplyCurlOptions($curl, array $options, string $context): void
         }
         throw new RuntimeException($context . ' networking could not be configured.');
     }
+}
+
+/** @return array{message: string, retryable: bool, stale_token: bool, diagnostic: string} */
+function firebaseClassifySendFailure(int $httpStatus, string $body): array
+{
+    $response = json_decode($body, true);
+    $error = is_array($response) && is_array($response['error'] ?? null) ? $response['error'] : [];
+    $status = strtoupper((string)($error['status'] ?? ''));
+    $fcmCode = '';
+    foreach (is_array($error['details'] ?? null) ? $error['details'] : [] as $detail) {
+        if (is_array($detail) && isset($detail['errorCode'])) {
+            $fcmCode = strtoupper((string)$detail['errorCode']);
+            break;
+        }
+    }
+    $diagnostic = 'HTTP ' . $httpStatus . ', status ' . ($status ?: 'unknown')
+        . ', FCM code ' . ($fcmCode ?: 'unknown');
+    if ($fcmCode === 'UNREGISTERED') {
+        return ['message' => 'The registered phone token has expired. Re-register the phone, then retry.', 'retryable' => false, 'stale_token' => true, 'diagnostic' => $diagnostic];
+    }
+    if ($fcmCode === 'SENDER_ID_MISMATCH') {
+        return ['message' => 'This phone was registered with a different Firebase project. Re-register it using this website.', 'retryable' => false, 'stale_token' => false, 'diagnostic' => $diagnostic];
+    }
+    if ($fcmCode === 'THIRD_PARTY_AUTH_ERROR') {
+        return ['message' => 'Firebase web push credentials need attention. Contact the website administrator.', 'retryable' => false, 'stale_token' => false, 'diagnostic' => $diagnostic];
+    }
+    if ($httpStatus === 401 || $httpStatus === 403) {
+        return ['message' => 'Firebase messaging credentials or permissions need attention. Contact the website administrator.', 'retryable' => false, 'stale_token' => false, 'diagnostic' => $diagnostic];
+    }
+    if ($httpStatus === 429 || $httpStatus >= 500) {
+        return ['message' => 'Firebase is temporarily unavailable. Retry the notification shortly.', 'retryable' => true, 'stale_token' => false, 'diagnostic' => $diagnostic];
+    }
+    return ['message' => 'Firebase rejected the phone notification. Contact the website administrator.', 'retryable' => false, 'stale_token' => false, 'diagnostic' => $diagnostic];
 }
 
 /**
@@ -327,15 +361,18 @@ function sendPaymentQrNotificationForDeviceTable(
     try {
         $projectId = PaymentHelper::env('FIREBASE_PROJECT_ID');
         $serviceAccountPath = PaymentHelper::env('FIREBASE_SERVICE_ACCOUNT_PATH');
-        $appUrl = PaymentHelper::env('APP_URL');
-        if ($appUrl === '') {
-            $appUrl = PaymentHelper::env('PUBLIC_APP_URL');
+        $appUrl = ItourPaymentPhoneAppUrl();
+        if (!preg_match('/^[a-z0-9-]{4,100}$/i', $projectId)) {
+            throw new RuntimeException('FIREBASE_PROJECT_ID is missing or invalid.');
         }
-        if (!preg_match('/^[a-z0-9-]{4,100}$/i', $projectId)
-            || $serviceAccountPath === ''
-            || !is_file($serviceAccountPath)
-            || !is_readable($serviceAccountPath)) {
-            throw new RuntimeException('Firebase Administrator messaging is not fully configured.');
+        if ($serviceAccountPath === '') {
+            throw new RuntimeException('FIREBASE_SERVICE_ACCOUNT_PATH is missing.');
+        }
+        if (!is_file($serviceAccountPath)) {
+            throw new RuntimeException('Firebase service account file does not exist at the configured path.');
+        }
+        if (!is_readable($serviceAccountPath)) {
+            throw new RuntimeException('Firebase service account file is not readable by PHP.');
         }
 
         $handoffUrl = PaymentHelper::publicHttpsUrl(
@@ -469,7 +506,14 @@ function sendPaymentQrNotificationForDeviceTable(
             $curlError = curl_error($curl);
             curl_close($curl);
             if ($responseBody !== false && $curlError === '') {
-                break;
+                $sendResult = json_decode((string)$responseBody, true);
+                if ($httpStatus >= 200 && $httpStatus < 300 && is_array($sendResult) && !empty($sendResult['name'])) {
+                    break;
+                }
+                $failure = firebaseClassifySendFailure($httpStatus, (string)$responseBody);
+                if (!$failure['retryable'] || $attempt === 3) break;
+                usleep(250000 * $attempt);
+                continue;
             }
             if (!in_array($curlErrorNumber, [CURLE_COULDNT_RESOLVE_HOST, CURLE_COULDNT_CONNECT, CURLE_OPERATION_TIMEDOUT, 60], true)) {
                 break;
@@ -483,14 +527,9 @@ function sendPaymentQrNotificationForDeviceTable(
 
         $response = json_decode((string)$responseBody, true);
         if ($httpStatus < 200 || $httpStatus >= 300 || !is_array($response) || empty($response['name'])) {
-            $responseText = strtoupper((string)$responseBody);
-            if (str_contains($responseText, 'UNREGISTERED')) {
-                // Keep the user's selected phone visible until they explicitly
-                // replace or re-register it. A transient/stale Firebase token
-                // is a delivery failure, not consent to remove the device.
-                return ['sent' => false, 'registered' => true, 'message' => 'The registered phone could not receive this notification. Re-register that phone to refresh its notification token.'];
-            }
-            throw new RuntimeException('Firebase rejected the phone notification.');
+            $failure = firebaseClassifySendFailure($httpStatus, (string)$responseBody);
+            error_log($ownerLabel . ' payment QR notification rejected: ' . $failure['diagnostic']);
+            return ['sent' => false, 'registered' => true, 'message' => $failure['message']];
         }
 
         $touch = $pdo->prepare("UPDATE {$deviceTable} SET last_used_at = NOW() WHERE device_id = ? AND revoked_at IS NULL");
@@ -498,6 +537,17 @@ function sendPaymentQrNotificationForDeviceTable(
         return ['sent' => true, 'registered' => true, 'message' => 'The payment QR notification was sent to the registered phone.'];
     } catch (Throwable $exception) {
         error_log($ownerLabel . ' payment QR notification failed: ' . $exception->getMessage());
-        return ['sent' => false, 'registered' => true, 'message' => 'The QR was created, but the phone notification could not be delivered.'];
+        $reason = $exception->getMessage();
+        if (str_contains($reason, 'certificate') || str_contains($reason, 'CA bundle') || str_contains($reason, 'CA directory')) {
+            $message = 'The server could not verify Firebase’s HTTPS certificate. Contact the website administrator.';
+        } elseif (str_contains($reason, 'could not be reached') || str_contains($reason, 'Timed out')) {
+            $message = 'The server could not reach Firebase. Retry shortly or contact the website administrator.';
+        } elseif (str_contains($reason, 'authentication') || str_contains($reason, 'service account')
+            || str_contains($reason, 'FIREBASE_PROJECT_ID') || str_contains($reason, 'FIREBASE_SERVICE_ACCOUNT_PATH')) {
+            $message = 'Firebase server credentials need attention. Contact the website administrator.';
+        } else {
+            $message = 'The QR was created, but the phone notification could not be delivered. Contact the website administrator.';
+        }
+        return ['sent' => false, 'registered' => true, 'message' => $message];
     }
 }

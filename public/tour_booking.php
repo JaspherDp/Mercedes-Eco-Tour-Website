@@ -347,6 +347,7 @@ $locations = [
 <!DOCTYPE html>
 <html lang="en">
 <head>
+  <script src="js/paymongo-return-navigation.js"></script>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Tour Booking | iTour Mercedes</title>
@@ -2420,6 +2421,7 @@ preferredSelect.addEventListener("change", function () {
           setOpeningPaymentState(true);
           const result = await submitBooking();
           if (result?.success && result?.checkout_url) {
+            window.ItourPayMongoNavigation?.remember(result.return_token);
             window.location.assign(result.checkout_url);
             return;
           }
