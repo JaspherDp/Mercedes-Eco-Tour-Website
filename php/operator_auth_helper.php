@@ -61,10 +61,12 @@ function OperatorRequireLogin(PDO $pdo, string $mode = 'redirect'): array
     if (is_array($operator)) {
         return $operator;
     }
-    if ($mode === 'json') {
+    if ($mode === 'json' || strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
+        || str_contains(strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json')
+        || (string)($_SERVER['HTTP_SEC_FETCH_DEST'] ?? '') === 'empty') {
         header('Content-Type: application/json; charset=utf-8');
         http_response_code(401);
-        echo json_encode(['success' => false, 'code' => 'SESSION_EXPIRED', 'message' => 'Your operator session expired. Please log in again.']);
+        echo json_encode(['success' => false, 'code' => 'SESSION_EXPIRED', 'message' => 'Your operator session expired. Please log in again.', 'login_url' => operatorLoginUrl()]);
         exit;
     }
     $_SESSION['alert'] = [

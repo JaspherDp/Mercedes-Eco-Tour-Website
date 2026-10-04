@@ -12,8 +12,9 @@ $requestedReturnTo = trim((string)($_POST['return_to'] ?? $_GET['return_to'] ?? 
 $safeReturnTo = HoNormalizeHotelAdminReturnTo($requestedReturnTo);
 $returnTo = '../' . $safeReturnTo;
 
-if (isset($_SESSION['hotel_admin_logged_in']) && $_SESSION['hotel_admin_logged_in'] === true) {
+if ($_SERVER['REQUEST_METHOD'] !== 'POST' && isset($_SESSION['hotel_admin_logged_in']) && $_SESSION['hotel_admin_logged_in'] === true && AppRoleSessionIsActive('hotel_admin', $pdo, false)) {
     HoRequireHotelAdmin($pdo);
+    if ($requestedReturnTo === '') $returnTo = '../' . PortalLoginLandingPage($pdo, 'hotel_admin', (int)$_SESSION['hotel_admin_id']);
     header('Location: ' . $returnTo);
     exit;
 }
@@ -65,9 +66,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             password_verify($password, (string)$admin['password'])
         ) {
             loginThrottleClear($pdo, 'hotel-administrator', $username);
+            AppClearRoleAuthentication('hotel_admin');
             session_regenerate_id(true);
             HoSetHotelAdminSession($admin);
-            AppMarkRoleAuthenticated('hotel_admin');
+            AppMarkRoleAuthenticated('hotel_admin', $pdo);
+            if ($requestedReturnTo === '') $returnTo = '../' . PortalLoginLandingPage($pdo, 'hotel_admin', (int)$admin['hotel_admin_id']);
             logActivity(
                 $pdo,
                 'Hotel Owner',

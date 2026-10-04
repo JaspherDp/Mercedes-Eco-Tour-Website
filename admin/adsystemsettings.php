@@ -22,6 +22,9 @@ $allowedDateFormats = ['M d, Y', 'd M Y', 'm/d/Y', 'd/m/Y'];
 $allowedStatuses = ['pending', 'confirmed'];
 
 [$settings, $settingsMeta] = loadAdminSystemSettings($pdo);
+$globalSessionTimeout = $settings['session_timeout_minutes'];
+PortalEnsureSettingsTable($pdo);
+$settings['session_timeout_minutes'] = PortalLoadSettings($pdo, 'admin', $adminId)['session_timeout_minutes'];
 $servicePrices = [];
 try {
     $priceRows = $pdo->query("SELECT service_type, day_tour_price, overnight_price FROM service_prices WHERE service_type IN ('boat', 'tourguide') AND is_active = 1")->fetchAll(PDO::FETCH_ASSOC);
@@ -66,6 +69,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'reset_settings') {
         try {
             $settings = adminSettingsDefaults();
+            PortalSaveSettings($pdo, 'admin', $adminId, PortalSettingsDefaults('admin'));
+            $settings['session_timeout_minutes'] = $globalSessionTimeout;
             saveAdminSystemSettings($pdo, $settings, $adminId);
             logActivity($pdo, 'Admin', $adminId, $adminName, 'Reset Settings', 'Restored all system preferences to their recommended defaults.', 'System Settings');
             adminManagementRedirect($pageFile, 'success', 'System settings were restored to the recommended defaults.');
@@ -80,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $cancellationWindowHours = ItourValidationInt($_POST['cancellation_window_hours'] ?? null, 'Cancellation window', 0, 720);
         $capacityWarningPercent = ItourValidationInt($_POST['capacity_warning_percent'] ?? null, 'Capacity warning', 1, 100);
         $auditRetentionDays = ItourValidationInt($_POST['audit_retention_days'] ?? null, 'Audit retention', 30, 3650);
-        $sessionTimeoutMinutes = ItourValidationInt($_POST['session_timeout_minutes'] ?? null, 'Session timeout', 15, 480);
+        $sessionTimeoutMinutes = PortalValidateSessionTimeout($_POST['session_timeout_minutes'] ?? null, (int)$settings['session_timeout_minutes']);
     } catch (InvalidArgumentException $error) {
         adminManagementRedirect($pageFile, 'error', $error->getMessage());
     }
@@ -139,6 +144,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     try {
+        PortalSaveSettings($pdo, 'admin', $adminId, ['session_timeout_minutes' => $sessionTimeoutMinutes, 'landing_page' => 'adhomepage.php']);
+        $candidate['session_timeout_minutes'] = $globalSessionTimeout;
         saveAdminSystemSettings($pdo, $candidate, $adminId);
         logActivity($pdo, 'Admin', $adminId, $adminName, 'Updated Settings', 'Updated portal, booking, notification, regional, or security preferences.', 'System Settings');
         adminManagementRedirect($pageFile, 'success', 'System settings saved successfully.');
@@ -291,7 +298,7 @@ if (!empty($settingsMeta['updated_by'])) {
 
             <section class="am-panel" data-panel-content="security">
               <article class="am-card"><header class="am-card-header"><div class="am-card-heading"><span class="am-card-icon"><svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.4 8 8 9 4.6-1 8-4 8-9V6l-8-3Z"/><path d="m8.5 12 2.3 2.3 4.7-4.8"/></svg></span><div><h3>Security policy</h3><p>Session and audit-history controls for administrative access</p></div></div></header><div class="am-card-body am-grid-2">
-                <div class="am-field"><label for="session_timeout_minutes">Administrative session timeout</label><div class="am-input-unit"><input id="session_timeout_minutes" name="session_timeout_minutes" type="number" min="15" max="480" value="<?= (int)$settings['session_timeout_minutes'] ?>"><span>minutes</span></div><div class="am-field-help">Recommended: 30–60 minutes on shared office computers.</div></div>
+                <div class="am-field"><label for="session_timeout_minutes">Your session expiration</label><select id="session_timeout_minutes" name="session_timeout_minutes" required><?php $timeoutOptions = PortalSessionTimeoutOptions(); $currentTimeout = (int)$settings['session_timeout_minutes']; if (!isset($timeoutOptions[$currentTimeout])) $timeoutOptions[$currentTimeout] = $currentTimeout . ' minutes (current)'; foreach ($timeoutOptions as $minutes => $label): ?><option value="<?= $minutes ?>" <?= $currentTimeout === $minutes ? 'selected' : '' ?>><?= adminManagementEscape($label) ?></option><?php endforeach; ?></select><div class="am-field-help">Applies only to your account and current session. Sign out after inactivity. Recommended: 30-60 minutes on shared office computers.</div></div>
                 <div class="am-field"><label for="audit_retention_days">Activity log retention</label><div class="am-input-unit"><input id="audit_retention_days" name="audit_retention_days" type="number" min="30" max="3650" value="<?= (int)$settings['audit_retention_days'] ?>"><span>days</span></div><div class="am-field-help">Recommended: at least 365 days for accountability.</div></div>
               </div></article>
               <article class="am-card"><header class="am-card-header"><div class="am-card-heading"><span class="am-card-icon"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4zM8 9h8M8 13h5"/></svg></span><div><h3>Configuration tools</h3><p>Download a portable copy or restore recommended values</p></div></div></header><div class="am-card-body"><div style="display:flex;gap:10px;flex-wrap:wrap"><button class="am-button" type="submit" name="action" value="export_settings"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg>Export JSON</button><button class="am-button danger" type="button" data-open-modal="resetModal"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></svg>Restore defaults</button></div></div></article>

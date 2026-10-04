@@ -82,6 +82,7 @@ $phonePageToken = bin2hex(random_bytes(16));
   </style>
 </head>
 <body>
+<?php require_once __DIR__ . '/../php/session_monitor.php'; AppRenderSessionMonitor('admin'); ?>
   <main class="phone-setup">
     <header class="phone-head">
       <div class="phone-brand"><img src="<?= htmlspecialchars($assetBase, ENT_QUOTES, 'UTF-8') ?>img/newlogo.png" alt=""><div><span>ITOUR MERCEDES</span><h1>Register Admin Phone</h1></div></div>

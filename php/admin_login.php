@@ -6,12 +6,11 @@ require_once __DIR__ . '/activity_logger.php';
 require_once __DIR__ . '/admin_auth_helper.php';
 require_once __DIR__ . '/login_throttle.php';
 require_once __DIR__ . '/turnstile.php';
-require 'alert.php';
 
 $requestedAdminReturn = trim((string)($_POST['return_to'] ?? $_GET['return_to'] ?? ''));
 $adminReturnPage = AdminNormalizeReturnTo($requestedAdminReturn);
 $isPhoneSetupReturn = $adminReturnPage === 'admin-phone-setup.php';
-$isAjaxLogin = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
+$isAjaxLogin = AdminRequestExpectsJson();
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
     $username = trim((string)($_POST['username'] ?? ''));
@@ -54,13 +53,14 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 
     if ($admin && password_verify($password, $admin['password'])) {
         loginThrottleClear($pdo, 'administrator', $username);
+        AppClearRoleAuthentication('admin');
         session_regenerate_id(true);
         $_SESSION['admin_logged_in'] = true;
         $_SESSION['admin_id'] = (int)$admin['admin_id'];
         $_SESSION['username'] = $admin['username'];
         $_SESSION['admin_name'] = $admin['full_name'];
         $_SESSION['admin_session_started'] = time();
-        AppMarkRoleAuthenticated('admin');
+        AppMarkRoleAuthenticated('admin', $pdo);
         if ($isPhoneSetupReturn) {
             // This one-use grant lets the phone setup page open only immediately
             // after the Administrator has entered their credentials.
@@ -134,6 +134,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <link rel="stylesheet" href="../styles/auth-portal.css?v=14">
 </head>
 <body class="auth-page">
+
+<?php
+// Flash alerts render HTML. Keep them out of login POST responses so queued
+// session-expiry notices cannot corrupt JSON or prevent redirects/cookies.
+require __DIR__ . '/alert.php';
+?>
 
 <div class="adlog-modal">
     <div class="adlog-brand">

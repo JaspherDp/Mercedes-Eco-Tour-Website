@@ -111,6 +111,7 @@ function HoNormalizeHotelAdminReturnTo(?string $value): string
         'Hocontents.php',
         'Horeviews.php',
         'Hoprofile.php',
+        'Hosystemsettings.php',
         'hotel-admin-phone-setup.php',
     ];
     if (!in_array($page, $allowedPages, true)) {
@@ -133,9 +134,11 @@ function HoRedirectToHotelAdminLogin(bool $forceJson = false): never
     $loginUrl = HoHotelAdminLoginUrl();
     $isAjax = $forceJson
         || strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
-        || str_contains(strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json');
+        || str_contains(strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json')
+        || (string)($_SERVER['HTTP_SEC_FETCH_DEST'] ?? '') === 'empty';
 
     if ($isAjax) {
+        unset($_SESSION['alert']); // The shared browser monitor displays expiry once.
         header('Content-Type: application/json; charset=utf-8');
         http_response_code(401);
         echo json_encode([

@@ -82,7 +82,8 @@ function AdminLoginUrl(?string $returnTo = null): string
 function AdminRequestExpectsJson(): bool
 {
     return strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest'
-        || str_contains(strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json');
+        || str_contains(strtolower((string)($_SERVER['HTTP_ACCEPT'] ?? '')), 'application/json')
+        || (string)($_SERVER['HTTP_SEC_FETCH_DEST'] ?? '') === 'empty';
 }
 
 function AdminRedirectToLogin(?string $returnTo = null): never
@@ -134,7 +135,7 @@ function AdminRequireLogin(?PDO $pdo = null): void
     }
 
     $hasAdminCookie = !empty($_COOKIE['admin_seen']);
-    $_SESSION['alert'] = [
+    if (!AdminRequestExpectsJson()) $_SESSION['alert'] = [
         'type' => 'error',
         'title' => $hasAdminCookie ? 'Session Expired' : 'Access Denied',
         'message' => $hasAdminCookie

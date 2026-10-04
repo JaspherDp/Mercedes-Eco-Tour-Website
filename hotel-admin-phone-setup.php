@@ -26,6 +26,7 @@ $adminName = trim((string)($hotelAdmin['full_name'] ?: $hotelAdmin['username'] ?
   </style>
 </head>
 <body>
+<?php require_once __DIR__ . '/php/session_monitor.php'; AppRenderSessionMonitor('hotel_admin'); ?>
   <main class="phone-setup">
     <header class="phone-head"><div class="phone-brand"><img src="img/newlogo.png" alt=""><div><span>ITOUR MERCEDES</span><h1>Register Hotel Payment Phone</h1></div></div></header>
     <section class="phone-body">

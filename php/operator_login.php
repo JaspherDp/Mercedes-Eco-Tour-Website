@@ -60,11 +60,12 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             header('Location: operator_login.php');
             exit();
         } else {
+            AppClearRoleAuthentication('operator');
             session_regenerate_id(true);
             $_SESSION['operator_logged_in'] = true;
             $_SESSION['operator_id'] = $operator['operator_id'];
             $_SESSION['operator_name'] = $operator['fullname'];
-            AppMarkRoleAuthenticated('operator');
+            AppMarkRoleAuthenticated('operator', $pdo);
             logActivity(
                 $pdo,
                 'Tour Operator',
@@ -91,7 +92,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
             unset($_SESSION['operator_login_return_to']);
             $operatorRedirect = $operatorReturnTo === '../operator-phone-setup.php'
                 ? $operatorReturnTo
-                : '../ophomepage.php';
+                : '../' . PortalLoginLandingPage($pdo, 'operator', (int)$operator['operator_id']);
             if ($isAjaxLogin) {
                 header('Content-Type: application/json; charset=utf-8');
                 echo json_encode(['success' => true, 'redirect' => $operatorRedirect]);

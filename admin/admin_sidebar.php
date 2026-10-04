@@ -170,6 +170,7 @@ if (isset($_GET['get_pending_count'])) {
 
 ?>
 
+<?php require_once __DIR__ . '/../php/session_monitor.php'; AppRenderSessionMonitor('admin'); ?>
 <style>
 .admin-sidebar,
 .admin-sidebar *,
@@ -901,7 +902,8 @@ if (isset($_GET['get_pending_count'])) {
             try {
                 const payload = await response.clone().json();
                 if (payload?.code === 'SESSION_EXPIRED' && payload?.login_url) {
-                    window.location.assign(payload.login_url);
+                    if (window.itourHandleSessionExpired) window.itourHandleSessionExpired(payload);
+                    else window.location.assign(payload.login_url);
                 }
             } catch (_error) {
                 // Let the page's existing request handler process non-session errors.

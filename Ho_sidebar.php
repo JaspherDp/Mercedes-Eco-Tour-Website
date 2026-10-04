@@ -5,6 +5,8 @@ $hoSidebarAccountName = trim((string)($_SESSION['hotel_admin_name'] ?? 'Hotel Ad
 $hoSidebarPropertyName = trim((string)($_SESSION['hotel_admin_property_name'] ?? ''));
 $hoSidebarInitial = strtoupper(substr($hoSidebarAccountName !== '' ? $hoSidebarAccountName : 'H', 0, 1));
 $hoSidebarProfileImage = trim((string)($_SESSION['hotel_admin_profile_picture'] ?? ''));
+require_once __DIR__ . '/php/session_monitor.php';
+AppRenderSessionMonitor('hotel_admin');
 require_once __DIR__ . '/php/alert.php';
 
 $hoNavGroups = [
@@ -20,11 +22,19 @@ $hoNavGroups = [
   'Guest Experience' => [
     ['reviews', 'Reviews', 'Horeviews.php', 'star'],
   ],
-  'Account' => [
+  'System' => [
+    ['settings', 'System Settings', 'Hosystemsettings.php', 'settings'],
     ['profile', 'Profile', 'Hoprofile.php', 'profile'],
   ],
 ];
+$hoNavCategoryIcons = [
+  'Operations' => '<rect x="3" y="6" width="18" height="14" rx="2"/><path d="M8 6V4h8v2M3 11h18M10 11v2h4v-2"/>',
+  'Content Management' => '<path d="M5 3h10l4 4v14H5z"/><path d="M14 3v5h5M8 12h8M8 16h8"/>',
+  'Guest Experience' => '<path d="M12 3 4 6v6c0 5 3.4 8 8 9 4.6-1 8-4 8-9V6l-8-3Z"/><path d="m8.5 12 2.3 2.3 4.7-4.8"/>',
+  'System' => '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+];
 $hoNavIcons = [
+  'settings' => '<circle cx="12" cy="12" r="3"/><path d="M9 3h6l1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1z"/>',
   'calendar' => '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/>',
   'rooms' => '<path d="M3 19v-8a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v8M3 16h18M6 19v2M18 19v2"/><path d="M6 9V6h5a2 2 0 0 1 2 2v1M13 9V7h5v2"/>',
   'card' => '<rect x="2.5" y="5" width="19" height="14" rx="2"/><path d="M2.5 10h19M7 15h3"/>',
@@ -35,6 +45,7 @@ $hoNavIcons = [
 ];
 ?>
 <script src="js/page-navigation-progress.js?v=1"></script>
+<link rel="stylesheet" href="styles/provider_sidebar.css?v=3">
 <aside class="ho-sidebar" aria-label="Hotel admin sidebar">
   <a class="ho-brand" href="Hohome.php">
     <img src="img/newlogo.png" alt="iTour Mercedes" />
@@ -51,7 +62,7 @@ $hoNavIcons = [
       <section class="ho-nav-group" aria-labelledby="<?= htmlspecialchars($groupId) ?>-heading">
         <h2 class="ho-nav-heading" id="<?= htmlspecialchars($groupId) ?>-heading">
           <button type="button" class="ho-nav-toggle" aria-expanded="true" aria-controls="<?= htmlspecialchars($groupId) ?>">
-            <span><?= htmlspecialchars($groupLabel) ?></span>
+            <span class="provider-nav-category-label"><svg class="provider-nav-category-icon" viewBox="0 0 24 24" aria-hidden="true"><?= $hoNavCategoryIcons[$groupLabel] ?></svg><span><?= htmlspecialchars($groupLabel) ?></span></span>
             <svg class="ho-nav-chevron" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
           </button>
         </h2>

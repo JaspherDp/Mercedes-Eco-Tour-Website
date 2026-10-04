@@ -33,6 +33,7 @@ $operatorName = trim((string)($operator['fullname'] ?: $operator['username'] ?: 
   </style>
 </head>
 <body>
+<?php require_once __DIR__ . '/php/session_monitor.php'; AppRenderSessionMonitor('operator'); ?>
   <main class="phone-setup">
     <header class="phone-head"><div class="phone-brand"><img src="img/newlogo.png" alt=""><div><span>ITOUR MERCEDES</span><h1>Register Operator Payment Phone</h1></div></div></header>
     <section class="phone-body">

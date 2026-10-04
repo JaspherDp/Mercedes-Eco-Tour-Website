@@ -20,6 +20,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'logout') {
 }
 
 // ✅ Session Validation
+OperatorRequireLogin($pdo);
 if (!isset($_SESSION['operator_id'])) {
     $_SESSION['alert'] = ['type' => 'error', 'title' => 'Session Expired', 'message' => 'Your session expired. Please log in again.'];
     header('Location: ' . operatorLoginUrl());
@@ -56,6 +57,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['updateProfile'])) {
 }
 ?>
 
+<?php require_once __DIR__ . '/../php/session_monitor.php'; AppRenderSessionMonitor('operator'); ?>
 <style>
 :root {
     --op-primary: #2b7a66;
@@ -365,6 +367,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['updateProfile'])) {
 .op-form-container button:hover,
 .op-form-container .op-profile-link:hover { background-color: var(--op-primary-dark); }
 </style>
+<link rel="stylesheet" href="styles/provider_sidebar.css?v=3">
 
 <?php require_once __DIR__ . '/../php/alert.php'; ?>
 <div class="op-sidebar" id="opSidebar">
@@ -382,7 +385,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['updateProfile'])) {
         </div>
 
         <div class="op-nav-section">
-            <div class="op-nav-section-title"><span>Operations</span><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></div>
+            <div class="op-nav-section-title"><span class="provider-nav-category-label"><svg class="provider-nav-category-icon" aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M8 6V4h8v2M3 11h18M10 11v2h4v-2"/></svg><span>Operations</span></span><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></div>
             <a href="opbookings.php" class="<?= basename($_SERVER['PHP_SELF'])=='opbookings.php'?'active':'' ?>">
                 <svg class="op-nav-icon" aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>
                 <span>Bookings</span>
@@ -401,7 +404,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['updateProfile'])) {
         </div>
 
         <div class="op-nav-section">
-            <div class="op-nav-section-title"><span>Content Management</span><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></div>
+            <div class="op-nav-section-title"><span class="provider-nav-category-label"><svg class="provider-nav-category-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M5 3h10l4 4v14H5z"/><path d="M14 3v5h5M8 12h8M8 16h8"/></svg><span>Content Management</span></span><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></div>
             <a href="optourpackages.php" class="<?= basename($_SERVER['PHP_SELF'])=='optourpackages.php'?'active':'' ?>">
                 <svg class="op-nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7.5 12 3l8 4.5-8 4.5-8-4.5Z"/><path d="m4 12 8 4.5 8-4.5M4 16.5 12 21l8-4.5"/></svg>
                 <span>Tour Packages</span>
@@ -409,7 +412,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['updateProfile'])) {
         </div>
 
         <div class="op-nav-section">
-            <div class="op-nav-section-title"><span>Account</span><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></div>
+            <div class="op-nav-section-title"><span class="provider-nav-category-label"><svg class="provider-nav-category-icon" aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg><span>System</span></span><svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg></div>
+            <a href="opsystemsettings.php" class="<?= basename($_SERVER['PHP_SELF'])=='opsystemsettings.php'?'active':'' ?>">
+                <svg class="op-nav-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M9 3h6l1 3 3 1 2 5-2 5-3 1-1 3H9l-1-3-3-1-2-5 2-5 3-1z"/></svg>
+                <span>System Settings</span>
+            </a>
             <a href="opprofile.php" class="<?= basename($_SERVER['PHP_SELF'])=='opprofile.php'?'active':'' ?>">
                 <svg class="op-nav-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5 21a7 7 0 0 1 14 0"/></svg>
                 <span>Profile</span>

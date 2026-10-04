@@ -1,0 +1,19 @@
+.portal-settings-page{margin:0;font-family:Inter,sans-serif;background:#f4f8f6}
+.portal-settings-main{margin-left:250px;padding-top:76px;min-width:0}
+.portal-settings-layout.ho-layout>.portal-settings-main{margin-left:0}
+.portal-settings-header{position:fixed;top:0;left:250px;right:0;z-index:90;min-height:76px;padding:12px 18px;display:flex;align-items:center;justify-content:space-between;gap:16px;background:#fff;border-bottom:1px solid #dce9e4;box-shadow:0 3px 12px rgba(18,70,55,.04)}
+.portal-settings-title{display:flex;align-items:center;gap:12px;min-width:0}
+.portal-settings-title>.am-card-icon{width:40px;height:40px;flex:0 0 40px;border:1px solid #cce3da}
+.portal-settings-title h1{margin:0;color:#145d46;font-size:23px;line-height:1.2;letter-spacing:-.025em}
+.portal-settings-title p{margin:4px 0 0;color:#687c75;font-size:11px;line-height:1.4}
+.portal-settings-avatar{width:36px;height:36px;flex:0 0 36px;display:grid;place-items:center;border-radius:50%;background:#1e7158;color:#fff;font-weight:800;text-decoration:none}
+.portal-settings-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.portal-settings-notice{margin-bottom:18px;padding:12px 15px;border:1px solid #c8e1d5;border-radius:10px;background:#edf8f2;color:#1a6549;font-size:12px;line-height:1.5}
+.portal-settings-notice.error{border-color:#efc8cc;background:#fff3f3;color:#a33845}
+.portal-settings-main .am-field{max-width:560px}
+.portal-settings-main .am-field select{width:100%}
+.portal-settings-main .am-button:disabled,.portal-settings-main .am-save-button:disabled{opacity:.55;cursor:not-allowed}
+.portal-settings-main .am-nav button:focus-visible{outline:2px solid #26826a;outline-offset:2px}
+@media(max-width:1050px){.portal-settings-header{flex-wrap:wrap;position:static;padding:15px}.portal-settings-main{padding-top:0}.portal-settings-header .am-header-actions{margin-left:0;width:100%;justify-content:flex-end}}
+@media(max-width:900px){.portal-settings-main .am-layout{grid-template-columns:1fr}.portal-settings-main .am-nav{display:flex;flex-wrap:wrap;gap:5px}.portal-settings-main .am-nav-label{width:100%}.portal-settings-main .am-nav-divider,.portal-settings-main .am-nav-note{display:none}.portal-settings-main .am-nav button{width:auto}}
+@media(max-width:700px){.portal-settings-main{margin-left:0}.portal-settings-title h1{font-size:20px}.portal-settings-main .admin-management-content{padding:16px 12px 30px}}
