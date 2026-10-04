@@ -167,6 +167,7 @@ try {
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script src="js/page-navigation-progress.js?v=3"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#155a49">
@@ -193,26 +194,32 @@ try {
       <div class="hero-overlay"></div>
       <div class="hero-shell">
         <div class="hero-content">
+          <div class="hero-intro">
           <span class="hero-eyebrow">Welcome to Mercedes, Camarines Norte</span>
           <h1 id="heroTitle">Find your kind of <span>island adventure.</span></h1>
           <p class="hero-tagline">From quiet beaches to unforgettable island-hopping, plan a local escape with trusted tours, stays, guides, and boats.</p>
+          </div>
 
-          <form class="hero-search" action="destination_results.php" method="get" aria-label="Search bookable services by destination">
-            <label class="hero-search-field" for="heroDestinationSearch">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5Z"/></svg>
-              <span class="sr-only">Destination</span>
-              <input id="heroDestinationSearch" type="search" name="destination" placeholder="Where do you want to go?" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="heroSearchSuggestions">
-            </label>
-            <button type="submit" aria-label="Search all services">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 20-4.35-4.35a8 8 0 1 0-1.42 1.42L19.59 21 21 20ZM5 11a6 6 0 1 1 12 0 6 6 0 0 1-12 0Z"/></svg>
-              <span class="hero-search-button-label">Search all</span>
-            </button>
-            <div class="hero-search-suggestions" id="heroSearchSuggestions" role="listbox" aria-label="Destination suggestions" hidden></div>
-          </form>
+          <div class="hero-planner">
+            <form class="hero-search" action="destination_results.php" method="get" aria-label="Search bookable services by destination">
+              <label class="hero-search-field" for="heroDestinationSearch">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a7 7 0 0 0-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 0 0-7-7Zm0 9.5A2.5 2.5 0 1 1 12 6a2.5 2.5 0 0 1 0 5.5Z"/></svg>
+                <span class="sr-only">Destination</span>
+                <span class="hero-search-copy">
+                  <input id="heroDestinationSearch" type="search" name="destination" placeholder="Where do you want to go?" autocomplete="off" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="heroSearchSuggestions">
+                </span>
+              </label>
+              <button type="submit" aria-label="Search all services">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m21 20-4.35-4.35a8 8 0 1 0-1.42 1.42L19.59 21 21 20ZM5 11a6 6 0 1 1 12 0 6 6 0 0 1-12 0Z"/></svg>
+                <span class="hero-search-button-label">Search all</span>
+              </button>
+              <div class="hero-search-suggestions" id="heroSearchSuggestions" role="listbox" aria-label="Destination suggestions" hidden></div>
+            </form>
 
-          <div class="hero-actions">
-            <a href="destination.php" class="hero-btn hero-btn--primary">Explore destinations</a>
-            <a href="hotel_resorts.php?tab=tours" class="hero-btn hero-btn--ghost">Browse all tours <span aria-hidden="true">→</span></a>
+            <div class="hero-actions">
+              <a href="destination.php" class="hero-btn hero-btn--primary">Explore destinations</a>
+              <a href="hotel_resorts.php?tab=tours" class="hero-btn hero-btn--ghost">Browse all tours <span aria-hidden="true">→</span></a>
+            </div>
           </div>
           <nav class="hero-mobile-nav" aria-label="Mobile quick links">
             <a href="./" aria-current="page">
@@ -223,7 +230,7 @@ try {
               <span class="hero-mobile-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M19.5 9.5c0 5.2-7.5 11.5-7.5 11.5S4.5 14.7 4.5 9.5a7.5 7.5 0 1 1 15 0Z"/><circle class="icon-accent" cx="12" cy="9.5" r="2.4"/></svg></span>
               <span>Destinations</span>
             </a>
-            <a href="hotel_resorts.php?tab=tours">
+            <a href="hotel_resorts.php?tab=tours#tourPackagesSection">
               <span class="hero-mobile-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="14" rx="3"/><path class="icon-accent" d="M8.5 7V4.5A1.5 1.5 0 0 1 10 3h4a1.5 1.5 0 0 1 1.5 1.5V7"/><path d="M8 11v6M16 11v6"/></svg></span>
               <span>Tours</span>
             </a>
@@ -231,6 +238,26 @@ try {
               <span class="hero-mobile-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle class="icon-accent" cx="12" cy="7.5" r="1.25"/><path d="M12 11v6"/></svg></span>
               <span>About</span>
             </a>
+            <a id="heroNavHotels" href="hotel_resorts.php?tab=hotels#featuredSection" data-hero-extra hidden>
+              <span class="hero-mobile-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 21V5h10v16M14 10h6v11M2 21h20M8 8h2M8 12h2M17 13h1M17 17h1M8 21v-5h2v5"/></svg></span>
+              <span>Hotels &amp; Resorts</span>
+            </a>
+            <a id="heroNavPackages" href="hotel_resorts.php?tab=tours#tourPackagesSection" data-hero-extra hidden>
+              <span class="hero-mobile-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="4" y="7" width="16" height="14" rx="3"/><path d="M9 7V4h6v3M8 11v6M16 11v6"/></svg></span>
+              <span>Tour Packages</span>
+            </a>
+            <a id="heroNavBoats" href="hotel_resorts.php?tab=boats#tourBoatsSection" data-hero-extra hidden>
+              <span class="hero-mobile-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v12M12 4l7 9h-7M9 6l-5 7h5M3 16h18l-4 5H7l-4-5Z"/></svg></span>
+              <span>Tour Boats</span>
+            </a>
+            <a id="heroNavGuides" href="hotel_resorts.php?tab=guides#tourGuidesSection" data-hero-extra hidden>
+              <span class="hero-mobile-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="4"/><path d="M5 21v-3a7 7 0 0 1 14 0v3M10 15l2 3 2-3"/></svg></span>
+              <span>Tour Guides</span>
+            </a>
+            <button class="hero-mobile-more" type="button" aria-label="More" aria-expanded="false" aria-controls="heroNavHotels heroNavPackages heroNavBoats heroNavGuides">
+              <span class="hero-mobile-nav-icon" aria-hidden="true"><svg class="hero-more-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg><svg class="hero-more-close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></span>
+              <span data-hero-more-label>More</span>
+            </button>
           </nav>
         </div>
 
@@ -327,24 +354,24 @@ try {
         </div>
 
         <div class="bt-container">
-          <a href="hotel_resorts.php?tab=tours" class="bt-card-link">
+          <a href="hotel_resorts.php?tab=hotels#featuredSection" class="bt-card-link">
+            <span class="bt-icon-wrap"><img src="img/hotelshome.png" alt=""></span>
+            <span class="bt-card-copy"><strong>Hotels &amp; resorts</strong><small>Find your home by the coast</small></span>
+            <span class="bt-arrow" aria-hidden="true">→</span>
+          </a>
+          <a href="hotel_resorts.php?tab=tours#tourPackagesSection" class="bt-card-link">
             <span class="bt-icon-wrap"><img src="img/packageshome.png" alt=""></span>
             <span class="bt-card-copy"><strong>Tour packages</strong><small>Ready-made island experiences</small></span>
             <span class="bt-arrow" aria-hidden="true">→</span>
           </a>
-          <a href="hotel_resorts.php?tab=guides" class="bt-card-link">
+          <a href="hotel_resorts.php?tab=guides#tourGuidesSection" class="bt-card-link">
             <span class="bt-icon-wrap"><img src="img/tourguidehome.png" alt=""></span>
             <span class="bt-card-copy"><strong>Local guides</strong><small>Explore with local expertise</small></span>
             <span class="bt-arrow" aria-hidden="true">→</span>
           </a>
-          <a href="hotel_resorts.php?tab=boats" class="bt-card-link">
+          <a href="hotel_resorts.php?tab=boats#tourBoatsSection" class="bt-card-link">
             <span class="bt-icon-wrap"><img src="img/boathome.png" alt=""></span>
             <span class="bt-card-copy"><strong>Boat rentals</strong><small>Travel safely between islands</small></span>
-            <span class="bt-arrow" aria-hidden="true">→</span>
-          </a>
-          <a href="hotel_resorts.php?tab=hotels" class="bt-card-link">
-            <span class="bt-icon-wrap"><img src="img/hotelshome.png" alt=""></span>
-            <span class="bt-card-copy"><strong>Hotels &amp; resorts</strong><small>Find your home by the coast</small></span>
             <span class="bt-arrow" aria-hidden="true">→</span>
           </a>
         </div>

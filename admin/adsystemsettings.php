@@ -267,7 +267,6 @@ if (!empty($settingsMeta['updated_by'])) {
                     </div></article>
                   <?php endforeach; ?>
                 </div>
-                <div class="am-prices-actions"><span>These rates are used in public tour estimates and booking calculations.</span><button class="am-save-button" type="submit" form="servicePricesForm">Save prices</button></div>
               <?php endif; ?>
             </section>
 

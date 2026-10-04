@@ -9,6 +9,7 @@ require_once 'php/db_connection.php';
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script src="js/page-navigation-progress.js?v=3"></script>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>iTour Mercedes</title>

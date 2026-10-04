@@ -335,6 +335,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script src="js/page-navigation-progress.js?v=3"></script>
   <script src="js/paymongo-return-navigation.js"></script>
   <script src="js/request-limit.js?v=<?= (int)@filemtime(__DIR__ . '/../js/request-limit.js') ?>"></script>
   <meta charset="utf-8" />

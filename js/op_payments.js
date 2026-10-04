@@ -134,7 +134,7 @@ document.querySelector('[data-open-collect]')?.addEventListener('click',()=>open
 document.querySelectorAll('[data-transaction]').forEach(button=>button.addEventListener('click',()=>{
   try{current=JSON.parse(button.dataset.transaction);}catch{current=null;}if(!current)return;
   const set=(selector,value)=>{const el=drawer.querySelector(selector);if(el)el.textContent=value||'—';};
-  set('[data-detail-reference]',current.reference);set('[data-detail-amount]',current.amount);set('[data-detail-booking]',current.booking_reference);set('[data-detail-guest]',current.guest);set('[data-detail-service]',`${current.service} · ${current.booking_type}`);set('[data-detail-channel]',current.channel);set('[data-detail-method]',current.method);set('[data-detail-date]',current.date);set('[data-detail-source]',current.source);
+  set('[data-detail-reference]',current.reference);set('[data-detail-amount]',current.amount);set('[data-detail-fee]',current.fee);set('[data-detail-net]',current.net);set('[data-detail-booking]',current.booking_reference);set('[data-detail-guest]',current.guest);set('[data-detail-service]',`${current.service} · ${current.booking_type}`);set('[data-detail-channel]',current.channel);set('[data-detail-method]',current.method);set('[data-detail-date]',current.date);set('[data-detail-source]',current.source);
   const status=drawer.querySelector('[data-detail-status]');if(status){status.className=`hp-status ${current.status_class||''}`;status.innerHTML=`<i></i>${escapeHtml(current.status)}`;}
   if(viewReceipt)viewReceipt.hidden=current.status_class!=='paid';show(drawer,true);
 }));

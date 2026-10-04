@@ -3726,6 +3726,15 @@ body .payment-modal { width: 460px; padding: 26px 28px; }
   box-shadow: inset 4px 0 0 #2b7a66;
 }
 
+.main-content .booking-row.is-notification-focus td,
+.main-content .booking-row.is-notification-focus:hover td {
+  border-color: #49a57f !important;
+  background: #dcf5e8 !important;
+}
+.main-content .booking-row.is-notification-focus td:first-child {
+  box-shadow: inset 4px 0 0 #17845b;
+}
+
 .main-content .booker-cell-wrap { align-items: center; gap: 12px; }
 .main-content .booker-name-row {
   flex-wrap: nowrap;
@@ -3739,14 +3748,14 @@ body .payment-modal { width: 460px; padding: 26px 28px; }
   padding: 2px;
   border-color: #c5e2d8 !important;
   background: #fff;
-  box-shadow: 0 4px 11px rgba(24, 83, 65, .13);
+  box-shadow: none !important;
   cursor: pointer;
-  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+  transition: border-color .18s ease;
 }
 .main-content .profile-img:hover {
-  transform: translateY(-2px) scale(1.04);
+  transform: none !important;
   border-color: #2b7a66 !important;
-  box-shadow: 0 7px 16px rgba(24, 83, 65, .2);
+  box-shadow: none !important;
 }
 .main-content .profile-img:focus-visible {
   outline: 3px solid rgba(43, 122, 102, .28);

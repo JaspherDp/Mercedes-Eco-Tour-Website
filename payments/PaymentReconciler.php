@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../php/activity_logger.php';
 require_once __DIR__ . '/BookingCheckoutService.php';
 require_once __DIR__ . '/PaymentHelper.php';
+require_once __DIR__ . '/../php/payout_accounting.php';
 
 final class PaymentReconciler
 {
@@ -101,6 +102,7 @@ final class PaymentReconciler
                     $eventUpdate->execute([$eventId, (int)$transaction['payment_transaction_id']]);
                 }
                 $pdo->commit();
+                PayoutAccounting::captureOptional($pdo, $transaction, $paidPayment, $expectedLiveMode);
                 PaymentHelper::logPayMongo('payment_duplicate', [
                     'transaction_id' => (int)$transaction['payment_transaction_id'],
                     'session_id' => $sessionId, 'payment_id' => $paymentId, 'event_id' => $eventId, 'idempotent' => true,
@@ -306,6 +308,7 @@ final class PaymentReconciler
             );
 
             $pdo->commit();
+            PayoutAccounting::captureOptional($pdo, $transaction, $paidPayment, $expectedLiveMode);
             PaymentHelper::logPayMongo('payment_reconciled', [
                 'mode' => $expectedLiveMode ? 'live' : 'test',
                 'transaction_id' => (int)$transaction['payment_transaction_id'],

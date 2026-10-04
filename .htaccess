@@ -61,6 +61,12 @@ DirectoryIndex index.php
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
+    # A host-only login cookie cannot follow a PayMongo return from www to the
+    # apex domain. Keep every entry point on the same host before PHP starts a
+    # session so mobile browser history and hosted checkout share one cookie.
+    RewriteCond %{HTTP_HOST} ^www\.itourmercedes\.com(?::[0-9]+)?$ [NC]
+    RewriteRule ^ https://itourmercedes.com%{REQUEST_URI} [R=302,L,NE]
+
     # Temporary production HTTPS redirect. Local/private XAMPP hosts remain on
     # HTTP. Change R=302 to R=308 only after the deployed SSL flows are verified.
     RewriteCond %{HTTPS} !=on

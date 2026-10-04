@@ -34,6 +34,7 @@ $hoNavIcons = [
   'profile' => '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
 ];
 ?>
+<script src="js/page-navigation-progress.js?v=1"></script>
 <aside class="ho-sidebar" aria-label="Hotel admin sidebar">
   <a class="ho-brand" href="Hohome.php">
     <img src="img/newlogo.png" alt="iTour Mercedes" />

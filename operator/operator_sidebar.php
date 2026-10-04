@@ -447,6 +447,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['updateProfile'])) {
     </div>
 </div>
 
+<script src="<?= basename(dirname((string)($_SERVER['SCRIPT_NAME'] ?? ''))) === 'operator' ? '../' : '' ?>js/page-navigation-progress.js?v=1"></script>
 <script>window.operatorNotificationCsrf = <?= json_encode($operatorNotificationCsrf) ?>;</script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script>

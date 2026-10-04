@@ -782,9 +782,9 @@
     const receiptButton = document.getElementById('openTransactionReceipt');
     if (receiptButton) receiptButton.hidden = !canIssueReceipt(data);
     document.getElementById('drawerBody').innerHTML = `
-      <div class="drawer-summary"><div class="drawer-summary-top"><small>${escapeHtml(data.domain)} payment</small><span class="status-badge ${escapeHtml(data.status_class)}"><i></i>${escapeHtml(data.status)}</span></div><span>Amount</span><strong>${escapeHtml(data.amount)}</strong></div>
+      <div class="drawer-summary"><div class="drawer-summary-top"><small>${escapeHtml(data.domain)} payment</small><span class="status-badge ${escapeHtml(data.status_class)}"><i></i>${escapeHtml(data.status)}</span></div><span>Gross customer payment</span><strong>${escapeHtml(data.amount)}</strong></div>
       <section class="drawer-section"><h4>Customer & booking</h4>${detail('Customer', data.customer)}${detail('Email', data.email)}${detail('Booking reference', data.booking_reference)}${detail('Service', data.service)}${detail('Booking total', data.booking_total)}${detail('Paid to date', data.booking_paid)}${detail('Balance remaining', data.booking_balance)}</section>
-      <section class="drawer-section"><h4>Payment information</h4>${detail('Transaction reference', data.reference)}${detail('Channel', data.provider)}${detail('Collected through', data.collection_source)}${detail('Payment method', data.method)}${detail('Created', data.created)}${detail('Settled', data.paid_at)}${detail('Provider payment ID', data.provider_payment_id)}</section>
+      <section class="drawer-section"><h4>Payment information</h4>${detail('PayMongo fee',data.fee)}${detail('Net before refunds',data.net)}${detail('Transaction reference', data.reference)}${detail('Channel', data.provider)}${detail('Collected through', data.collection_source)}${detail('Payment method', data.method)}${detail('Created', data.created)}${detail('Settled', data.paid_at)}${detail('Provider payment ID', data.provider_payment_id)}</section>
       ${data.failure_message ? `<div class="drawer-error"><strong>Payment note</strong><br>${escapeHtml(data.failure_message)}</div>` : ''}`;
     drawer.classList.add('open');
     drawer.setAttribute('aria-hidden', 'false');

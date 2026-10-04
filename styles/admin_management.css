@@ -257,14 +257,12 @@ body { margin: 0; }
 .am-prices-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
 .am-prices-grid .am-card { min-width: 0; margin-bottom: 0; }
 .am-price-input { position: relative; min-width: 0; min-height: 41px; overflow: hidden; border: 1px solid #d7e5e0; border-radius: 9px; background: #fff; transition: border-color .18s ease, box-shadow .18s ease; }
-.am-price-input:focus-within { border-color: #63aa91; box-shadow: 0 0 0 3px rgba(43,122,102,.1); }
+.am-price-input:focus-within { border-color: #63aa91; }
 .am-price-input > span { position: absolute; top: 50%; left: 12px; z-index: 1; color: #28745d; font-size: 12px; font-weight: 800; line-height: 1; pointer-events: none; transform: translateY(-50%); }
 .am-prices-grid .am-price-input input,
-.am-prices-grid .am-price-input input:focus { display: block; width: 100%; min-width: 0; min-height: 39px; padding: 9px 12px 9px 31px; border: 0; outline: none; box-shadow: none; background: transparent; appearance: textfield; }
+.am-prices-grid .am-price-input input:focus { display: block; width: 100%; min-width: 0; min-height: 39px; padding: 9px 12px 9px 31px; border: 0 !important; border-radius: 0 !important; outline: none; box-shadow: none; background: transparent !important; appearance: textfield; }
 .am-prices-grid .am-price-input input::-webkit-outer-spin-button,
 .am-prices-grid .am-price-input input::-webkit-inner-spin-button { margin: 0; appearance: none; }
-.am-prices-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 16px; padding: 16px 18px; border: 1px solid var(--am-line); border-radius: 13px; color: var(--am-muted); background: #fff; font-size: 11px; }
-.am-prices-actions .am-save-button { flex: 0 0 auto; }
 
 @media (max-width: 1300px) {
   .am-prices-grid { grid-template-columns: 1fr; }
@@ -289,7 +287,6 @@ body { margin: 0; }
 }
 @media (max-width: 600px) {
   .am-summary-grid,.am-grid-2,.am-grid-3,.am-system-info,.am-prices-grid { grid-template-columns: 1fr; }
-  .am-prices-actions { align-items: stretch; flex-direction: column; }
   .am-header-actions .am-button { display: none; }
   .am-profile-identity { align-items: flex-start; }
   .am-profile-hero-meta { gap: 13px; flex-wrap: wrap; }

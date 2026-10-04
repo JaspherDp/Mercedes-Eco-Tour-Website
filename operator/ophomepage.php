@@ -1554,7 +1554,7 @@ new Chart(revenueCtx, {
         labels: <?= json_encode($revenueLabels, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
         datasets: [
             { label: 'Booked value', data: <?= json_encode($revenueBooked) ?>, backgroundColor: 'rgba(43,122,102,.22)', borderColor: '#2b7a66', borderWidth: 1, borderRadius: 5 },
-            { label: 'Collected', data: <?= json_encode($revenueCollected) ?>, backgroundColor: '#2b7a66', borderRadius: 5 }
+            { label: 'Gross customer payments', data: <?= json_encode($revenueCollected) ?>, backgroundColor: '#2b7a66', borderRadius: 5 }
         ]
     },
     options: {

@@ -42,9 +42,12 @@
           ${field('Booking status', data.booking_status)}
           ${field('Payment status', data.payment_status)}
           ${field('Booking total', data.booking_total)}
-          ${field('Amount paid', data.amount_paid)}
+          ${field('Gross customer payment', data.amount_paid)}
           ${field('Guest balance', data.balance)}
-          ${field('Payout amount', data.payout_amount)}
+          ${field('PayMongo fee', data.paymongo_fee)}
+          ${field('Refunded', data.refunded)}
+          ${field('Expected net payout', data.net_payout)}
+          ${field(settled ? 'Amount settled' : 'Net payout', data.payout_amount)}
         </div>
       </section>
       <section class="he-detail-section">

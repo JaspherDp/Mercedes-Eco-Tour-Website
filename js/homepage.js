@@ -100,6 +100,31 @@
     update();
   }
 
+  function initMobileHeroMore() {
+    const nav = document.querySelector(".hero-mobile-nav");
+    const toggle = nav?.querySelector(".hero-mobile-more");
+    if (!toggle) return;
+    const extras = Array.from(nav.querySelectorAll("[data-hero-extra]"));
+    const label = toggle.querySelector("[data-hero-more-label]");
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const setExpanded = (expanded) => {
+      extras.forEach((link) => { link.hidden = !expanded; });
+      nav.classList.toggle("is-expanded", expanded);
+      toggle.setAttribute("aria-expanded", String(expanded));
+      toggle.setAttribute("aria-label", expanded ? "Close extra navigation" : "More");
+      label.textContent = expanded ? "Close" : "More";
+      nav.scrollTo({ left: expanded ? nav.scrollWidth : 0, behavior: expanded && !reduceMotion.matches ? "smooth" : "auto" });
+      window.dispatchEvent(new Event("resize"));
+    };
+    toggle.addEventListener("click", () => setExpanded(toggle.getAttribute("aria-expanded") !== "true"));
+    nav.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && toggle.getAttribute("aria-expanded") === "true") {
+        setExpanded(false);
+        toggle.focus({ preventScroll: true });
+      }
+    });
+  }
+
   function initHeroVisual() {
     const visual = document.querySelector("[data-hero-visual]");
     if (!visual) return;
@@ -937,6 +962,7 @@
 
   document.addEventListener("DOMContentLoaded", () => {
     loadHeader();
+    initMobileHeroMore();
     initHeroVisual();
     initGallery();
     initTourCategories();

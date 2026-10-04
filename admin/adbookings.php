@@ -1510,6 +1510,7 @@ $selectedYear  = !empty($_GET['year'])  ? intval($_GET['year'])  : (int)date('Y'
 $selectedMonth = !empty($_GET['month']) ? intval($_GET['month']) : (int)date('n');
 $selectedDate  = !empty($_GET['date'])  ? trim((string)$_GET['date']) : date('Y-m-d');
 $search_q     = trim($_GET['search'] ?? '');
+$focusedBookingId = filter_var($_GET['focus_booking'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]) ?: 0;
 $statusFilter = $_GET['status'] ?? ''; // for completed tab
 $cancellationStatusFilter = strtolower(trim((string)($_GET['cancel_status'] ?? '')));
 $rowsRaw      = trim((string)($_GET['rows'] ?? '25'));
@@ -1704,6 +1705,7 @@ $sql = "SELECT
          AND cr.booking_id = b.booking_id
          AND cr.request_status IN ('pending','approved','decision_required','completed')";
 
+$bookingSelectSql = $sql;
 if (!empty($where)) {
     $sql .= " WHERE " . implode(" AND ", $where);
 }
@@ -1717,6 +1719,21 @@ foreach ($params as $key => $val) {
 }
 $stmt->execute();
 $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
+if ($focusedBookingId > 0 && $activeTab === 'all' && $search_q === '') {
+    $alreadyLoaded = false;
+    foreach ($bookings as $booking) {
+        if ((int)$booking['booking_id'] === $focusedBookingId) {
+            $alreadyLoaded = true;
+            break;
+        }
+    }
+    if (!$alreadyLoaded) {
+        $focusedBookingStmt = $pdo->prepare($bookingSelectSql . ' WHERE b.booking_id = :focused_booking_id LIMIT 1');
+        $focusedBookingStmt->execute([':focused_booking_id' => $focusedBookingId]);
+        $focusedBooking = $focusedBookingStmt->fetch(PDO::FETCH_ASSOC);
+        if ($focusedBooking) $bookings[] = $focusedBooking;
+    }
+}
 
 $cancellationSummary = ['total' => 0, 'pending' => 0, 'approved' => 0, 'refund_pending' => 0, 'completed' => 0];
 $cancellationSummaryStatement = $pdo->query("
@@ -2104,7 +2121,7 @@ if(isset($_GET['action']) && $_GET['action'] === 'fetchBookings') {
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <link rel="stylesheet" href="styles/admin_panel_theme.css" />
-<link rel="stylesheet" href="styles/adbookings.css?v=32" />
+<link rel="stylesheet" href="styles/adbookings.css?v=35" />
 <link rel="stylesheet" href="styles/admin_receipt.css?v=2" />
 </head>
 <style>
@@ -2995,7 +3012,7 @@ $paymentPill .= "</div>";
         }
 
 
-        echo "<tr class='booking-row'>
+        echo "<tr class='booking-row' data-booking-id='" . (int)$b['booking_id'] . "'>
     <td class='booker-cell' style='width:32%;'>
         <div class='booker-cell-wrap'>
             <img src='{$picEsc}' class='profile-img hover-profile' alt='profile'
@@ -5980,7 +5997,7 @@ function generateReportHTML() {
   const orientation = document.getElementById('reportOrientation').value || 'portrait';
   const paperSize = document.getElementById('reportPaperSize').value;
   const printSize = paperSize === 'letter' ? 'letter' : paperSize === 'long' ? 'legal' : 'A4';
-  const stylesheet = new URL('styles/adbookings.css?v=32', window.location.href).href;
+  const stylesheet = new URL('styles/adbookings.css?v=35', window.location.href).href;
 
   return `
     <!doctype html><html>
@@ -6929,8 +6946,6 @@ function closeTouristProfileDrawer() {
 }
 
 document.querySelectorAll('.hover-profile').forEach(img => {
-  img.addEventListener('mouseenter', () => showTooltip(img));
-  img.addEventListener('mouseleave', hideTooltip);
   img.addEventListener('click', () => openTouristProfileDrawer(img));
   img.addEventListener('keydown', event => {
     if (event.key === 'Enter' || event.key === ' ') {
@@ -7167,9 +7182,22 @@ if (overviewForm) {
 // ===========================================================
 const searchInput = document.querySelector('#searchForm input[name="search"]');
 const tabPages = document.querySelectorAll('.tab-page');
+const bookingSearchUrl = new URL(window.location.href);
+const hadServerBookingSearch = <?= json_encode($search_q !== '', JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
+const cameFromBookingNotification = bookingSearchUrl.searchParams.get('from_notification') === '1';
+bookingSearchUrl.searchParams.delete('search');
+bookingSearchUrl.searchParams.delete('from_notification');
+if (cameFromBookingNotification) {
+  history.replaceState(history.state, '', bookingSearchUrl.href);
+}
+if (searchInput) searchInput.value = <?= json_encode($search_q, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
 
 if (searchInput) searchInput.addEventListener('input', () => {
   const query = searchInput.value.toLowerCase().trim();
+  if (!query && hadServerBookingSearch) {
+    window.location.replace(bookingSearchUrl.href);
+    return;
+  }
 
   tabPages.forEach(tab => {
     const tbody = tab.querySelector('tbody');
@@ -7196,6 +7224,26 @@ if (searchInput) searchInput.addEventListener('input', () => {
     }
   });
 });
+
+const focusedBookingId = new URL(window.location.href).searchParams.get('focus_booking');
+if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
+  const focusUrl = new URL(window.location.href);
+  focusUrl.searchParams.delete('focus_booking');
+  history.replaceState(history.state, '', focusUrl.href);
+
+  const bookingRow = Array.from(document.querySelectorAll('#all .booking-row'))
+    .find(row => row.dataset.bookingId === focusedBookingId);
+  if (bookingRow) {
+    requestAnimationFrame(() => {
+      bookingRow.classList.add('is-notification-focus');
+      bookingRow.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        block: 'center'
+      });
+      setTimeout(() => bookingRow.classList.remove('is-notification-focus'), 500);
+    });
+  }
+}
 
 // ===========================================================
 // ----------------- WALK-IN BOOKING -------------------------

@@ -7,6 +7,8 @@ require_once __DIR__ . '/PayMongoService.php';
 require_once __DIR__ . '/PaymentReconciler.php';
 require_once __DIR__ . '/PaymentReturnStatus.php';
 require_once __DIR__ . '/../php/app_url_helper.php';
+require_once __DIR__ . '/../php/session_security.php';
+require_once __DIR__ . '/../php/tourist_auth_helper.php';
 
 header('Cache-Control: no-store');
 
@@ -60,6 +62,7 @@ try {
 $isAdminPayment = false;
 $isHotelAdminPayment = false;
 $isOperatorPayment = false;
+$isTouristBalancePayment = false;
 $bookingCheckoutReturnPath = '';
 $bookingCheckoutStatus = '';
 $bookingCheckoutReference = '';
@@ -71,6 +74,7 @@ if (preg_match('/^[a-f0-9]{64}$/', $token)) {
             && in_array((string)($metadata['source'] ?? ''), ['admin_booking_payment', 'hotel_checkin_payment', 'hotel_checkout_payment', 'operator_booking_payment'], true);
         $isHotelAdminPayment = $isAdminPayment && ($metadata['staff_type'] ?? '') === 'hotel_admin';
         $isOperatorPayment = $isAdminPayment && ($metadata['staff_type'] ?? '') === 'operator';
+        $isTouristBalancePayment = is_array($metadata) && ($metadata['source'] ?? '') === 'tourist_profile_balance';
         $isBookingCheckout = is_array($metadata) && ($metadata['source'] ?? '') === 'booking_checkout';
 
         if ($isBookingCheckout) {
@@ -133,5 +137,40 @@ if (preg_match('/^[a-f0-9]{64}$/', $token)) {
 
 $returnUrl = $returnBaseUrl . '/php/profile.php?'
     . http_build_query($params, '', '&', PHP_QUERY_RFC3986);
+if ($isTouristBalancePayment) {
+    AppSessionStart();
+    $returningTourist = TouristValidateSession($pdo);
+    if (!is_array($returningTourist)
+        || (int)$returningTourist['tourist_id'] !== (int)($transaction['tourist_id'] ?? 0)) {
+        // Mobile hosted checkouts can return in a different browser container.
+        // Show the verified ledger result before asking for a profile login.
+        $paymentStatus = strtolower((string)($transaction['status'] ?? 'pending'));
+        $verified = $paymentStatus === 'paid';
+        $terminal = in_array($paymentStatus, ['failed', 'expired', 'cancelled'], true);
+        $returnTitle = $verified ? 'Payment Verified' : ($terminal ? 'Payment Not Completed' : 'Payment Verification Pending');
+        $returnMessage = $verified
+            ? 'Your balance payment was verified. Sign in to view your updated booking.'
+            : ($terminal
+                ? 'This payment was not completed. Sign in to review your booking before trying again.'
+                : 'We are still verifying this payment. Sign in to check your booking before paying again.');
+        header('Content-Type: text/html; charset=utf-8');
+        header('Cache-Control: no-store, max-age=0');
+        header('Referrer-Policy: no-referrer');
+        ?>
+<!doctype html>
+<html lang="en">
+<head>
+<script src="../js/page-navigation-progress.js?v=1"></script>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><?= htmlspecialchars($returnTitle, ENT_QUOTES, 'UTF-8') ?> - iTour Mercedes</title>
+  <style>body{min-height:100vh;display:grid;place-items:center;margin:0;padding:20px;background:#edf6f1;color:#173d32;font-family:Arial,sans-serif}.card{width:min(420px,100%);box-sizing:border-box;padding:30px;border-radius:18px;background:#fff;box-shadow:0 18px 50px #173d3220;text-align:center}h1{font-size:24px}p{line-height:1.55;color:#536b62}a{display:inline-block;margin-top:12px;padding:12px 20px;border-radius:9px;background:#176b55;color:#fff;text-decoration:none;font-weight:700}</style>
+</head>
+<body><main class="card"><h1><?= htmlspecialchars($returnTitle, ENT_QUOTES, 'UTF-8') ?></h1><p><?= htmlspecialchars($returnMessage, ENT_QUOTES, 'UTF-8') ?></p><a href="<?= htmlspecialchars($returnUrl, ENT_QUOTES, 'UTF-8') ?>">Sign in to view booking</a></main></body>
+</html>
+        <?php
+        exit;
+    }
+}
 header('Location: ' . $returnUrl, true, 303);
 exit;

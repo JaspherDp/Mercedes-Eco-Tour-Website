@@ -18,6 +18,7 @@ ensureBookingCancellationRequestsTable($pdo);
 
 // ---------- AUTH ----------
 $user = TouristRequireLogin($pdo, 'redirect', '../?open_login=1', (string)($_SERVER['REQUEST_URI'] ?? ''));
+header('Cache-Control: private, no-store, max-age=0');
 $tourist_id = (int) $_SESSION['tourist_id'];
 
 // Used by the shared PayMongo balance-checkout endpoint. The token is tied to
@@ -1119,6 +1120,7 @@ while ($row = $feedback_stmt->fetch(PDO::FETCH_ASSOC)) {
 <!doctype html>
 <html lang="en">
 <head>
+<script src="../js/page-navigation-progress.js?v=1"></script>
   <script src="../js/paymongo-return-navigation.js"></script>
 <meta charset="utf-8">
 <title>iTour Mercedes - My Profile</title>

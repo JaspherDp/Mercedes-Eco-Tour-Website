@@ -18,7 +18,9 @@ webhook. Return screens show paid, terminal failure, or pending according to
 server state. Browser Back no longer requests cancellation automatically.
 
 Initial bookings retain `booking_success.php?token=...` and its existing guarded
-success page. Tourist balance payments retain the profile success confirmation.
+success page. Tourist balance payments retain the profile success confirmation
+when the profile session is available. When a mobile checkout returns without
+that cookie, the verified result appears before the sign-in link.
 Staff payments retain their admin/hotel/operator booking confirmations; phone
 returns retain their Payment Verified page. No new success page was added.
 

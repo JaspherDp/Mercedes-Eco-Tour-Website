@@ -43,6 +43,7 @@
   const ledgerTabs=[...document.querySelectorAll('[data-ledger-status]')];
   const payoutExport=document.getElementById('payoutExport');
   const peso=new Intl.NumberFormat('en-PH',{style:'currency',currency:'PHP',minimumFractionDigits:2,maximumFractionDigits:2});
+  const totalLabel=(amount,unknown=0)=>unknown?'Pending review':peso.format(amount);
   const stakeholderFilter=document.getElementById('pageStakeholderFilter');
   const providerFilter=document.getElementById('pageProviderFilter');
   const pageScopeReset=document.getElementById('pageScopeReset');
@@ -77,8 +78,8 @@
     const grouped=new Map();
     records.forEach(record=>{
       if(record.state==='excluded')return;
-      if(!grouped.has(record.provider_key))grouped.set(record.provider_key,{key:record.provider_key,name:record.provider_name,type:record.provider_type,pending:0,available:0,settled:0,bookings:0});
-      const provider=grouped.get(record.provider_key);if(provider[record.state]!==undefined)provider[record.state]+=Number(record.payout||0);provider.bookings++;
+      if(!grouped.has(record.provider_key))grouped.set(record.provider_key,{key:record.provider_key,name:record.provider_name,type:record.provider_type,pending:0,available:0,settled:0,bookings:0,unknown:{pending:0,available:0,settled:0}});
+      const provider=grouped.get(record.provider_key);if(record.payout===null)provider.unknown[record.state]++;if(provider[record.state]!==undefined)provider[record.state]+=Number(record.payout||0);provider.bookings++;
     });
     return [...grouped.values()].sort((a,b)=>(b.pending+b.available)-(a.pending+a.available)||a.name.localeCompare(b.name));
   }
@@ -86,24 +87,24 @@
     const providers=aggregateProviders(records);
     if(providerBalanceBody)providerBalanceBody.innerHTML=providers.length?providers.map(provider=>{
       const outstanding=provider.pending+provider.available;
-      return `<tr><td><div class="provider-cell"><span class="provider-mark ${escapeHtml(provider.type)}">${escapeHtml(String(provider.name||'?').charAt(0).toUpperCase())}</span><div><strong>${escapeHtml(provider.name)}</strong><small>${escapeHtml(stakeholderLabels[provider.type]||provider.type)}</small></div></div></td><td class="right muted-money">${escapeHtml(peso.format(provider.pending))}</td><td class="right available-money">${escapeHtml(peso.format(provider.available))}</td><td class="right settled-money">${escapeHtml(peso.format(provider.settled))}</td><td class="right"><strong>${escapeHtml(peso.format(outstanding))}</strong></td></tr>`;
+      return `<tr><td><div class="provider-cell"><span class="provider-mark ${escapeHtml(provider.type)}">${escapeHtml(String(provider.name||'?').charAt(0).toUpperCase())}</span><div><strong>${escapeHtml(provider.name)}</strong><small>${escapeHtml(stakeholderLabels[provider.type]||provider.type)}</small></div></div></td><td class="right muted-money">${escapeHtml(totalLabel(provider.pending,provider.unknown.pending))}</td><td class="right available-money">${escapeHtml(totalLabel(provider.available,provider.unknown.available))}</td><td class="right settled-money">${escapeHtml(totalLabel(provider.settled,provider.unknown.settled))}</td><td class="right"><strong>${escapeHtml(totalLabel(outstanding,provider.unknown.pending+provider.unknown.available))}</strong></td></tr>`;
     }).join(''):'<tr><td colspan="5"><div class="table-empty">No provider payout balances match this workspace filter.</div></td></tr>';
-    const exposed=providers.filter(provider=>provider.pending+provider.available>0).slice(0,5);
+    const exposed=providers.filter(provider=>provider.pending+provider.available>0||provider.unknown.pending+provider.unknown.available>0).slice(0,5);
     const outstanding=providers.reduce((sum,provider)=>sum+provider.pending+provider.available,0);
-    if(exposureTotal)exposureTotal.textContent=peso.format(outstanding);
-    const exposedCount=providers.filter(provider=>provider.pending+provider.available>0).length;
+    if(exposureTotal)exposureTotal.textContent=totalLabel(outstanding,providers.reduce((n,p)=>n+p.unknown.pending+p.unknown.available,0));
+    const exposedCount=providers.filter(provider=>provider.pending+provider.available>0||provider.unknown.pending+provider.unknown.available>0).length;
     if(exposureProviderCount)exposureProviderCount.textContent=`Across ${exposedCount.toLocaleString()} provider${exposedCount===1?'':'s'}`;
     if(exposureList){exposureList.innerHTML=exposed.length?exposed.map(provider=>{
       const due=provider.pending+provider.available;
       const share=outstanding>0?Math.min(100,(due/outstanding)*100):0;
-      return `<div class="exposure-row"><div class="exposure-ring ${escapeHtml(provider.type)}" style="--exposure-progress:${share.toFixed(1)}%"><div><strong>${share.toFixed(0)}%</strong><span>of total</span></div></div><div class="exposure-provider"><strong>${escapeHtml(provider.name)}</strong><small>${escapeHtml(stakeholderLabels[provider.type]||provider.type)} &middot; ${provider.bookings.toLocaleString()} booking${provider.bookings===1?'':'s'}</small></div><div class="exposure-amount"><strong>${escapeHtml(peso.format(due))}</strong><span>Outstanding</span></div></div>`;
+      return `<div class="exposure-row"><div class="exposure-ring ${escapeHtml(provider.type)}" style="--exposure-progress:${share.toFixed(1)}%"><div><strong>${share.toFixed(0)}%</strong><span>of total</span></div></div><div class="exposure-provider"><strong>${escapeHtml(provider.name)}</strong><small>${escapeHtml(stakeholderLabels[provider.type]||provider.type)} &middot; ${provider.bookings.toLocaleString()} booking${provider.bookings===1?'':'s'}</small></div><div class="exposure-amount"><strong>${escapeHtml(totalLabel(due,provider.unknown.pending+provider.unknown.available))}</strong><span>Outstanding</span></div></div>`;
     }).join(''):'<div class="compact-empty">No outstanding provider balances match this filter.</div>';}
   }
   function updatePageSummary(records){
-    const totals={collected:0,pending:0,available:0,settled:0},counts={pending:0,available:0,settled:0};
-    records.forEach(record=>{totals.collected+=Number(record.collected||0);if(totals[record.state]!==undefined&&record.state!=='collected')totals[record.state]+=Number(record.payout||0);if(counts[record.state]!==undefined)counts[record.state]++;});
+    const unknown={pending:0,available:0,settled:0},totals={collected:0,pending:0,available:0,settled:0},counts={pending:0,available:0,settled:0};
+    records.forEach(record=>{if(record.payout===null&&unknown[record.state]!==undefined)unknown[record.state]++;totals.collected+=Number(record.collected||0);if(totals[record.state]!==undefined&&record.state!=='collected')totals[record.state]+=Number(record.payout||0);if(counts[record.state]!==undefined)counts[record.state]++;});
     const notes={collected:`${records.length.toLocaleString()} recorded booking payment${records.length===1?'':'s'}`,pending:`${counts.pending.toLocaleString()} booking${counts.pending===1?'':'s'} awaiting completion`,available:`${counts.available.toLocaleString()} completed booking${counts.available===1?'':'s'} ready to settle`,settled:`${counts.settled.toLocaleString()} completed disbursement${counts.settled===1?'':'s'}`};
-    Object.keys(totals).forEach(key=>{const card=document.querySelector(`[data-page-metric="${key}"]`);if(!card)return;card.querySelector('strong').textContent=peso.format(totals[key]);card.querySelector('small').textContent=notes[key];});
+    Object.keys(totals).forEach(key=>{const card=document.querySelector(`[data-page-metric="${key}"]`);if(!card)return;card.querySelector('strong').textContent=totalLabel(totals[key],unknown[key]||0);card.querySelector('small').textContent=notes[key];});
     const monthKeys=Array.isArray(data.monthKeys)?data.monthKeys:[];const collections=monthKeys.map(()=>0),settled=monthKeys.map(()=>0),pending=monthKeys.map(()=>0),available=monthKeys.map(()=>0);
     records.forEach(record=>{const bookingIndex=monthKeys.indexOf(record.booking_month);if(bookingIndex>=0){collections[bookingIndex]+=Number(record.collected||0);if(record.state==='pending')pending[bookingIndex]+=Number(record.payout||0);if(record.state==='available')available[bookingIndex]+=Number(record.payout||0);}if(record.state==='settled'){const settledIndex=monthKeys.indexOf(record.settled_month);if(settledIndex>=0)settled[settledIndex]+=Number(record.payout||0);}});
     const metricSeries={collected:collections,pending,available,settled};
@@ -143,7 +144,7 @@
   }
   function applyLedgerFilters(historyMode='none'){
     if(!ledgerFilters)return;
-    const filters=currentLedgerFilters(),scope=pageScope();let shown=0,total=0;
+    const filters=currentLedgerFilters(),scope=pageScope();let shown=0,total=0,unknown=0;
     ledgerRows.forEach(row=>{
       const matchesSearch=!filters.search||String(row.dataset.search||'').includes(filters.search);
       const matchesStatus=filters.status==='all'||row.dataset.state===filters.status;
@@ -151,11 +152,11 @@
       const matchesScope=(scope.stakeholder==='all'||row.dataset.providerType===scope.stakeholder)&&(scope.provider==='all'||row.dataset.providerKey===scope.provider);
       const visible=matchesSearch&&matchesStatus&&matchesType&&matchesScope;
       row.hidden=!visible;
-      if(visible){shown++;total+=Number(row.dataset.payoutAmount||0);}
+      if(visible){shown++;if(row.dataset.payoutUnknown==='1')unknown++;total+=Number(row.dataset.payoutAmount||0);}
     });
     if(ledgerEmptyRow)ledgerEmptyRow.hidden=shown!==0;
     if(ledgerResultCount)ledgerResultCount.textContent=`Showing ${shown.toLocaleString()} of ${ledgerRows.length.toLocaleString()} booking payment records`;
-    if(ledgerFilteredTotal)ledgerFilteredTotal.textContent=peso.format(total);
+    if(ledgerFilteredTotal)ledgerFilteredTotal.textContent=totalLabel(total,unknown);
     ledgerTabs.forEach(tab=>{const active=tab.dataset.ledgerStatus===filters.status;tab.classList.toggle('active',active);tab.setAttribute('aria-current',active?'page':'false');});
     if(ledgerReset)ledgerReset.hidden=!filters.search&&filters.status==='all'&&filters.type==='all';
     closeActionMenus();syncLedgerUrl(filters,historyMode);
@@ -175,7 +176,7 @@
     let record={};try{record=JSON.parse(button.dataset.payoutDetails||'{}');}catch(_error){return;}
     closeActionMenus();
     const bookingRows=[['Guest',record.guest],['Service',record.service],['Service date',record.service_date],['Booking status',record.booking_status],['Completion',record.completion_status]];
-    const financialRows=[['Provider',record.provider],['Provider type',record.provider_type],['Payment method',record.payment_method],['Amount collected',record.amount_paid],['Refund amount',record.refund_amount],...(record.retention_applicable?[['Non-refundable retained',record.retained_amount]]:[]),['Provider payout',record.amount],['Payout status',record.payout_status],['Settlement reference',record.settlement_reference||'Not settled']];
+    const financialRows=[['Provider',record.provider],['Provider type',record.provider_type],['Payment method',record.payment_method],['Gross customer payment',record.gross||record.amount_paid],['PayMongo fee',record.fee],['Expected net payout',record.net],['Refund amount',record.refund_amount],...(record.retention_applicable?[['Non-refundable retained',record.retained_amount]]:[]),[record.payout_status==='Settled'?'Amount settled':'Net payout',record.amount],['Payout status',record.payout_status],['Settlement reference',record.settlement_reference||'Not settled']];
     const refundTone=String(record.refund_status||'').toLowerCase().includes('fail')?'danger':(String(record.refund_status||'').toLowerCase()==='refunded'?'success':'');
     const refundNote=record.payout_note||(record.payout_status==='Not payable'
       ? `This booking is not payable because its completion status is ${record.completion_status||'not completed'}. Review the refund state before taking further action.`
@@ -194,7 +195,7 @@
     const statusRows=[['Current status',record.status],['Booking decision',record.booking_status],['Completion',record.completion],['Refund status',record.refund_status],['Payout status',record.payout_status]];
     const rows=list=>'<div class="drawer-detail-grid">'+list.map(([label,value])=>`<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value||'—')}</strong></div>`).join('')+'</div>';
     const retentionNote=record.payout_note?`<div class="drawer-retention-note"><strong>Late-cancellation payout</strong><p>${escapeHtml(record.payout_note)}</p></div>`:'';
-    document.getElementById('bookingDetailBody').innerHTML=`<div class="drawer-hero"><div><small>BOOKING REFERENCE</small><strong>${escapeHtml(record.reference)}</strong><span>${escapeHtml(record.service)}</span></div><b>${escapeHtml(record.status)}</b></div><section class="drawer-section"><h4>Guest information</h4>${rows(contactRows)}</section><section class="drawer-section"><h4>Reservation information</h4>${rows(serviceRows)}</section><section class="drawer-section"><h4>Status and workflow</h4>${rows(statusRows)}</section><section class="drawer-payment-card"><small>PAYMENT SUMMARY</small><div><span>Booking total</span><strong>${escapeHtml(record.total)}</strong></div><div><span>Amount received</span><strong>${escapeHtml(record.paid)}</strong></div><div><span>Refund amount</span><strong>${escapeHtml(record.refund_amount)}</strong></div><div><span>Remaining balance</span><strong>${escapeHtml(record.balance)}</strong></div><div class="balance"><span>Provider payout</span><strong>${escapeHtml(record.provider_payout)}</strong></div><p>${escapeHtml(record.payment_method)}</p></section>${retentionNote}`;
+    document.getElementById('bookingDetailBody').innerHTML=`<div class="drawer-hero"><div><small>BOOKING REFERENCE</small><strong>${escapeHtml(record.reference)}</strong><span>${escapeHtml(record.service)}</span></div><b>${escapeHtml(record.status)}</b></div><section class="drawer-section"><h4>Guest information</h4>${rows(contactRows)}</section><section class="drawer-section"><h4>Reservation information</h4>${rows(serviceRows)}</section><section class="drawer-section"><h4>Status and workflow</h4>${rows(statusRows)}</section><section class="drawer-payment-card"><small>PAYMENT SUMMARY</small><div><span>Booking total</span><strong>${escapeHtml(record.total)}</strong></div><div><span>Gross customer payment</span><strong>${escapeHtml(record.paid)}</strong></div><div><span>PayMongo fee</span><strong>${escapeHtml(record.fee)}</strong></div><div><span>Refund amount</span><strong>${escapeHtml(record.refund_amount)}</strong></div><div><span>Remaining balance</span><strong>${escapeHtml(record.balance)}</strong></div><div class="balance"><span>Net payout / amount settled</span><strong>${escapeHtml(record.provider_payout)}</strong></div><p>${escapeHtml(record.payment_method)}</p></section>${retentionNote}`;
     openDrawer(bookingDrawer);
   }));
 
@@ -225,6 +226,7 @@
   document.getElementById('enterDifferentDestination')?.addEventListener('click',()=>{clearElectronic(true);savedDestinationPanel.hidden=true;settlementAccountName.focus();});
   document.getElementById('toggleAccountIdentifier')?.addEventListener('click',event=>{const show=settlementAccountIdentifier.type==='password';settlementAccountIdentifier.type=show?'text':'password';event.currentTarget.textContent=show?'Hide':'Show';});
   async function openSettlement(details){
+    document.getElementById('settlementGross').textContent=details.gross||'Unavailable';document.getElementById('settlementFee').textContent=details.fee||'Unavailable';document.getElementById('settlementRefunded').textContent=details.refunded||'Unavailable';
     settlementForm.reset();settlementForm.dataset.confirmed='false';savedDestinations=[];showSaved(null);document.getElementById('settlementPayoutId').value=details.id||'';document.getElementById('settlementContext').value=details.context||'';document.getElementById('settlementBooking').textContent=details.reference||'—';document.getElementById('settlementProvider').textContent=details.provider||'—';document.getElementById('settlementAmount').textContent=details.amount||'—';
     try{const csrf=settlementForm.elements.csrf_token.value,response=await fetch(`adearningsdisbursements.php?destination_for=${encodeURIComponent(details.id)}`,{headers:{Accept:'application/json','X-Requested-With':'XMLHttpRequest','X-CSRF-Token':csrf},credentials:'same-origin',cache:'no-store'}),result=await response.json();if(!response.ok||!result.success)throw new Error(result.message||'Payout details could not be loaded.');savedDestinations=Array.isArray(result.destinations)?result.destinations:[];const preferred=savedDestinations.find(item=>item.is_default)||savedDestinations[0];preferred?applySaved(preferred):configureMethod(false);openModal(settlementModal);}catch(error){window.Swal?Swal.fire({icon:'error',title:'Unable to open payout',text:error.message,confirmButtonColor:'#1d6851'}):window.alert(error.message);}
   }
@@ -241,7 +243,7 @@
   const receiptDrawer=document.getElementById('settlementRecordDrawer');
   document.querySelectorAll('[data-receipt]').forEach(button=>button.addEventListener('click',()=>{
     let record={};try{record=JSON.parse(button.dataset.receipt||'{}');}catch(_error){return;}
-    const rows=[['Settlement type','Manual settlement'],['Booking',record.booking],['Provider',record.provider],['Amount settled',record.amount],['Settlement method',record.method],['Bank / e-wallet / channel',record.institution||record.method],['Account holder / recipient',record.account_name||'—'],['Masked destination',record.destination||'—'],['Transaction / acknowledgment reference',record.reference],['Settlement date',record.settled],['Settled by',record.settled_by||'Administrator'],['Internal note',record.note||'—']];
+    const rows=[['Settlement type','Manual settlement'],['Booking',record.booking],['Provider',record.provider],['Gross at settlement',record.snapshot_gross],['PayMongo fee at settlement',record.snapshot_fee],['Refunded at settlement',record.snapshot_refunds],['Amount settled',record.amount],['Settlement method',record.method],['Bank / e-wallet / channel',record.institution||record.method],['Account holder / recipient',record.account_name||'—'],['Masked destination',record.destination||'—'],['Transaction / acknowledgment reference',record.reference],['Settlement date',record.settled],['Settled by',record.settled_by||'Administrator'],['Internal note',record.note||'—']];
     document.getElementById('receiptBody').innerHTML='<div class="receipt-grid">'+rows.map(([label,value])=>`<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`).join('')+'</div>';
     closeActionMenus();openDrawer(receiptDrawer);
   }));

@@ -8,6 +8,8 @@ AppSessionStart();
 }
 
 require_once __DIR__ . '/../php/db_connection.php';
+require_once __DIR__ . '/../php/payout_accounting.php';
+require_once __DIR__ . '/../php/payout_fee_sync.php';
 require_once __DIR__ . '/../php/activity_logger.php';
 require_once __DIR__ . '/../php/firebase_config.php';
 require_once __DIR__ . '/../php/admin_auth_helper.php';
@@ -24,6 +26,7 @@ require_once __DIR__ . '/../php/refund_confirmation_email.php';
 use PHPMailer\PHPMailer\PHPMailer;
 
 AdminRequireLogin();
+PayoutFeeSync::handle($pdo, 'admin');
 ensureBookingCancellationRequestsTable($pdo);
 ensureBookingRefundsTable($pdo);
 
@@ -905,7 +908,7 @@ if (($_GET['export'] ?? '') === 'csv') {
     fputcsv($output, [
         'Transaction Reference', 'Payment Date', 'Booking Reference', 'Customer Name', 'Customer Email',
         'Service', 'Booking Type', 'Payment Channel', 'Payment Method', 'Collected Through',
-        'Amount (PHP)', 'Status', 'Provider Payment ID', 'Payment Note',
+        'Gross payment (PHP)','PayMongo fee','Net before refunds', 'Status', 'Provider Payment ID', 'Payment Note',
     ]);
     foreach ($exportRows as $row) {
         fputcsv($output, [
@@ -919,7 +922,7 @@ if (($_GET['export'] ?? '') === 'csv') {
             paymentCsvSafe(paymentDisplayChannel($row)),
             paymentCsvSafe(paymentLabel((string)$row['payment_method_type'])),
             paymentCsvSafe(paymentCollectionSource($row)),
-            number_format(((int)$row['amount_minor']) / 100, 2, '.', ''),
+            number_format(((int)$row['amount_minor']) / 100, 2, '.', ''),PayoutAccounting::transactionDisplay($row)['fee'],PayoutAccounting::transactionDisplay($row)['net'],
             paymentLabel((string)$row['status']),
             paymentCsvSafe((string)$row['provider_payment_id']),
             paymentCsvSafe((string)$row['failure_message']),
@@ -1202,9 +1205,9 @@ $exportFilterSummary = $exportFilterLabels ? implode(' · ', $exportFilterLabels
   <title>Payments & Transactions | iTour Mercedes Admin</title>
   <link rel="icon" type="image/png" href="img/newlogo.png">
   <link rel="stylesheet" href="styles/admin_panel_theme.css">
-  <link rel="stylesheet" href="styles/adpaymenttransactions.css?v=36">
+  <link rel="stylesheet" href="styles/adpaymenttransactions.css?v=37">
   <link rel="stylesheet" href="styles/admin_receipt.css?v=2">
-</head>
+<link rel="stylesheet" href="styles/payout_accounting.css?v=1"></head>
 <body data-ledger-view="<?= htmlspecialchars($activeLedgerView) ?>">
 <div class="admin-container">
   <?php include __DIR__ . '/admin_sidebar.php'; ?>
@@ -1395,7 +1398,7 @@ $exportFilterSummary = $exportFilterLabels ? implode(' · ', $exportFilterLabels
 
         <div class="transaction-table-wrap">
           <table class="transaction-table">
-            <thead><tr><th>Transaction</th><th>Customer & booking</th><th>Channel</th><th>Date</th><th class="amount-column">Amount</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
+            <thead><tr><th>Transaction</th><th>Customer & booking</th><th>Channel</th><th>Date</th><th class="amount-column">Gross payment</th><th>Status</th><th><span class="sr-only">Actions</span></th></tr></thead>
             <tbody>
             <?php if (!$transactions): ?>
               <tr><td colspan="7"><div class="payment-empty"><span>⌕</span><strong>No transactions found</strong><p>Adjust the filters or search for a different reference.</p></div></td></tr>
@@ -1405,7 +1408,7 @@ $exportFilterSummary = $exportFilterLabels ? implode(' · ', $exportFilterLabels
                 'booking_reference' => (string)$transaction['booking_reference'], 'customer' => (string)$transaction['full_name'],
                 'email' => (string)$transaction['email'], 'service' => (string)$transaction['service_name'],
                 'domain' => paymentLabel((string)$transaction['booking_domain']), 'provider' => paymentDisplayChannel($transaction),
-                'method' => paymentLabel((string)$transaction['payment_method_type']), 'amount' => paymentMoney(((int)$transaction['amount_minor']) / 100),
+                'fee' => PayoutAccounting::transactionDisplay($transaction)['fee'], 'net' => PayoutAccounting::transactionDisplay($transaction)['net'], 'method' => paymentLabel((string)$transaction['payment_method_type']), 'amount' => paymentMoney(((int)$transaction['amount_minor']) / 100),
                 'collection_source' => paymentCollectionSource($transaction),
                 'status' => paymentLabel((string)$transaction['status']), 'status_class' => paymentStatusClass((string)$transaction['status']),
                 'created' => date('M j, Y · g:i A', strtotime((string)$transaction['created_at'])),
@@ -1420,7 +1423,7 @@ $exportFilterSummary = $exportFilterLabels ? implode(' · ', $exportFilterLabels
                 <td><div class="transaction-customer"><strong><?= htmlspecialchars((string)$transaction['full_name'] ?: 'Guest') ?></strong><span><?= htmlspecialchars((string)$transaction['booking_reference'] ?: ('Booking #' . $transaction['booking_id'])) ?> · <?= htmlspecialchars(paymentLabel((string)$transaction['booking_domain'])) ?></span></div></td>
                 <td><div class="transaction-channel"><strong><?= htmlspecialchars(paymentDisplayChannel($transaction)) ?></strong><span class="channel-source"><?= htmlspecialchars(paymentCollectionSource($transaction)) ?></span><small><?= htmlspecialchars(paymentLabel((string)$transaction['payment_method_type'])) ?></small></div></td>
                 <td><div class="transaction-date"><strong><?= date('M j, Y', strtotime((string)$transaction['created_at'])) ?></strong><span><?= date('g:i A', strtotime((string)$transaction['created_at'])) ?></span></div></td>
-                <td class="amount-column"><strong><?= paymentMoney(((int)$transaction['amount_minor']) / 100) ?></strong><span><?= htmlspecialchars((string)$transaction['currency']) ?></span></td>
+                <td class="amount-column"><strong><?= paymentMoney(((int)$transaction['amount_minor']) / 100) ?></strong><?= PayoutAccounting::transactionHtml($transaction) ?><span><?= htmlspecialchars((string)$transaction['currency']) ?></span></td>
                 <td><span class="status-badge <?= paymentStatusClass((string)$transaction['status']) ?>"><i></i><?= htmlspecialchars(paymentLabel((string)$transaction['status'])) ?></span></td>
                 <td class="row-action-cell"><button class="row-menu" type="button" aria-label="View transaction details" data-transaction='<?= htmlspecialchars(json_encode($transactionData, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT), ENT_QUOTES, 'UTF-8') ?>'><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.35"/><circle cx="12" cy="12" r="1.35"/><circle cx="19" cy="12" r="1.35"/></svg></button></td>
               </tr>
@@ -1599,7 +1602,7 @@ $exportFilterSummary = $exportFilterLabels ? implode(' · ', $exportFilterLabels
         <header><div><span>REPORT PREVIEW</span><h4>Transactions included</h4></div><small id="exportPreviewCaption">Preparing preview…</small></header>
         <div class="export-preview-state" id="exportPreviewState"><span></span>Loading matching transactions…</div>
         <div class="export-preview-table-wrap" id="exportPreviewTableWrap" hidden>
-          <table class="export-preview-table"><thead><tr><th>Transaction</th><th>Customer & booking</th><th>Type</th><th>Amount</th><th>Status</th></tr></thead><tbody id="exportPreviewRows"></tbody></table>
+          <table class="export-preview-table"><thead><tr><th>Transaction</th><th>Customer & booking</th><th>Type</th><th>Gross payment</th><th>Status</th></tr></thead><tbody id="exportPreviewRows"></tbody></table>
         </div>
       </section>
     </div>
@@ -1758,6 +1761,6 @@ window.refundProcessingConfig = <?= json_encode([
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
-<script src="js/adpaymenttransactions.js?v=26"></script>
-</body>
+<script src="js/adpaymenttransactions.js?v=27"></script>
+<?= PayoutFeeSync::script() ?></body>
 </html>

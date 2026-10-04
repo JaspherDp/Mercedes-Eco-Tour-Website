@@ -131,6 +131,7 @@ $additionalFees = getAdditionalFees($pdo);
 
 <html lang="en" class="tours-page-root">
 <head>
+<script src="js/page-navigation-progress.js?v=3"></script>
   <meta charset="utf-8"/>
   <meta content="width=device-width, initial-scale=1" name="viewport"/>
   <title>iTour Mercedes</title>

@@ -47,6 +47,7 @@ foreach (destinationRows($pdo, true) as $destination) {
 <!DOCTYPE html>
 <html lang="en">
   <head>
+<script src="js/page-navigation-progress.js?v=3"></script>
     <meta charset="utf-8" />
     <meta content="width=device-width, initial-scale=1" name="viewport" />
     <meta name="description" content="Explore beautiful islands, beaches, and tourist destinations in Mercedes, Camarines Norte. Discover places to visit and plan your next adventure." />

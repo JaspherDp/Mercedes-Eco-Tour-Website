@@ -546,6 +546,7 @@ unset($hotel);
 <!DOCTYPE html>
 <html lang="en" class="tours-page-root">
 <head>
+<script src="js/page-navigation-progress.js?v=3"></script>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="description" content="<?= htmlspecialchars($seoDescription, ENT_QUOTES, 'UTF-8') ?>" />
@@ -927,7 +928,7 @@ unset($hotel);
 <!-- CAROUSEL SECTIONS -->
 <section id="carouselSection" class="carousel-container">
   <!-- Tour Packages Carousel -->
-  <div class="carousel-wrapper">
+  <div class="carousel-wrapper" id="tourPackagesSection">
     <div class="carousel-header">
       <div class="carousel-heading-copy">
         <span class="carousel-section-eyebrow">Curated experiences</span>
@@ -952,7 +953,7 @@ unset($hotel);
   </div>
 
   <!-- Tour Boats Carousel -->
-  <div class="carousel-wrapper">
+  <div class="carousel-wrapper" id="tourBoatsSection">
     <div class="carousel-header">
       <div class="carousel-heading-copy">
         <span class="carousel-section-eyebrow">Explore the coast</span>
@@ -977,7 +978,7 @@ unset($hotel);
   </div>
 
   <!-- Tour Guides Carousel -->
-  <div class="carousel-wrapper">
+  <div class="carousel-wrapper" id="tourGuidesSection">
     <div class="carousel-header">
       <div class="carousel-heading-copy">
         <span class="carousel-section-eyebrow">Travel with locals</span>
@@ -2144,7 +2145,13 @@ include 'footer.php';
           || sessionStorage.getItem(ACTIVE_SEARCH_TAB_KEY)
           || "hotels"
         );
-        if (hasExternalSearchParams) {
+        const carouselTab = getLandingCarouselTab();
+        if (carouselTab) {
+          setActiveSearchTab(carouselTab);
+          sessionStorage.removeItem("searchMode");
+          sessionStorage.removeItem("searchData");
+          showFeaturedMode();
+        } else if (hasExternalSearchParams) {
           savedData = {
             tab: tabFromUrl,
             island: urlParams.get("destination") || urlParams.get("island") || "",
@@ -2225,6 +2232,8 @@ include 'footer.php';
         }
         updateIslandFieldState();
 
+        scrollToLandingCarousel();
+
         fetch("logsign-modal.html?v=16")
           .then(res => res.text())
           .then(html => {
@@ -2249,6 +2258,29 @@ include 'footer.php';
       })
       .catch(err => console.error("Header load error:", err));
   });
+
+  function getLandingCarouselTab() {
+    return {
+      "#featuredSection": "hotels",
+      "#tourPackagesSection": "tours",
+      "#tourBoatsSection": "boats",
+      "#tourGuidesSection": "guides"
+    }[window.location.hash] || "";
+  }
+
+  function scrollToLandingCarousel() {
+    if (!getLandingCarouselTab()) return;
+    const target = document.getElementById(window.location.hash.slice(1));
+    if (!target || !target.getClientRects().length) return;
+    requestAnimationFrame(() => {
+      const headerHeight = Array.from(document.querySelectorAll(".head-nav-main-header, .head-subnav"))
+        .reduce((height, header) => height + header.getBoundingClientRect().height, 0);
+      window.scrollTo({ top: Math.max(0, window.scrollY + target.getBoundingClientRect().top - headerHeight - 16), behavior: "instant" });
+    });
+  }
+
+  window.addEventListener("load", scrollToLandingCarousel, { once: true });
+  window.addEventListener("hashchange", scrollToLandingCarousel);
 
   function showFeaturedMode() {
     document.getElementById("featuredSection").style.display = "block";

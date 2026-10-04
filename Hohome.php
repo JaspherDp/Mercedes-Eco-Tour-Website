@@ -383,7 +383,7 @@ foreach ($acceptedCheckins as $item) {
         <div class="ho-insights-grid">
           <article class="ho-card ho-insight-card">
             <div class="ho-card-head">
-              <div><p class="ho-eyebrow">FINANCIAL PERFORMANCE</p><h3>Revenue & Collections</h3></div>
+              <div><p class="ho-eyebrow">FINANCIAL PERFORMANCE</p><h3>Booked value & gross collections</h3></div>
               <span class="ho-chart-note">Booked vs. received</span>
             </div>
             <div class="ho-chart-stage"><canvas id="hoRevenueChart"></canvas></div>
@@ -682,7 +682,7 @@ foreach ($acceptedCheckins as $item) {
           type: 'bar',
           data: { labels: lineLabels, datasets: [
             { label: 'Booked revenue', data: revenueData, backgroundColor: '#b9ded1', borderRadius: 6, maxBarThickness: 30 },
-            { label: 'Collected', data: collectedData, backgroundColor: '#216b56', borderRadius: 6, maxBarThickness: 30 }
+            { label: 'Gross customer payments', data: collectedData, backgroundColor: '#216b56', borderRadius: 6, maxBarThickness: 30 }
           ]},
           options: {
             responsive: true, maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' },

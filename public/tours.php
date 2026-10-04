@@ -65,6 +65,7 @@ $faqs = $stmt->fetchAll();
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script src="js/page-navigation-progress.js?v=3"></script>
     <script src="js/request-limit.js?v=<?= (int)@filemtime(__DIR__ . '/../js/request-limit.js') ?>"></script>
   <meta charset="utf-8"/>
   <meta content="width=device-width, initial-scale=1" name="viewport"/>

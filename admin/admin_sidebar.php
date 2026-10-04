@@ -707,6 +707,15 @@ if (isset($_GET['get_pending_count'])) {
   margin-bottom: 3px;
 }
 
+.ap-notif-message {
+  display: block;
+  padding-right: 24px;
+  margin-bottom: 6px;
+  color: #365d50;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
 .ap-header-notif-item small {
   width: fit-content;
   display: inline-flex;
@@ -739,6 +748,7 @@ if (isset($_GET['get_pending_count'])) {
 </style>
 
 <?php require_once __DIR__ . '/../php/alert.php'; ?>
+<script src="<?= $phpApiBase === '../php' ? '../' : '' ?>js/page-navigation-progress.js?v=1"></script>
 <aside class="admin-sidebar" id="adminSidebar" aria-label="Admin sidebar">
   <a class="admin-brand" href="adhomepage.php">
     <img src="img/newlogo.png" alt="iTour Mercedes logo">
@@ -1012,41 +1022,52 @@ document.addEventListener('DOMContentLoaded', () => {
     const adminName = <?= json_encode(trim(strip_tags($admin_username)) !== '' ? trim(strip_tags($admin_username)) : 'Website Admin') ?>;
     const adminProfileImage = <?= json_encode($admin_profile_picture) ?>;
     let notifCache = null;
-    let markRequested = false;
+    let markPromise = null;
 
     const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, character => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;'
     })[character]);
 
-    const renderNotifItems = (container, items) => {
+    const renderNotifItems = (container, items, heldUnreadIds = null) => {
         if (!container) return;
         if (!Array.isArray(items) || items.length === 0) {
             container.innerHTML = '<div class="ap-notif-empty"><span>✓</span><strong>You are all caught up</strong><small>New booking activity will appear here.</small></div>';
             return;
         }
         container.innerHTML = items.map(item => {
-            const isUnread = String(item?.is_notif_viewed ?? 0) === '0';
+            const isUnread = String(item?.is_notif_viewed ?? 0) === '0'
+                || heldUnreadIds?.has(String(item?.booking_id ?? ''));
             const unreadClass = isUnread ? ' is-unread' : '';
             const unreadPill = isUnread ? '<span class="ap-notif-unread-pill">NEW</span>' : '';
             const bookingId = item.booking_id ?? '';
             const bookingReference = item.booking_reference || bookingId || 'Booking';
             const fullName = escapeHtml(item.full_name ?? 'Tourist');
+            const bookingTypeRaw = String(item.booking_type ?? 'Booking').toLowerCase();
             const bookingType = escapeHtml(item.booking_type ?? 'Booking');
             const createdAt = escapeHtml(item.notification_at || item.created_at || '');
             const bookingLabel = escapeHtml(bookingReference);
             const decision = String(item.tourist_decision || '').toLowerCase();
             const isRescheduled = decision === 'reschedule';
             const isFullRefund = decision === 'full_refund' || decision === 'tourist_full_refund';
-            const detail = isRescheduled
-                ? `Tourist rescheduled to ${escapeHtml(item.rescheduled_service_date || item.booking_date || '-')}`
-                : (isFullRefund ? 'Tourist chose cancellation and a full refund' : `${bookingType} &bull; ${createdAt}`);
+            const serviceLabel = bookingTypeRaw === 'boat' ? 'boat tour'
+                : bookingTypeRaw === 'package' ? 'tour package'
+                : bookingTypeRaw === 'tourguide' ? 'tour guide'
+                : 'tour';
+            const bookingDate = escapeHtml(item.booking_date || '');
+            const newDate = escapeHtml(item.rescheduled_service_date || item.booking_date || '');
+            const message = isRescheduled
+                ? `${fullName} chose ${newDate || 'a new date'} for this ${serviceLabel} booking.`
+                : isFullRefund
+                    ? `${fullName} chose to cancel this ${serviceLabel} booking and requested a full refund.`
+                    : `${fullName} submitted a new ${serviceLabel} booking${bookingDate ? ` for ${bookingDate}` : ''}.`;
             const href = isFullRefund && item.cancellation_request_id
                 ? `adbookings.php?tab=cancellations&focus_request=${encodeURIComponent(item.cancellation_request_id)}`
-                : `adbookings.php?search=${encodeURIComponent(bookingId)}`;
+                : `adbookings.php?tab=all&focus_booking=${encodeURIComponent(bookingId)}`;
             return `
                 <a class="ap-header-notif-item${unreadClass}" href="${href}" aria-label="View booking ${bookingLabel}">
                     <strong>${bookingLabel} &mdash; ${fullName}${unreadPill}</strong>
-                    <small>${detail}${(isRescheduled || isFullRefund) && createdAt ? ` &bull; ${createdAt}` : ''}</small>
+                    <span class="ap-notif-message">${message}</span>
+                    <small>${bookingType}${createdAt ? ` &bull; ${createdAt}` : ''}</small>
                 </a>
             `;
         }).join('');
@@ -1062,10 +1083,10 @@ document.addEventListener('DOMContentLoaded', () => {
             .catch(() => ({ unread: 0, data: [] }));
     };
 
-    const renderNotificationState = (badgeEl, listEl, payload, forceHideBadge = false) => {
+    const renderNotificationState = (badgeEl, listEl, payload, forceHideBadge = false, heldUnreadIds = null) => {
         const safePayload = payload || {};
         const unread = parseInt(safePayload.unread || 0, 10);
-        renderNotifItems(listEl, safePayload.data || []);
+        renderNotifItems(listEl, safePayload.data || [], heldUnreadIds);
         if (forceHideBadge) {
             badgeEl.style.display = 'none';
         } else if (unread > 0) {
@@ -1077,25 +1098,29 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const markNotificationsRead = () => {
-        if (markRequested) return Promise.resolve();
-        markRequested = true;
-        return fetch(`${notifApiBase}/mark_notif_badge.php`, {
+        if (markPromise) return markPromise;
+        markPromise = fetch(`${notifApiBase}/mark_notif_badge.php`, {
             method: 'POST', cache: 'no-store', keepalive: true,
             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
             body: new URLSearchParams({csrf_token: <?= json_encode($adminNotificationCsrf, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>})
         })
-            .then(() => {
+            .then(async response => {
+                const result = await response.json();
+                if (!response.ok || !result.success) return false;
                 if (notifCache && Array.isArray(notifCache.data)) {
+                    notifCache.unread = 0;
                     notifCache.data = notifCache.data.map(n => {
                         n.is_notif_viewed = 1;
                         return n;
                     });
                 }
+                return true;
             })
-            .catch(() => {})
+            .catch(() => false)
             .finally(() => {
-                markRequested = false;
+                markPromise = null;
             });
+        return markPromise;
     };
 
     headers.forEach(header => {
@@ -1183,17 +1208,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const list = notifWrap.querySelector('.ap-header-notif-list');
         const markReadBtn = notifWrap.querySelector('.ap-header-mark-read');
         if (!btn || !panel || !badge || !list || !markReadBtn) return;
+        const heldUnreadIds = new Set();
 
         const refreshNotifications = () => {
             return fetchNotifications().then(payload => {
-                renderNotificationState(badge, list, payload, panel.classList.contains('open'));
+                renderNotificationState(badge, list, payload, panel.classList.contains('open'), heldUnreadIds);
                 return payload;
             });
         };
 
         const closePanel = () => {
+            if (!panel.classList.contains('open')) return;
             panel.classList.remove('open');
             btn.setAttribute('aria-expanded', 'false');
+            heldUnreadIds.clear();
+            if (notifCache && Array.isArray(notifCache.data)) {
+                notifCache.unread = 0;
+                notifCache.data = notifCache.data.map(item => ({ ...item, is_notif_viewed: 1 }));
+                renderNotificationState(badge, list, notifCache);
+            }
+            markNotificationsRead().then(marked => {
+                if (!marked) refreshNotifications();
+            });
         };
 
         refreshNotifications();
@@ -1207,16 +1243,23 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             panel.classList.add('open');
             btn.setAttribute('aria-expanded', 'true');
-            refreshNotifications().then(() => {
-                badge.style.display = 'none';
+            badge.style.display = 'none';
+            refreshNotifications().then(payload => {
+                if (!panel.classList.contains('open')) return;
+                (payload.data || []).forEach(item => {
+                    if (String(item?.is_notif_viewed ?? 0) === '0') heldUnreadIds.add(String(item.booking_id));
+                });
+                renderNotifItems(list, payload.data || [], heldUnreadIds);
                 return markNotificationsRead();
             }).then(() => {
-                if (notifCache) renderNotifItems(list, notifCache.data || []);
+                if (panel.classList.contains('open') && notifCache) renderNotifItems(list, notifCache.data || [], heldUnreadIds);
             });
         });
 
         markReadBtn.addEventListener('click', () => {
-            markNotificationsRead().then(() => {
+            markNotificationsRead().then(marked => {
+                if (!marked) return;
+                heldUnreadIds.clear();
                 badge.style.display = 'none';
                 if (notifCache && Array.isArray(notifCache.data)) {
                     renderNotifItems(list, notifCache.data);

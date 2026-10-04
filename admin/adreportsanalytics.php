@@ -170,7 +170,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     fputcsv($out, ['Hotel / resort data', $includeHotels ? 'Included' : 'Excluded']);
     fputcsv($out, []);
     fputcsv($out, ['Metric', 'Value']);
-    fputcsv($out, ['Total bookings', $totalBookings]); fputcsv($out, ['Revenue collected', number_format($revenue, 2, '.', '')]);
+    fputcsv($out, ['Total bookings', $totalBookings]); fputcsv($out, ['Gross payments collected', number_format($revenue, 2, '.', '')]);
     fputcsv($out, ['Unique tourists', $uniqueVisitors]); fputcsv($out, ['Completion rate', number_format($completionRate, 1) . '%']);
     fputcsv($out, []); fputcsv($out, ['Top service', 'Type', 'Bookings', 'Booking value', 'Completed']);
     foreach ($serviceRows as $row) fputcsv($out, [reportCsvCell((string)$row['service']), ucfirst((string)$row['type']), $row['bookings'], $row['booking_value'], $row['completed']]);
@@ -246,7 +246,7 @@ $tourismReportExcelUrl = $tourismReportEndpoint . '?' . http_build_query($touris
         <?php
         $metrics = [
           ['Total Bookings', number_format($totalBookings), $bookingChange, 'calendar', 'Reservations created in this period'],
-          ['Revenue Collected', reportMoney($revenue), $revenueChange, 'revenue', 'Successful payment transactions'],
+          ['Gross Payments Collected', reportMoney($revenue), $revenueChange, 'revenue', 'Before fees and refunds; see Earnings for net payouts'],
           ['Unique Tourists', number_format($uniqueVisitors), $visitorChange, 'visitors', 'Distinct guests who booked'],
           ['Completion Rate', number_format($completionRate, 1).'%', $completionChange, 'completion', number_format($completedBookings).' completed bookings'],
         ];
@@ -266,7 +266,7 @@ $tourismReportExcelUrl = $tourismReportEndpoint . '?' . http_build_query($touris
 
       <section class="analytics-grid primary-grid">
         <article class="report-card performance-card">
-          <header class="card-heading"><div><span class="eyebrow">PERFORMANCE TREND</span><h2>Bookings & revenue</h2><p>Demand and collected revenue across the selected period</p></div><div class="card-heading-actions"><div class="chart-legend"><span><i class="booking-dot"></i>Bookings</span><span><i class="revenue-dot"></i>Revenue</span></div><div class="chart-tools"><button type="button" data-chart-download="performanceChart" data-filename="bookings-revenue" title="Download chart" aria-label="Download bookings and revenue chart"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg></button><button type="button" data-chart-expand title="Expand chart" aria-label="Expand bookings and revenue chart"><svg viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg></button></div></div></header>
+          <header class="card-heading"><div><span class="eyebrow">PERFORMANCE TREND</span><h2>Bookings & gross collections</h2><p>Successful customer payments before PayMongo fees and refunds</p></div><div class="card-heading-actions"><div class="chart-legend"><span><i class="booking-dot"></i>Bookings</span><span><i class="revenue-dot"></i>Gross payments</span></div><div class="chart-tools"><button type="button" data-chart-download="performanceChart" data-filename="bookings-revenue" title="Download chart" aria-label="Download bookings and revenue chart"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg></button><button type="button" data-chart-expand title="Expand chart" aria-label="Expand bookings and revenue chart"><svg viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg></button></div></div></header>
           <div class="chart-wrap tall"><canvas id="performanceChart"></canvas><div class="chart-empty" hidden>No booking or payment activity for this period.</div></div>
         </article>
         <article class="report-card mix-card">
@@ -311,7 +311,7 @@ $tourismReportExcelUrl = $tourismReportEndpoint . '?' . http_build_query($touris
     <div class="detail-dialog-body">
       <section class="detail-summary-grid">
         <article><span>Total bookings</span><strong><?= number_format($totalBookings) ?></strong><small><?= number_format($completedBookings) ?> completed</small></article>
-        <article><span>Revenue collected</span><strong><?= reportMoney($revenue) ?></strong><small><?= reportMoney($averageBookingValue) ?> average booking value</small></article>
+        <article><span>Gross payments collected</span><strong><?= reportMoney($revenue) ?></strong><small><?= reportMoney($averageBookingValue) ?> average booking value</small></article>
         <article><span>Unique tourists</span><strong><?= number_format($uniqueVisitors) ?></strong><small>Distinct guests in this period</small></article>
         <article><span>Booking health</span><strong><?= number_format($completionRate,1) ?>%</strong><small><?= number_format($cancellationRate,1) ?>% cancelled or declined</small></article>
       </section>
@@ -351,6 +351,6 @@ window.reportAnalyticsData = <?= json_encode([
   'statusLabels'=>array_column($statusRows,'label'),'statusValues'=>array_map('intval',array_column($statusRows,'total')),
 ], JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES) ?>;
 </script>
-<script src="js/adreportsanalytics.js?v=9"></script>
+<script src="js/adreportsanalytics.js?v=accounting-1"></script>
 </body>
 </html>
