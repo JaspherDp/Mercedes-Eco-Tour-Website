@@ -104,7 +104,9 @@ function sendBookingConfirmedEmail($email, $name, $booking) {
             BookingConfirmationEmailBranding($mail)
         );
         $mail->AltBody = 'Your iTour Mercedes booking ' . BookingReferenceDisplay($booking)
-            . ' has been confirmed. Please review the booking details in this email.';
+            . ' has been confirmed. Please review the booking details in this email.'
+            . "\n\nPlease submit the details of every tourist included in your booking, including yourself, before your scheduled trip. Go to Profile > Bookings > your booking > Add Tourist."
+            . "\nSubmit Tourist Details: " . itourEmailProfileUrl(['section' => 'bookings', 'submit_tourists' => (int)$booking['booking_id']]);
 
         // =========================
         // SEND
@@ -133,8 +135,7 @@ function getBookingEmailServiceLabel(array $booking): string {
 
 function cancellationTrackingUrl(): string
 {
-    $baseUrl = ItourTryCanonicalAppUrl('cancellation tracking email link');
-    return $baseUrl === '' ? '' : $baseUrl . '/php/profile.php?section=cancel-bookings';
+    return itourEmailProfileUrl(['section' => 'cancel-bookings']);
 }
 
 function sendCancellationApprovedEmail(string $email, string $name, array $cancellation): bool
@@ -225,6 +226,7 @@ function getProfessionalBookingEmailTemplate($name, array $b, array $branding = 
     return BookingConfirmationEmailTemplate(array_merge([
         'guest_name' => $name,
         'service_label' => $serviceLabel,
+        'tourist_submission_booking_id' => in_array($type, ['package', 'boat', 'tourguide'], true) ? (int)($b['booking_id'] ?? 0) : 0,
         'booking_reference' => BookingReferenceDisplay($b),
         'intro' => 'Your ' . strtolower($serviceLabel) . ' has been reviewed and confirmed by the iTour Mercedes team.',
         'details' => [
@@ -2122,6 +2124,8 @@ if(isset($_GET['action']) && $_GET['action'] === 'fetchBookings') {
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <link rel="stylesheet" href="styles/admin_panel_theme.css" />
 <link rel="stylesheet" href="styles/adbookings.css?v=35" />
+<link rel="stylesheet" href="styles/tourist-booking-history.css?v=1" />
+<script defer src="js/tourist-booking-history.js?v=1"></script>
 <link rel="stylesheet" href="styles/admin_receipt.css?v=2" />
 </head>
 <style>
@@ -3071,7 +3075,13 @@ echo "<td><span class='booking-date'>".htmlspecialchars($b['booking_date'])."</s
     <td>{$paymentPill}</td>
     <td>{$state_pill}</td>
     {$touristSubmissionTd}
-    <td style='width:auto;'>";
+    <td class='booking-history-actions' style='width:auto;'>";
+
+$historyTouristId = (int)($b['tourist_id'] ?? 0);
+$historyCount = (int)($b['t_total_bookings'] ?? 0);
+if ($historyTouristId > 0) {
+    echo "<button type='button' class='tourist-booking-count' data-tourist-history='{$historyTouristId}' aria-label='View tourist booking history: {$historyCount} bookings'>{$historyCount}X</button>";
+}
 
 if ($showCancellationRequestState) {
     echo "<a class='view-cancellation-link' href='adbookings.php?tab=cancellations&amp;focus_request={$activeCancellationRequestId}'>View</a>";

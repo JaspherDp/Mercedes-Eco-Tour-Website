@@ -13,13 +13,12 @@ use PHPMailer\PHPMailer\PHPMailer;
 
 function bookingWorkflowBaseUrl(): string
 {
-    return ItourTryCanonicalAppUrl('booking workflow email link');
+    return itourEmailPublicBaseUrl();
 }
 
 function bookingWorkflowProfileUrl(int $requestId): string
 {
-    $base = bookingWorkflowBaseUrl();
-    return $base === '' ? '' : $base . '/php/profile.php?section=bookings&cancellation_request=' . $requestId . '#cancellation-' . $requestId;
+    return itourEmailProfileUrl(['section' => 'bookings', 'cancellation_request' => $requestId], 'cancellation-' . $requestId);
 }
 
 function bookingWorkflowEmailRows(array $rows): string
@@ -34,13 +33,18 @@ function bookingWorkflowEmailRows(array $rows): string
 
 function bookingWorkflowEmailShell(string $eyebrow, string $title, string $intro, array $rows, string $notice, string $buttonLabel = '', string $buttonUrl = ''): string
 {
+    $greeting = '';
+    if (preg_match('/^(Dear\s[\s\S]*?),<br\s*\/?>([\s\S]*)$/i', $intro, $parts)) {
+        $greeting = '<p style="margin:0 0 10px;font-size:14px;line-height:1.7;text-align:left;text-indent:0;">' . $parts[1] . ',</p>';
+        $intro = $parts[2];
+    }
     $button = $buttonUrl !== '' ? '<div style="padding:20px 0 5px;text-align:center"><a href="' . htmlspecialchars($buttonUrl) . '" style="display:inline-block;padding:13px 22px;border-radius:9px;background:#176b58;color:#fff;text-decoration:none;font-weight:800;font-size:13px">' . htmlspecialchars($buttonLabel) . '</a></div>' : '';
     return '<!doctype html><html><body style="margin:0;background:#eef5f2;font-family:Arial,sans-serif;color:#294b40"><div style="display:none;max-height:0;overflow:hidden">' . htmlspecialchars($title) . '</div>'
         . '<table role="presentation" width="100%" cellspacing="0" cellpadding="20"><tr><td align="center"><table role="presentation" width="620" style="max-width:620px;width:100%;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 8px 30px rgba(14,68,51,.12)">'
         . '<tr><td style="padding:28px 32px;text-align:center;background:#0d4d3b;color:#fff"><div style="font-size:11px;font-weight:800;letter-spacing:1px;color:#bde4d7">' . htmlspecialchars($eyebrow) . '</div><h1 style="margin:10px 0 5px;font-size:25px">' . htmlspecialchars($title) . '</h1><div style="font-size:13px;color:#d9eee7">iTour Mercedes</div></td></tr>'
-        . '<tr><td style="padding:28px 32px"><p style="margin:0 0 18px;font-size:14px;line-height:1.7">' . $intro . '</p><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #dce9e4;border-radius:10px;overflow:hidden">' . bookingWorkflowEmailRows($rows) . '</table>'
-        . '<div style="margin-top:18px;padding:15px 17px;border-left:4px solid #d59a2c;background:#fff8e8;color:#684e1c;font-size:13px;line-height:1.65">' . $notice . '</div>' . $button
-        . '<p style="margin:22px 0 0;font-size:12px;line-height:1.6;color:#75857f">If you need assistance, reply to this email and our tourism team will help you.</p></td></tr></table></td></tr></table></body></html>';
+        . '<tr><td style="padding:28px 32px">' . $greeting . '<p style="margin:0 0 18px;font-size:14px;line-height:1.7;text-align:justify;text-indent:28px;">' . $intro . '</p><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border:1px solid #dce9e4;border-radius:10px;overflow:hidden">' . bookingWorkflowEmailRows($rows) . '</table>'
+        . '<div style="margin-top:18px;padding:15px 17px;border-left:4px solid #d59a2c;background:#fff8e8;color:#684e1c;font-size:13px;line-height:1.65;text-align:justify;text-indent:28px;">' . $notice . '</div>' . $button
+        . '<p style="margin:22px 0 0;font-size:12px;line-height:1.6;color:#75857f;text-align:left;text-indent:0;">If you need assistance, reply to this email and our tourism team will help you.</p>' . itourEmailQuickLinks() . '</td></tr></table></td></tr></table></body></html>';
 }
 
 function sendBookingWorkflowEmail(string $email, string $name, string $subject, string $html, string $plain): bool

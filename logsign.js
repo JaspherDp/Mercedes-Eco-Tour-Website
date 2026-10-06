@@ -272,7 +272,20 @@ function initLogSignEvents() {
     steps[0].classList.add("phase-active");
   };
 
-  const openAuthModal = () => {
+  const openAuthModal = async (options = {}) => {
+    if (options.resume !== true) {
+      try {
+        const response = await fetch('php/auth_context.php', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ returnTo: typeof options.returnTo === 'string' ? options.returnTo : '' })
+        });
+        if (!response.ok || !(await response.json()).success) throw new Error('Unable to prepare login');
+      } catch (error) {
+        showToast('Unable to open login. Please try again.', 'error');
+        return;
+      }
+    }
     clearLoginFormError();
     modalOverlay.style.display = "flex";
     loginForm.classList.remove("logsign-hidden");
@@ -303,7 +316,8 @@ function initLogSignEvents() {
   window.AuthModalStore = authStore;
 
   // --- Modal open/close ---
-  if (openModalBtn) {
+  if (openModalBtn && openModalBtn.dataset.authBound !== '1') {
+    openModalBtn.dataset.authBound = '1';
     openModalBtn.addEventListener("click", openAuthModal);
   }
 
@@ -727,7 +741,7 @@ async function handleLogin(event) {
             if (data.redirect_url) {
                 window.location.href = data.redirect_url;
             } else {
-                window.location.reload();
+                window.location.href = './';
             }
 
         } else if ((data.status === 'locked' || data.locked === true) && Number(data.retry_after) > 0) {
@@ -1001,7 +1015,7 @@ if (false) {
       if (!response.ok || data.status !== "success") throw new Error(data.message || "Account creation failed.");
       closeAuthModal();
       showToast("Account created successfully! Redirecting...", "success");
-      setTimeout(() => window.location.reload(), 1000);
+      setTimeout(() => { window.location.href = data.redirect_url || './'; }, 1000);
     } catch (error) {
       Swal.fire({ icon: "error", title: "Signup Failed", text: error.message, confirmButtonColor: "#2B7066" });
     } finally {
@@ -1138,8 +1152,8 @@ if (forgotPasswordLink && forgotPasswordForm && forgotEmailInput && forgotSendCo
   forgotSendCodeBtn.style.backgroundColor = '#999';
 
   // --- Open Forgot Password Modal ---
-  forgotPasswordLink.addEventListener('click', () => {
-    openAuthModal();
+  forgotPasswordLink.addEventListener('click', async () => {
+    await openAuthModal({ resume: true });
     loginForm.classList.add('logsign-hidden');
     signupForm.classList.add('logsign-hidden');
     forgotPasswordForm.classList.remove('logsign-hidden');

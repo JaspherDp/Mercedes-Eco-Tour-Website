@@ -4,10 +4,30 @@ declare(strict_types=1);
 require_once __DIR__ . '/../payments/PaymentHelper.php';
 require_once __DIR__ . '/app_url_helper.php';
 
-/** Resolve the public website URL used by email links and remotely hosted images. */
+/** Email navigation always targets the permanent public website. */
 function itourEmailPublicBaseUrl(): string
 {
-    return ItourTryCanonicalAppUrl('email public base URL');
+    return 'https://itourmercedes.com';
+}
+
+/** Build a profile link on the public website, preserving its booking action. */
+function itourEmailProfileUrl(array $query = [], string $fragment = ''): string
+{
+    $base = itourEmailPublicBaseUrl();
+    if ($base === '') return '';
+    return $base . '/php/profile.php' . ($query ? '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986) : '')
+        . ($fragment !== '' ? '#' . rawurlencode($fragment) : '');
+}
+
+function itourEmailQuickLinks(): string
+{
+    $base = itourEmailPublicBaseUrl();
+    if ($base === '') return '';
+    $escape = static fn(string $url): string => htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
+    return '<div style="margin-top:22px;text-align:center;font-size:12px;line-height:1.8;"><strong style="color:#31594d;">Quick links</strong><br>'
+        . '<a style="color:#176b58;" href="' . $escape($base . '/') . '">Homepage</a> &nbsp;|&nbsp; '
+        . '<a style="color:#176b58;" href="' . $escape(itourEmailProfileUrl(['section' => 'bookings'])) . '">My Bookings</a> &nbsp;|&nbsp; '
+        . '<a style="color:#176b58;" href="' . $escape(itourEmailProfileUrl(['section' => 'cancel-bookings'])) . '">Cancellations &amp; Refunds</a></div>';
 }
 
 /** Return a non-attached, cache-busted public URL for an email brand asset. */

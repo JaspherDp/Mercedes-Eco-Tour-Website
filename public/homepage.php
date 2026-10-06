@@ -230,7 +230,7 @@ try {
               <span class="hero-mobile-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M19.5 9.5c0 5.2-7.5 11.5-7.5 11.5S4.5 14.7 4.5 9.5a7.5 7.5 0 1 1 15 0Z"/><circle class="icon-accent" cx="12" cy="9.5" r="2.4"/></svg></span>
               <span>Destinations</span>
             </a>
-            <a href="hotel_resorts.php?tab=tours#tourPackagesSection">
+            <a href="hotel_resorts.php?tab=tours&amp;reset_search=1">
               <span class="hero-mobile-nav-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="14" rx="3"/><path class="icon-accent" d="M8.5 7V4.5A1.5 1.5 0 0 1 10 3h4a1.5 1.5 0 0 1 1.5 1.5V7"/><path d="M8 11v6M16 11v6"/></svg></span>
               <span>Tours</span>
             </a>

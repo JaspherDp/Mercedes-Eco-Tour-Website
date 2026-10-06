@@ -168,7 +168,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 </div>
 
 <script src="../js/turnstile.js?v=7"></script>
-<script src="../js/auth-portal.js?v=10"></script>
+<script src="../js/auth-portal.js?v=11"></script>
 </body>
 </html>
 

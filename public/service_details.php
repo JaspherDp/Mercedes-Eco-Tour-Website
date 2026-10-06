@@ -202,7 +202,7 @@ function serviceDetailRating(array $item): string {
   <script src="js/header.js?v=<?= (int)@filemtime(__DIR__ . '/../js/header.js') ?>"></script>
   <script src="js/favorites.js"></script>
   <script src="js/recently_viewed.js?v=<?= (int)@filemtime(__DIR__ . '/../js/recently_viewed.js') ?>"></script>
-  <script src="js/service_details.js"></script>
+  <script src="js/service_details.js?v=<?= (int)@filemtime(__DIR__ . '/../js/service_details.js') ?>"></script>
   <script>if (typeof window.initHeader === 'function') window.initHeader();</script>
 </body>
 </html>

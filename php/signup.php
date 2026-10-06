@@ -436,8 +436,11 @@ if ($action === 'send_code') {
 
         unset($_SESSION['verification_code'], $_SESSION['signup_email'], $_SESSION['signup_fname'], $_SESSION['signup_lname'], $_SESSION['signup_verified_email'], $_SESSION['verification_expiry']);
 
+        $redirectUrl = $_SESSION['post_login_redirect'] ?? './';
+        unset($_SESSION['post_login_redirect']);
         echo json_encode([
             'status'  => 'success',
+            'redirect_url' => $redirectUrl,
             'title'   => 'Signup Successful',
             'message' => 'Welcome! You have successfully signed up.',
             'user'    => [

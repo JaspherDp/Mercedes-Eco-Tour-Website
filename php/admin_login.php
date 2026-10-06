@@ -177,7 +177,7 @@ require __DIR__ . '/alert.php';
 </div>
 
 <script src="../js/turnstile.js?v=7"></script>
-<script src="../js/auth-portal.js?v=10"></script>
+<script src="../js/auth-portal.js?v=11"></script>
 </body>
 </html>
 

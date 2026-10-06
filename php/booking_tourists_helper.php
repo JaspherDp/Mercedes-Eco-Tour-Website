@@ -15,6 +15,7 @@ function ensureBookingTouristManifestColumns(PDO $pdo): void
     $known = array_fill_keys(array_map('strtolower', $columns), true);
 
     $definitions = [
+        'boat_number' => "SMALLINT UNSIGNED NULL",
         'age' => "TINYINT UNSIGNED NULL AFTER gender",
         'address' => "VARCHAR(500) NULL AFTER age",
         'country' => "VARCHAR(100) NULL AFTER address",
@@ -33,4 +34,38 @@ function ensureBookingTouristManifestColumns(PDO $pdo): void
     }
 
     $ready = true;
+}
+
+/** Validate explicit boat assignments; other booking types keep a single list. */
+function bookingTouristAssignBoats(array $rows, array $numbers, string $type, int $pax): array
+{
+    if (strtolower($type) !== 'boat') {
+        foreach ($rows as &$row) $row['boat_number'] = null;
+        return $rows;
+    }
+    $boatCount = (int)ceil($pax / 8);
+    if (count($numbers) !== count($rows)) throw new InvalidArgumentException('Choose a boat for every tourist.');
+    $counts = array_fill(1, $boatCount, 0);
+    foreach ($rows as $index => &$row) {
+        $number = filter_var($numbers[$index] ?? null, FILTER_VALIDATE_INT);
+        if ($number === false || $number < 1 || $number > $boatCount) throw new InvalidArgumentException('Invalid tourist boat assignment.');
+        if (++$counts[$number] > 8) throw new InvalidArgumentException("Boat {$number} can carry a maximum of 8 tourists.");
+        $row['boat_number'] = $number;
+    }
+    unset($row);
+    if (in_array(0, $counts, true)) throw new InvalidArgumentException('Add at least one tourist to each required boat.');
+    return $rows;
+}
+
+/** Legacy manifests without assignments are split in their original passenger order. */
+function bookingTouristBoatManifests(array $passengers): array
+{
+    $groups = [];
+    foreach ($passengers as $index => $passenger) {
+        $boat = (int)($passenger['boat_number'] ?? 0);
+        if ($boat < 1) $boat = (int)floor($index / 8) + 1;
+        $groups[$boat][] = $passenger;
+    }
+    ksort($groups, SORT_NUMERIC);
+    return $groups;
 }

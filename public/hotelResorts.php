@@ -236,7 +236,7 @@ document.addEventListener("DOMContentLoaded", () => {
           swalScript.onload = () => {
             // Load logsign.js after SweetAlert2
             const logsignScript = document.createElement("script");
-            logsignScript.src = "logsign.js?v=17";
+            logsignScript.src = "logsign.js?v=18";
             logsignScript.onload = () => {
               if (typeof initLogSignEvents === "function") {
                 initLogSignEvents();

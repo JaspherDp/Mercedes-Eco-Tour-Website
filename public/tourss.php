@@ -588,7 +588,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
           function loadLogSign() {
             const logsignScript = document.createElement("script");
-            logsignScript.src = "logsign.js?v=17";
+            logsignScript.src = "logsign.js?v=18";
             logsignScript.onload = () => {
               if (typeof initLogSignEvents === "function") initLogSignEvents();
               else console.error("initLogSignEvents not found in logsign.js");
@@ -691,7 +691,7 @@ function loadLoginModal() {
       document.getElementById("loginModal").innerHTML = html;
 
       const script = document.createElement("script");
-      script.src = "logsign.js?v=17";
+      script.src = "logsign.js?v=18";
       script.onload = () => {
         if (typeof initLogSignEvents === "function") initLogSignEvents();
       };

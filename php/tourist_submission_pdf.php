@@ -35,7 +35,7 @@ if (!$booking) {
 }
 
 $passengerStmt = $pdo->prepare("
-    SELECT full_name, gender, age, address, country, region, province, city,
+    SELECT full_name, gender, age, address, country, region, province, city, boat_number,
            barangay, postal_code, street, residence, phone_number
     FROM booking_tourists
     WHERE booking_id = ?
@@ -185,7 +185,9 @@ $reference = profilePdfText($booking['booking_reference'] ?? ('Booking #' . $boo
 $pax = (int)($booking['pax'] ?: ((int)$booking['num_adults'] + (int)$booking['num_children']));
 
 $passengersPerPage = 6;
-$pages = array_chunk($passengers, $passengersPerPage);
+$boatManifests = $bookingType === 'boat' ? bookingTouristBoatManifests($passengers) : [];
+$boatNumbers = array_keys($boatManifests);
+$pages = $bookingType === 'boat' ? array_values($boatManifests) : array_chunk($passengers, $passengersPerPage);
 $pageCount = count($pages);
 $pdf = new TouristProfilePdf('P', 'mm', 'A4', true, 'UTF-8', false);
 $pdf->SetCreator('iTour Mercedes');
@@ -197,6 +199,7 @@ $pdf->SetMargins(15, 12, 15);
 $pdf->SetAutoPageBreak(false);
 
 foreach ($pages as $pageIndex => $pagePassengers) {
+    $boatNumber = $bookingType === 'boat' ? $boatNumbers[$pageIndex] : null;
     $pdf->AddPage();
     profilePdfHeader($pdf, $booking, $pageIndex + 1, $pageCount);
 
@@ -206,15 +209,16 @@ foreach ($pages as $pageIndex => $pagePassengers) {
     profilePdfLabel($pdf, 21, 70, 38, 'Travel date', profilePdfDate($booking['booking_date'] ?? ''));
     profilePdfLabel($pdf, 63, 70, 39, 'Service', $serviceLabel);
     profilePdfLabel($pdf, 106, 70, 62, 'Destination / Package', profilePdfText($destination));
-    profilePdfLabel($pdf, 173, 70, 16, 'Pax', (string)$pax);
+    profilePdfLabel($pdf, 173, 70, 16, 'Pax', (string)($boatNumber !== null ? count($pagePassengers) : $pax));
 
     $pdf->SetXY(15, 94);
     $pdf->SetTextColor(24, 66, 53);
     $pdf->SetFont('helvetica', 'B', 11.5);
-    $pdf->Cell(120, 7, 'Submitted Passengers', 0, 0, 'L');
+    $pdf->Cell(120, 7, $boatNumber !== null ? 'Boat ' . $boatNumber . ' - Passenger Manifest' : 'Submitted Passengers', 0, 0, 'L');
     $pdf->SetTextColor(94, 116, 108);
     $pdf->SetFont('helvetica', '', 7.5);
-    $pdf->Cell(60, 7, count($passengers) . ' passenger' . (count($passengers) === 1 ? '' : 's'), 0, 1, 'R');
+    $manifestPax = $boatNumber !== null ? count($pagePassengers) : count($passengers);
+    $pdf->Cell(60, 7, $manifestPax . ' passenger' . ($manifestPax === 1 ? '' : 's'), 0, 1, 'R');
 
     $columns = [
         ['label' => '#', 'width' => 9, 'align' => 'C'],
@@ -240,7 +244,7 @@ foreach ($pages as $pageIndex => $pagePassengers) {
         $gender = ucfirst(strtolower(profilePdfText($passenger['gender'] ?? '')));
         $ageGender = profilePdfText($passenger['age'] ?? '') . ' / ' . $gender;
         $values = [
-            (string)($pageIndex * $passengersPerPage + $rowIndex + 1),
+            (string)($boatNumber !== null ? $rowIndex + 1 : $pageIndex * $passengersPerPage + $rowIndex + 1),
             profilePdfText($passenger['full_name'] ?? ''),
             $ageGender,
             profilePdfText($passenger['address'] ?? ''),
@@ -249,7 +253,7 @@ foreach ($pages as $pageIndex => $pagePassengers) {
         $pdf->SetFont('helvetica', '', 7.4);
         $rowHeight = 11.0;
         foreach ($columns as $columnIndex => $column) {
-            $rowHeight = max($rowHeight, min(18.0, $pdf->getNumLines($values[$columnIndex], $column['width'] - 3) * 3.8 + 3));
+            $rowHeight = max($rowHeight, min($boatNumber !== null ? 16.0 : 18.0, $pdf->getNumLines($values[$columnIndex], $column['width'] - 3) * 3.8 + 3));
         }
         $x = $left;
         $fill = $rowIndex % 2 === 1;
@@ -257,7 +261,7 @@ foreach ($pages as $pageIndex => $pagePassengers) {
         $pdf->SetDrawColor(207, 221, 216);
         $pdf->SetTextColor(34, 59, 51);
         foreach ($columns as $columnIndex => $column) {
-            $pdf->MultiCell($column['width'], $rowHeight, $values[$columnIndex], 1, $column['align'], $fill, 0, $x, $y, true, 0, false, true, $rowHeight, 'M');
+            $pdf->MultiCell($column['width'], $rowHeight, $values[$columnIndex], 1, $column['align'], $fill, 0, $x, $y, true, 0, false, true, $rowHeight, 'M', $boatNumber !== null);
             $x += $column['width'];
         }
         $y += $rowHeight;

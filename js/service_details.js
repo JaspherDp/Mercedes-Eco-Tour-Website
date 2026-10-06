@@ -106,6 +106,12 @@
 
     const returnUrl = encodeURIComponent(config.backUrl);
     byId("serviceBookButton").href = `tour_booking.php?booking_type=${isBoat ? "boat" : "tourguide"}&preferred=${encodeURIComponent(item.name || "")}&return=${returnUrl}`;
+    const bookingUrl = new URL(byId('serviceBookButton').href, location.href);
+    const searchParams = new URLSearchParams(location.search);
+    ['destination', 'destination2', 'destinations', 'checkin', 'checkout', 'date', 'adults', 'children', 'child_ages', 'pax', 'tour_date_mode', 'tour_type', 'tour_duration'].forEach(key => {
+      if (searchParams.has(key)) bookingUrl.searchParams.set(key, searchParams.get(key));
+    });
+    byId('serviceBookButton').href = bookingUrl.href;
     const dots = byId("serviceImageDots");
     dots.innerHTML = images.map((_, index) => `<button type="button" aria-label="Show image ${index + 1}"></button>`).join("");
     dots.querySelectorAll("button").forEach((dot, index) => dot.addEventListener("click", () => showImage(index)));

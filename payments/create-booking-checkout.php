@@ -86,6 +86,11 @@ try {
         $checkout = bookingCheckoutDate($input['checkout'] ?? '');
         $adults = ItourValidationInt($input['adults'] ?? 1, 'Adults', 1, 100);
         $children = ItourValidationInt($input['children'] ?? 0, 'Children', 0, 100);
+        $hotelChildAges = $input['child_ages'] ?? [];
+        if (!is_array($hotelChildAges) || count($hotelChildAges) !== $children) {
+            throw new DomainException('Please select an age for every child.');
+        }
+        $hotelChildAges = array_map(static fn($age) => ItourValidationInt($age, 'Child age', 0, 17), $hotelChildAges);
         $firstName = bookingCheckoutText($input['first_name'] ?? '', 120);
         $lastName = bookingCheckoutText($input['last_name'] ?? '', 120);
         $email = bookingCheckoutText($input['email'] ?? '', 190);
@@ -130,6 +135,7 @@ try {
             'last_name' => $lastName, 'email' => $email, 'phone_number' => $phone,
             'special_request' => bookingCheckoutText($input['special_request'] ?? '', 2000),
             'unit_price' => (float)$room['price'], 'hotel_name' => $hotelName,
+            'child_ages' => $hotelChildAges,
         ];
         $serviceName = $hotelName . ' - ' . (string)$room['room_name'];
         $lineDescription = $checkin . ' to ' . $checkout . ' | ' . $nights . ' night(s)';
@@ -283,6 +289,24 @@ try {
         }
         $validatedBoatId = $domain === 'boat' ? $resourceId : 0;
         $validatedGuideId = $domain === 'tourguide' ? $resourceId : 0;
+        $additionalBoatIds = $input['additionalBoatIds'] ?? [];
+        if (!is_array($additionalBoatIds) || count($additionalBoatIds) > ($domain === 'boat' ? $requiredBoats - 1 : 0)) {
+            throw new DomainException('The additional boat preferences do not match the passenger count.');
+        }
+        $additionalBoatNames = [];
+        $validatedAdditionalBoatIds = [];
+        foreach ($additionalBoatIds as $additionalBoatId) {
+            $additionalBoatId = ItourValidationInt($additionalBoatId, 'Additional preferred boat', 1, PHP_INT_MAX);
+            if ($additionalBoatId === $validatedBoatId || in_array($additionalBoatId, $validatedAdditionalBoatIds, true)) {
+                throw new DomainException('Please choose a different boat for each additional preference.');
+            }
+            $extraBoat = $pdo->prepare('SELECT name FROM boats WHERE boat_id = ? LIMIT 1');
+            $extraBoat->execute([$additionalBoatId]);
+            $extraName = $extraBoat->fetchColumn();
+            if ($extraName === false) throw new DomainException('An additional preferred boat is no longer available.');
+            $validatedAdditionalBoatIds[] = $additionalBoatId;
+            $additionalBoatNames[] = (string)$extraName;
+        }
         $resourceBookingEnd = $tourType === 'overnight' ? $bookingEndDate : $bookingDate;
         $preferredParts = [];
         if ($domain === 'package') {
@@ -294,6 +318,7 @@ try {
         }
         if ($addOn === 'boat') $preferredParts[] = 'Add-on: Tour Boat';
         if ($addOn === 'tourguide') $preferredParts[] = 'Add-on: Tour Guide';
+        if ($additionalBoatNames) $preferredParts[] = 'Additional preferred boats: ' . implode(', ', $additionalBoatNames);
         $preferredParts[] = 'Payment Option: ' . ($paymentType === 'full' ? 'Full' : '20% Partial');
         $preferred = bookingCheckoutText(implode(' | ', $preferredParts), 255);
         $payload = [
@@ -307,6 +332,9 @@ try {
             'preferred_resource' => $preferred, 'boat_id' => $validatedBoatId,
             'guide_id' => $validatedGuideId, 'num_adults' => $adults,
             'num_children' => $children,
+            'additional_boat_ids' => $validatedAdditionalBoatIds,
+            'additional_boat_names' => $additionalBoatNames,
+            'child_ages' => $childAges,
         ];
         $serviceName = $packageName !== '' ? $packageName : ucfirst($domain) . ' booking';
         $lineDescription = $bookingDate . ' | ' . $guestCount . ' guest(s)';

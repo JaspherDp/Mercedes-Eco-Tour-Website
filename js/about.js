@@ -63,7 +63,7 @@ document.addEventListener('DOMContentLoaded', () => {
       .then((html) => {
         loginHost.innerHTML = html;
         const script = document.createElement('script');
-        script.src = 'logsign.js?v=17';
+        script.src = 'logsign.js?v=18';
         script.addEventListener('load', () => {
           if (typeof initLogSignEvents === 'function') initLogSignEvents();
         });

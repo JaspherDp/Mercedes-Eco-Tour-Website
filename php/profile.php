@@ -379,9 +379,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['booking_id'], $_POST[
         }
         $booking_id = ItourValidationInt($_POST['booking_id'], 'Booking ID', 1, PHP_INT_MAX);
 
-        $bookingCheck = $pdo->prepare("SELECT COALESCE(NULLIF(pax, 0), num_adults + num_children) FROM bookings WHERE booking_id = ? AND tourist_id = ? LIMIT 1");
+        $bookingCheck = $pdo->prepare("SELECT COALESCE(NULLIF(pax, 0), num_adults + num_children) AS allowed_pax, booking_type FROM bookings WHERE booking_id = ? AND tourist_id = ? LIMIT 1");
         $bookingCheck->execute([$booking_id, $tourist_id]);
-        $allowedPax = (int)$bookingCheck->fetchColumn();
+        $manifestBooking = $bookingCheck->fetch(PDO::FETCH_ASSOC) ?: [];
+        $allowedPax = (int)($manifestBooking['allowed_pax'] ?? 0);
         if ($allowedPax <= 0) throw new Exception('Booking not found or has no passenger capacity.');
 
         $stmtCheck = $pdo->prepare("SELECT COUNT(*) FROM booking_tourists WHERE booking_id = ?");
@@ -390,11 +391,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['booking_id'], $_POST[
 
         $touristRows = profileTouristManifestRows($_POST);
         if (count($touristRows) !== $allowedPax) throw new Exception("Complete all {$allowedPax} tourist entries before submitting.");
+            $touristRows = bookingTouristAssignBoats($touristRows, (array)($_POST['boat_number'] ?? []), (string)$manifestBooking['booking_type'], $allowedPax);
         $pdo->beginTransaction();
         $stmt = $pdo->prepare("
             INSERT INTO booking_tourists
-            (booking_id, full_name, gender, age, address, country, region, province, city, barangay, postal_code, street, residence, phone_number)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (booking_id, full_name, gender, age, address, country, region, province, city, barangay, postal_code, street, residence, phone_number, boat_number)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ");
 
         foreach ($touristRows as $touristRow) {
@@ -413,6 +415,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['booking_id'], $_POST[
                 $touristRow['street'],
                 $touristRow['residence'],
                 $touristRow['phone_number'],
+                    $touristRow['boat_number'],
             ]);
         }
 
@@ -540,9 +543,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $booking_id = ItourValidationInt($_POST['booking_id'], 'Booking ID', 1, PHP_INT_MAX);
 
-            $bookingCheck = $pdo->prepare("SELECT COALESCE(NULLIF(pax, 0), num_adults + num_children) FROM bookings WHERE booking_id = ? AND tourist_id = ? LIMIT 1");
+            $bookingCheck = $pdo->prepare("SELECT COALESCE(NULLIF(pax, 0), num_adults + num_children) AS allowed_pax, booking_type FROM bookings WHERE booking_id = ? AND tourist_id = ? LIMIT 1");
             $bookingCheck->execute([$booking_id, $tourist_id]);
-            $allowedPax = (int)$bookingCheck->fetchColumn();
+            $manifestBooking = $bookingCheck->fetch(PDO::FETCH_ASSOC) ?: [];
+        $allowedPax = (int)($manifestBooking['allowed_pax'] ?? 0);
             if ($allowedPax <= 0) throw new Exception('Booking not found or has no passenger capacity.');
 
             $stmtCheck = $pdo->prepare("SELECT COUNT(*) FROM booking_tourists WHERE booking_id = ?");
@@ -554,12 +558,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $touristRows = profileTouristManifestRows($_POST);
             if (count($touristRows) !== $allowedPax) throw new Exception("Complete all {$allowedPax} tourist entries before submitting.");
+            $touristRows = bookingTouristAssignBoats($touristRows, (array)($_POST['boat_number'] ?? []), (string)$manifestBooking['booking_type'], $allowedPax);
             $pdo->beginTransaction();
 
             $stmt = $pdo->prepare("
                 INSERT INTO booking_tourists
-                (booking_id, full_name, gender, age, address, country, region, province, city, barangay, postal_code, street, residence, phone_number)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (booking_id, full_name, gender, age, address, country, region, province, city, barangay, postal_code, street, residence, phone_number, boat_number)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ");
 
             foreach ($touristRows as $touristRow) {
@@ -578,6 +583,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $touristRow['street'],
                     $touristRow['residence'],
                     $touristRow['phone_number'],
+                    $touristRow['boat_number'],
                 ]);
             }
 
@@ -1134,6 +1140,7 @@ while ($row = $feedback_stmt->fetch(PDO::FETCH_ASSOC)) {
 (() => {
   const allowedTabs = ['profile', 'bookings', 'cancel-bookings', 'favorites', 'complaints', 'history'];
   const requestedTab = new URLSearchParams(window.location.search).get('section');
+  const hasTouristSubmission = /^[1-9]\d*$/.test(new URLSearchParams(window.location.search).get('submit_tourists') || '');
   let savedTab = null;
   try { savedTab = sessionStorage.getItem('profileActiveTab') || localStorage.getItem('activeTab'); } catch (error) {}
   const navigationEntry = performance.getEntriesByType?.('navigation')?.[0];
@@ -1141,7 +1148,7 @@ while ($row = $feedback_stmt->fetch(PDO::FETCH_ASSOC)) {
   const isHistoryTraversal = navigationEntry
     ? navigationEntry.type === 'back_forward'
     : performance.navigation?.type === 2;
-  const initialTab = isReload
+  const initialTab = hasTouristSubmission ? 'bookings' : isReload
     ? (allowedTabs.includes(savedTab) ? savedTab : (allowedTabs.includes(requestedTab) ? requestedTab : 'profile'))
     : (isHistoryTraversal ? 'profile' : (allowedTabs.includes(requestedTab) ? requestedTab : 'profile'));
   document.documentElement.dataset.profileTab = initialTab;
@@ -2133,6 +2140,15 @@ textarea:focus {
 #touristFormUser{min-height:0;overflow:hidden;gap:0;background:#f7faf9}.tourist-form-summary{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:13px 24px;border-bottom:1px solid #e0eae6;background:#fff}.tourist-form-summary>div{display:flex;align-items:baseline;gap:8px}.tourist-form-summary strong{color:#17634f;font-size:1.15rem}.tourist-form-summary span{color:#536b63;font-size:.7rem;font-weight:750}.tourist-form-summary p{margin:0;color:#788b85;font-size:.66rem}
 #touristRowsUser{max-height:52vh;padding:16px 24px;overflow-y:auto;gap:12px;scrollbar-width:thin;scrollbar-color:#91b9ac #edf3f1}
 .tourist-row-user{position:relative;display:block;margin:0;padding:16px 48px 16px 16px;border:1px solid #dbe7e2;border-radius:13px;background:#fff;box-shadow:0 3px 10px rgba(21,67,53,.045)}
+.tourist-boat-group{display:grid;gap:12px;padding:16px;background:#edf7f3;border:1px solid #bfded1;border-radius:14px}
+.tourist-boat-group h4{display:flex;justify-content:space-between;align-items:center;margin:0;color:#175a45;font-size:16px;gap:12px}
+.tourist-boat-group h4 span{font-size:12px;padding:5px 10px;border-radius:20px;background:#d5eee2}
+.tourist-boat-group>p{margin:0;color:#60796f;font-size:12px}
+.tourist-boat-group>.add-more-user{justify-self:start}
+.tourist-boat-group>.tourist-boat-capacity-error{margin:0;color:#b42335;font-size:12px;font-weight:600;line-height:1.5}
+.tourist-boat-capacity-error[hidden]{display:none}
+.tourist-boat-choice{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:12px;font-weight:700;color:#235e4b}
+.tourist-boat-choice select{width:auto;min-width:100px}
 .tourist-row-heading{display:flex;align-items:center;gap:9px;margin-bottom:12px}.tourist-row-number{display:grid;width:25px;height:25px;place-items:center;border-radius:7px;color:#fff;background:#26745f;font-size:.68rem;font-weight:850}.tourist-row-heading strong{color:#294a40;font-size:.77rem}.tourist-row-grid{display:grid;grid-template-columns:minmax(180px,1.5fr) minmax(135px,.8fr) minmax(85px,.45fr) minmax(155px,.9fr);gap:10px}.tourist-field{display:block;min-width:0}.tourist-field.address{grid-column:1/-1}.tourist-field>span{display:block;margin:0 0 5px;color:#526d64;font-size:.62rem;font-weight:800}.tourist-field input,.tourist-field select,.tourist-address-trigger{width:100%;height:40px;padding:9px 11px;border:1px solid #cedcd7;border-radius:8px;outline:0;background:#fff;color:#29463d;font:inherit;font-size:.72rem;transition:border-color .16s,box-shadow .16s}.tourist-field input:focus,.tourist-field select:focus,.tourist-address-trigger:focus{border-color:#4b997f;box-shadow:0 0 0 3px rgba(61,145,117,.12)}.tourist-address-trigger{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;cursor:pointer}.tourist-address-trigger span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#82928d}.tourist-address-trigger.has-address span{color:#29463d}.tourist-address-trigger svg{width:17px;height:17px;flex:none;color:#27745f}.remove-tourist-user{position:absolute;top:14px;right:14px;display:grid;width:30px;height:30px;place-items:center;padding:0;border:1px solid #f0cccc;border-radius:8px;background:#fff2f2;color:#ae4141}.remove-tourist-user:hover{background:#fbe1e1}
 .tourist-modal-footer-user{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0;padding:15px 24px;border-top:1px solid #dce7e3;background:#fff}.tourist-modal-footer-user .btn{min-height:40px;padding:9px 15px;border-radius:9px;font-size:.72rem;font-weight:800}.tourist-modal-footer-user .add-more-user{margin:0;color:#1c654f;background:#edf7f3;border:1px solid #c5ded5}.tourist-submit-user{color:#fff;background:#26745f;border:1px solid #26745f;box-shadow:0 5px 13px rgba(38,116,95,.17)}.tourist-submit-user:disabled{color:#82908b!important;background:#d9dfdd!important;border-color:#d0d7d4!important;box-shadow:none!important;cursor:not-allowed!important;opacity:1!important}
 .tourist-address-overlay{position:fixed;inset:0;z-index:11100;display:none;align-items:center;justify-content:center;padding:22px;background:rgba(7,29,24,.65);backdrop-filter:blur(5px)}.tourist-address-overlay.show{display:flex}.tourist-address-modal{width:min(620px,100%);overflow:hidden;border:1px solid #d4e3dd;border-radius:17px;background:#fff;box-shadow:0 28px 85px rgba(5,31,25,.32)}.tourist-address-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:20px 22px;border-bottom:1px solid #dce7e3;background:linear-gradient(135deg,#f9fcfb,#eaf5f0)}.tourist-address-header span{color:#26745f;font-size:.58rem;font-weight:850;letter-spacing:.1em;text-transform:uppercase}.tourist-address-header h3{margin:3px 0;color:#173c32;font-size:1.12rem}.tourist-address-header p{margin:0;color:#6c817a;font-size:.68rem}.tourist-address-header button{display:grid;width:32px;height:32px;place-items:center;border:0;border-radius:8px;background:transparent;color:#567067;font-size:22px;cursor:pointer}.tourist-address-header button:hover{background:#dbece5}.tourist-address-body{padding:19px 22px}.tourist-address-copy{padding:12px;margin-bottom:15px;border:1px solid #cde1d9;border-radius:10px;background:#eff8f4}.tourist-address-copy label{display:block;margin-bottom:6px;color:#28624f;font-size:.65rem;font-weight:800}.tourist-address-copy select{width:100%;height:39px;padding:8px 10px;border:1px solid #bdd7cd;border-radius:8px;background:#fff;color:#29483e;font-size:.72rem}.tourist-address-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.tourist-address-field.full{grid-column:1/-1}.tourist-address-field span{display:block;margin-bottom:5px;color:#506a61;font-size:.64rem;font-weight:800}.tourist-address-field input,.tourist-address-field select{width:100%;height:41px;padding:9px 11px;border:1px solid #cadad4;border-radius:8px;outline:0;color:#29483f;background:#fff;font:inherit;font-size:.73rem}.tourist-address-field input:focus,.tourist-address-field select:focus{border-color:#4b997f;box-shadow:0 0 0 3px rgba(61,145,117,.12)}.tourist-address-field select:disabled{color:#8a9994;background:#f1f5f3;cursor:not-allowed}.tourist-address-error{margin:12px 0 0;padding:9px 11px;border-radius:8px;background:#fff0f1;color:#a23d47;font-size:.67rem}.tourist-address-footer{display:flex;justify-content:flex-end;gap:9px;padding:14px 22px;border-top:1px solid #dde8e4;background:#fafcfb}.tourist-address-footer button{min-height:39px;padding:9px 15px;border-radius:8px;font:inherit;font-size:.7rem;font-weight:800;cursor:pointer}.tourist-address-cancel{border:1px solid #cddbd6;background:#fff;color:#526a62}.tourist-address-done{border:1px solid #26745f;background:#26745f;color:#fff}
@@ -4640,9 +4656,9 @@ document.addEventListener("DOMContentLoaded", function () {
                   PDF
                 </button>
               <?php else: ?>
-                <button class="btn-action add-tourist-btn-user" data-booking-id="<?= (int)$b['booking_id'] ?>" data-pax="<?= (int)$pax ?>">
+                <button class="btn-action add-tourist-btn-user" data-booking-id="<?= (int)$b['booking_id'] ?>" data-pax="<?= (int)$pax ?>" data-booking-type="<?= htmlspecialchars(strtolower((string)$b['booking_type']), ENT_QUOTES, 'UTF-8') ?>">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                  Add
+                  Add Tourist
                 </button>
               <?php endif; ?>
             </td>
@@ -5820,7 +5836,7 @@ document.addEventListener("DOMContentLoaded", function () {
       <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($manifestCsrf, ENT_QUOTES, 'UTF-8') ?>">
 
       <div class="tourist-form-summary">
-        <div><strong id="touristFormCount">1</strong><span>Tourists added</span></div>
+        <div><strong id="touristFormCount" aria-live="polite">0/0</strong><span>Tourists added</span></div>
         <p>Tap an address field to enter a structured address or reuse one already entered.</p>
       </div>
 
@@ -6238,6 +6254,7 @@ function saveCrop() {
 
 let maxPax = 0;
 let currentTouristCount = 0;
+let touristBookingIsBoat = false;
 
 const modal = document.getElementById('af-feedback-modal');
 const closeBtn = document.getElementById('af-feedback-close');
@@ -7667,15 +7684,73 @@ function setTouristRowAddress(row, address) {
 }
 
 function renumberTouristRows() {
+  const previousScrollTop = touristRowsUser.scrollTop;
   const rows = Array.from(touristRowsUser.querySelectorAll('.tourist-row-user'));
-  rows.forEach((row, index) => {
+  touristRowsUser.querySelectorAll('.tourist-boat-group').forEach(group => group.remove());
+  if (touristBookingIsBoat) {
+    for (let boat = 1; boat <= Math.ceil(maxPax / 8); boat++) {
+      const members = rows.filter(row => Number(row.querySelector('[name="boat_number[]"]').value) === boat);
+      const group = document.createElement('section');
+      group.className = 'tourist-boat-group';
+      group.innerHTML = `<h4>Boat ${boat} <span>${members.length}/8 tourists</span></h4><p>Enter the details of the tourists travelling on this boat.</p>`;
+      members.forEach(row => group.appendChild(row));
+      const add = document.createElement('button');
+      add.type = 'button';
+      add.className = 'btn add-more-user';
+      add.textContent = `+ Add tourist to Boat ${boat}`;
+      const capacityError = document.createElement('p');
+      capacityError.className = 'tourist-boat-capacity-error';
+      capacityError.id = `touristBoatCapacityError${boat}`;
+      capacityError.hidden = true;
+      capacityError.setAttribute('role', 'alert');
+      add.setAttribute('aria-describedby', capacityError.id);
+      add.addEventListener('click', () => {
+        if (members.length >= 8 || rows.length >= maxPax) {
+          capacityError.textContent = members.length >= 8
+            ? `Maximum capacity for Boat ${boat} has been reached (8 tourists).`
+            : `All ${maxPax} tourists for this booking have already been added.`;
+          capacityError.hidden = false;
+          return;
+        }
+        const addedRow = createTouristRowUser({boat_number:boat});
+        group.appendChild(addedRow);
+        renumberTouristRows();
+        showAddedTouristRow(addedRow);
+      });
+      group.appendChild(add);
+      group.appendChild(capacityError);
+      touristRowsUser.appendChild(group);
+    }
+  }
+  Array.from(touristRowsUser.querySelectorAll('.tourist-row-user')).forEach((row, index) => {
     row.querySelector('.tourist-row-number').textContent = index + 1;
     row.querySelector('.tourist-row-heading strong').textContent = `Tourist ${index + 1}`;
   });
   currentTouristCount = rows.length;
-  document.getElementById('touristFormCount').textContent = currentTouristCount;
+  document.getElementById('touristFormCount').textContent = `${currentTouristCount}/${maxPax}`;
   updateAddButtonState();
+  touristRowsUser.scrollTop = previousScrollTop;
 }
+
+function showAddedTouristRow(row) {
+  requestAnimationFrame(() => {
+    row.querySelector('input[name="full_name[]"]')?.focus({preventScroll:true});
+    row.scrollIntoView({block:'nearest', behavior:'smooth'});
+  });
+}
+
+touristRowsUser.addEventListener('change', event => {
+  if (!event.target.matches('[name="boat_number[]"]')) return;
+  const select = event.target;
+  const count = Array.from(touristRowsUser.querySelectorAll('[name="boat_number[]"]')).filter(input => input.value === select.value).length;
+  if (count > 8) {
+    alert(`Boat ${select.value} can carry a maximum of 8 tourists. Choose another boat.`);
+    select.value = select.dataset.previousBoat;
+    return;
+  }
+  select.dataset.previousBoat = select.value;
+  renumberTouristRows();
+});
 
 /* ---------- HELPER: create ONE tourist row ---------- */
 function createTouristRowUser(tourist = {}) {
@@ -7687,6 +7762,7 @@ function createTouristRowUser(tourist = {}) {
   const addressLine = structuredAddressLine || tourist.address || '';
   row.innerHTML = `
     <div class="tourist-row-heading"><span class="tourist-row-number">1</span><strong>Tourist 1</strong></div>
+    ${touristBookingIsBoat ? `<label class="tourist-boat-choice">Assigned boat <select name="boat_number[]" aria-label="Assigned boat for this tourist">${Array.from({length:Math.ceil(maxPax / 8)}, (_, i) => `<option value="${i + 1}" ${Number(tourist.boat_number) === i + 1 ? 'selected' : ''}>Boat ${i + 1}</option>`).join('')}</select></label>` : ''}
     <div class="tourist-row-grid">
       <label class="tourist-field name"><span>Full name</span><input type="text" name="full_name[]" maxlength="180" placeholder="Passenger's complete name" required value="${touristHtmlValue(tourist.full_name)}"></label>
       <label class="tourist-field"><span>Gender (by birth)</span><select name="gender[]" required><option value="">Select gender</option><option value="male" ${String(tourist.gender).toLowerCase() === 'male' ? 'selected' : ''}>Male</option><option value="female" ${String(tourist.gender).toLowerCase() === 'female' ? 'selected' : ''}>Female</option></select></label>
@@ -7705,6 +7781,14 @@ function createTouristRowUser(tourist = {}) {
     <button type="button" class="remove-tourist-user" aria-label="Remove tourist">&times;</button>
   `;
   row.querySelector('.tourist-address-trigger').classList.toggle('has-address', Boolean(addressLine));
+  if (touristBookingIsBoat) {
+    const select = row.querySelector('[name="boat_number[]"]');
+    const existing = Array.from(touristRowsUser.querySelectorAll('[name="boat_number[]"]'));
+    const available = Array.from({length:Math.ceil(maxPax / 8)}, (_, i) => i + 1)
+      .find(number => existing.filter(input => Number(input.value) === number).length < 8);
+    select.value = String(Number(tourist.boat_number) || available || 1);
+    select.dataset.previousBoat = select.value;
+  }
   return row;
 }
 
@@ -8115,6 +8199,7 @@ document.querySelectorAll('.add-tourist-btn-user').forEach(btn => {
   btn.addEventListener('click', async () => {
     const bookingId = btn.dataset.bookingId;
     maxPax = parseInt(btn.dataset.pax || 0);
+    touristBookingIsBoat = btn.dataset.bookingType === 'boat';
 
     bookingIdInput.value = bookingId;
 
@@ -8156,6 +8241,19 @@ document.querySelectorAll('.add-tourist-btn-user').forEach(btn => {
 });
 
 /* ---------- CLOSE MODAL ---------- */
+// Email links can only open a form belonging to a booking rendered for this account.
+const touristSubmissionId = new URLSearchParams(window.location.search).get('submit_tourists');
+function openRequestedTouristSubmission() {
+  if (!touristSubmissionId || !/^[1-9]\d*$/.test(touristSubmissionId)) return;
+  const submissionButton = Array.from(document.querySelectorAll('.add-tourist-btn-user'))
+    .find(button => button.dataset.bookingId === touristSubmissionId);
+  const bookingRow = document.getElementById('booking-' + touristSubmissionId);
+  bookingRow?.scrollIntoView({block: 'center'});
+  if (submissionButton) submissionButton.click();
+  else if (bookingRow?.querySelector('.view-tourist-btn-user')) bookingRow.querySelector('.view-tourist-btn-user').click();
+  else alert('The tourist submission form is unavailable for this booking. Please use the account that made the booking and check its status in My Bookings.');
+}
+
 document.querySelector('.tourist-modal-close-user').onclick = () => {
   touristModalUser.style.display = 'none';
 };
@@ -8170,10 +8268,7 @@ document.getElementById('addMoreTouristUser').addEventListener('click', () => {
   const addedRow = createTouristRowUser();
   touristRowsUser.appendChild(addedRow);
   renumberTouristRows();
-  requestAnimationFrame(() => {
-    touristRowsUser.scrollTo({top: touristRowsUser.scrollHeight, behavior: 'smooth'});
-    addedRow.querySelector('input[name="full_name[]"]')?.focus({preventScroll:true});
-  });
+  showAddedTouristRow(addedRow);
 });
 
 function updateAddButtonState() {
@@ -8190,7 +8285,9 @@ function updateAddButtonState() {
     addBtn.style.cursor = 'pointer';
   }
 
-  const hasRequiredPax = maxPax > 0 && currentTouristCount === maxPax;
+  const boatCounts = touristBookingIsBoat ? Array.from({length:Math.ceil(maxPax / 8)}, (_, i) =>
+    Array.from(touristRowsUser.querySelectorAll('[name="boat_number[]"]')).filter(input => Number(input.value) === i + 1).length) : [];
+  const hasRequiredPax = maxPax > 0 && currentTouristCount === maxPax && boatCounts.every(count => count > 0 && count <= 8);
   submitBtn.disabled = !hasRequiredPax;
   const remainingPax = Math.max(maxPax - currentTouristCount, 0);
   submitBtn.title = hasRequiredPax
@@ -8314,6 +8411,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const upcoming = document.getElementById('upcoming-bookings');
     if (upcoming) upcoming.style.display = activeTab === 'profile' ? 'block' : 'none';
   }
+  // Open the email's booking action after the Bookings section is visible.
+  openRequestedTouristSubmission();
 });
 
 </script>

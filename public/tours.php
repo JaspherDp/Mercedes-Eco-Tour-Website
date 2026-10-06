@@ -437,7 +437,7 @@ $faqs = $stmt->fetchAll();
 
     // Load logsign.js only after modal is added
     const script = document.createElement("script");
-    script.src = "logsign.js?v=17";
+    script.src = "logsign.js?v=18";
     script.onload = () => {
       if (typeof initLogSignEvents === "function") {
         initLogSignEvents();
@@ -561,6 +561,17 @@ loadSecondNavbarContent("sectours");
         const form = document.getElementById(id);
         if (!form) return;
 
+        const isBookingForm = id === 'boatForm' || id === 'guideForm';
+        const bookingSnapshot = () => new URLSearchParams(new FormData(form)).toString();
+        let savedBookingSnapshot = bookingSnapshot();
+        if (isBookingForm) {
+            window.addEventListener('beforeunload', event => {
+                if (bookingSnapshot() === savedBookingSnapshot) return;
+                event.preventDefault();
+                event.returnValue = '';
+            });
+        }
+
         form.addEventListener("submit", async function(e) {
             e.preventDefault();
             const formData = new FormData(form);
@@ -575,6 +586,7 @@ loadSecondNavbarContent("sectours");
                 alert(data.message || (data.success ? 'Request submitted.' : 'Unable to submit request.'));
                 if (!response.ok || !data.success) return;
                 form.reset();
+                savedBookingSnapshot = bookingSnapshot();
                 modal.style.display = "none";
             } catch (err) {
                 alert("Error: " + err);

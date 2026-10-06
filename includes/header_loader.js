@@ -45,7 +45,7 @@
     modalContainer.innerHTML = await modalResponse.text();
 
     await loadScriptOnce("https://cdn.jsdelivr.net/npm/sweetalert2@11", "sweetalert2", () => !!window.Swal);
-    await loadScriptOnce("logsign.js?v=17", "logsign", () => typeof window.initLogSignEvents === "function");
+    await loadScriptOnce("logsign.js?v=18", "logsign", () => typeof window.initLogSignEvents === "function");
     if (typeof window.initLogSignEvents === "function") {
       window.initLogSignEvents();
     }

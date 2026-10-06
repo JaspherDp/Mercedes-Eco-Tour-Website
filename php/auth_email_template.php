@@ -63,14 +63,15 @@ function itourBuildVerificationEmail(string $purpose, string $code, string $reci
         . '<tr><td align="center" style="padding:28px 28px 20px;border-bottom:1px solid #e6eeeb;">' . $brand . '</td></tr>'
         . '<tr><td style="padding:34px 42px 12px;"><div style="margin-bottom:10px;color:#176b55;font-size:12px;font-weight:700;letter-spacing:1.5px;text-align:center;">' . $eyebrow . '</div>'
         . '<h1 style="margin:0 0 22px;color:#153b31;font-size:27px;line-height:1.2;text-align:center;">' . $heading . '</h1>'
-        . '<p style="margin:0 0 15px;color:#294940;font-size:15px;line-height:1.7;">' . $safeGreeting . '</p>'
+        . '<p style="margin:0 0 15px;color:#294940;font-size:15px;line-height:1.7;text-align:left;text-indent:0;">' . $safeGreeting . '</p>'
         . '<p style="margin:0;color:#526a63;font-size:15px;line-height:1.7;text-align:justify;text-indent:28px;">' . $intro . '</p></td></tr>'
         . '<tr><td align="center" style="padding:22px 32px 24px;"><div style="margin-bottom:10px;color:#71847e;font-size:11px;font-weight:700;letter-spacing:1.4px;">YOUR SIX-DIGIT CODE</div>'
         . '<table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center"><tr>' . $codeCells . '</tr></table>'
-        . '<p style="margin:14px 0 0;color:#526a63;font-size:13px;line-height:1.6;">This code expires in <strong style="color:#294940;">10 minutes</strong> and can only be used once.</p></td></tr>'
+        . '<p style="margin:14px 0 0;color:#526a63;font-size:13px;line-height:1.6;text-align:justify;text-indent:28px;">This code expires in <strong style="color:#294940;">10 minutes</strong> and can only be used once.</p></td></tr>'
         . '<tr><td style="padding:0 42px 32px;"><div style="padding:16px 18px;background:#f7faf9;border:1px solid #dce9e4;border-radius:12px;color:#526a63;font-size:13px;line-height:1.65;text-align:justify;">' . $action . '</div>'
         . '<div style="margin-top:18px;padding:14px 16px;background:#fff7f5;border-left:4px solid #c75a4e;border-radius:8px;color:#74433d;font-size:12px;line-height:1.6;"><strong>Security reminder:</strong> Never share this code with anyone. iTour Mercedes will never ask you to provide a verification code by phone, text message, or chat.</div>'
-        . '<p style="margin:20px 0 0;color:#71817c;font-size:12px;line-height:1.6;">' . $unrequested . '</p></td></tr>'
+        . '<p style="margin:20px 0 0;color:#71817c;font-size:12px;line-height:1.6;text-align:justify;text-indent:28px;">' . $unrequested . '</p></td></tr>'
+        . '<tr><td style="padding:0 28px 22px;">' . itourEmailQuickLinks() . '</td></tr>'
         . '<tr><td align="center" style="padding:22px 28px;background:#123e33;color:#dcece6;font-size:11px;line-height:1.7;"><strong style="color:#fff;font-size:12px;">iTour Mercedes</strong><br>Mercedes, Camarines Norte<br>This is an automated security email. Please do not reply.<br>&copy; '
         . date('Y') . ' iTour Mercedes. All rights reserved.</td></tr></table></td></tr></table></body></html>';
 

@@ -2245,7 +2245,7 @@ include 'footer.php';
             swalScript.src = "https://cdn.jsdelivr.net/npm/sweetalert2@11";
             swalScript.onload = () => {
               const logsignScript = document.createElement("script");
-              logsignScript.src = "logsign.js?v=17";
+              logsignScript.src = "logsign.js?v=18";
               logsignScript.onload = () => {
                 if (typeof initLogSignEvents === "function") initLogSignEvents();
                 else console.error("initLogSignEvents not found in logsign.js");
@@ -3016,12 +3016,33 @@ document.querySelectorAll(".filter").forEach(cb => {
     }
   }
 
+  let featuredAmenitiesObserver;
+
+  function fitFeaturedAmenities(box) {
+    if (!box.getBoundingClientRect().width) return;
+    const pills = Array.from(box.querySelectorAll(':scope > .hotel-featured-amenity'));
+    const more = box.querySelector('.hotel-featured-more');
+    const count = more.querySelector('.hotel-featured-more-count');
+    pills.forEach(pill => { pill.hidden = false; });
+    more.hidden = true;
+    const fits = () => {
+      const bounds = box.getBoundingClientRect();
+      return [...pills, more].filter(item => !item.hidden)
+        .every(item => item.getBoundingClientRect().bottom <= bounds.bottom + 1);
+    };
+    let visible = pills.length;
+    while (!fits() && visible > 0) {
+      pills[--visible].hidden = true;
+      more.hidden = false;
+      count.textContent = `+${pills.length - visible} more`;
+    }
+  }
+
   function displayFeatured() {
     const grid = document.getElementById("featuredGrid");
     // A single DOM update avoids reflowing and repainting the carousel for every card.
     const cards = hotels.map((h, index) => {
-      const visibleAmenities = (h.amenities || []).slice(0, 5);
-      const hiddenAmenities = (h.amenities || []).slice(5);
+      const visibleAmenities = h.amenities || [];
       const imageLoading = index < 5 ? "eager" : "lazy";
       const imagePriority = index < 3 ? "high" : "auto";
       const hotelId = Number(h.id) || 0;
@@ -3048,14 +3069,12 @@ document.querySelectorAll(".filter").forEach(cb => {
           </div>
           <div class="hotel-featured-amenities">
             ${visibleAmenities.map(a => `<span class="hotel-featured-amenity">${escapeHtml(a)}</span>`).join("")}
-            ${hiddenAmenities.length > 0 ? `
-              <div class="hotel-featured-more">
-                +${hiddenAmenities.length} more
-                <div class="hotel-featured-tooltip">
+              <button type="button" class="hotel-featured-more" hidden aria-label="See all amenities for ${hotelName}" onclick="event.stopPropagation(); openAmenities(${hotelId})">
+                <span class="hotel-featured-more-count"></span>
+                <span class="hotel-featured-tooltip">
                   ${(h.amenities || []).map(a => `<span class="hotel-featured-amenity">${escapeHtml(a)}</span>`).join("")}
-                </div>
-              </div>
-            ` : ""}
+                </span>
+              </button>
           </div>
           <div class="hotel-featured-price-wrap">
             <span class="hotel-featured-price-label">as low as</span>
@@ -3071,6 +3090,14 @@ document.querySelectorAll(".filter").forEach(cb => {
     }).join("");
 
     grid.innerHTML = cards;
+    featuredAmenitiesObserver?.disconnect();
+    featuredAmenitiesObserver = new ResizeObserver(entries => {
+      entries.forEach(entry => fitFeaturedAmenities(entry.target));
+    });
+    grid.querySelectorAll('.hotel-featured-amenities').forEach(box => {
+      fitFeaturedAmenities(box);
+      featuredAmenitiesObserver.observe(box);
+    });
   }
 
   function openHotelDetails(hotelId, source = "featured") {

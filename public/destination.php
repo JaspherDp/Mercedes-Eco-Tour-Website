@@ -368,7 +368,7 @@ destinationHeaderReady
           document.getElementById("loginModal").innerHTML = html;
 
           const logsignScript = document.createElement("script");
-          logsignScript.src = "logsign.js?v=17";
+          logsignScript.src = "logsign.js?v=18";
           logsignScript.onload = () => {
             if (typeof initLogSignEvents === "function") initLogSignEvents();
           };

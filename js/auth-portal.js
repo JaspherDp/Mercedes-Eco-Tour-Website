@@ -120,11 +120,16 @@ document.addEventListener("DOMContentLoaded", () => {
       lockoutTimer = window.setInterval(render, 1000);
     };
 
-    const openDashboard = async (redirect) => {
+    const isPhoneRegistrationDestination = (redirect) => {
+      const destination = new URL(redirect, window.location.href);
+      return /\/(?:admin-phone-setup|hotel-admin-phone-setup|operator-phone-setup)\.php$/.test(destination.pathname);
+    };
+
+    const openDestination = async (redirect) => {
       const destination = new URL(redirect, window.location.href);
 
       // Never inject a document fetched from another origin. The login
-      // endpoints currently return same-origin dashboard URLs, but retain a
+      // endpoints currently return same-origin portal URLs, but retain a
       // normal navigation fallback if that contract ever changes.
       if (destination.origin !== window.location.origin) {
         window.location.assign(destination.href);
@@ -140,10 +145,12 @@ document.addEventListener("DOMContentLoaded", () => {
       });
 
       if (!response.ok) {
-        throw new Error("The dashboard could not be opened. Please try again.");
+        throw new Error(isPhoneRegistrationDestination(redirect)
+          ? "Phone registration could not be opened. Please try again."
+          : "The dashboard could not be opened. Please try again.");
       }
 
-      const dashboardHtml = await response.text();
+      const destinationHtml = await response.text();
       const finalDestination = new URL(response.url || destination.href);
 
       if (finalDestination.origin !== window.location.origin) {
@@ -156,7 +163,7 @@ document.addEventListener("DOMContentLoaded", () => {
       // spinner while a traditional navigation waits for the server.
       window.history.replaceState(null, "", finalDestination.href);
       document.open();
-      document.write(dashboardHtml);
+      document.write(destinationHtml);
       document.close();
     };
 
@@ -208,8 +215,10 @@ document.addEventListener("DOMContentLoaded", () => {
           throw new Error("Login succeeded, but no destination was provided.");
         }
 
-        buttonLabel.textContent = "Opening dashboard...";
-        await openDashboard(payload.redirect);
+        buttonLabel.textContent = isPhoneRegistrationDestination(payload.redirect)
+          ? "Opening phone registration..."
+          : "Opening dashboard...";
+        await openDestination(payload.redirect);
       } catch (error) {
         window.ItourTurnstile.reset(form);
         showLoginError(error instanceof Error ? error.message : "Unable to log in. Please try again.");

@@ -108,6 +108,11 @@ function BookingConfirmationEmailTemplate(array $data): string
         $data['wordmark_url'] ?? PaymentHelper::env('BOOKING_EMAIL_WORDMARK_URL', $defaultWordmarkUrl)
     );
     $year = date('Y');
+    $submissionId = max(0, (int)($data['tourist_submission_booking_id'] ?? 0));
+    $submissionUrl = $submissionId > 0 ? itourEmailProfileUrl(['section' => 'bookings', 'submit_tourists' => $submissionId]) : '';
+    $touristReminder = $submissionId > 0 ? '<tr><td style="padding:20px 30px 0;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#edf8f3;border:1px solid #b9dfd1;border-radius:10px;"><tr><td style="padding:18px;color:#315b4e;font-size:14px;line-height:1.65;"><strong style="display:block;margin-bottom:10px;color:#164f3e;">Required: Submit your tourist details</strong><p style="margin:0 0 12px;text-align:justify;text-indent:28px;">Please submit the details of every tourist included in your booking, including yourself. This list is required for your tour, so please complete it before your scheduled trip.</p><p style="margin:0;text-align:justify;text-indent:28px;">To access the form, sign in to your tourist account, go to <strong>Profile &gt; Bookings</strong>, find this booking, and select <strong>Add Tourist</strong>. You can also use the button below to open the form directly.</p>'
+        . ($submissionUrl !== '' ? '<div style="padding-top:18px;text-align:center;"><a href="' . BookingConfirmationEmailEscape($submissionUrl) . '" style="display:inline-block;padding:13px 22px;background:#176b58;border-radius:9px;color:#fff;font-size:14px;font-weight:700;text-decoration:none;">Submit Tourist Details</a></div>' : '')
+        . '</td></tr></table></td></tr>' : '';
 
     return '<!doctype html>
 <html lang="en">
@@ -142,25 +147,27 @@ function BookingConfirmationEmailTemplate(array $data): string
           <td style="padding:30px 30px 22px;text-align:center;background:#f5faf8;border-bottom:1px solid #deebe6;">
             <div style="display:inline-block;padding:7px 13px;border-radius:999px;background:#dff3ea;color:#176148;font-size:11px;font-weight:800;letter-spacing:.8px;">CONFIRMED</div>
             <h1 style="margin:15px 0 7px;color:#123f31;font-size:26px;line-height:1.2;">' . $serviceLabel . ' Confirmed</h1>
-            <p style="margin:0;color:#63766f;font-size:14px;line-height:1.6;">' . $intro . '</p>
+            <p style="margin:0;color:#63766f;font-size:14px;line-height:1.6;text-align:justify;text-indent:28px;">' . $intro . '</p>
             ' . ($reference !== '' ? '<div style="margin-top:17px;color:#6a7e76;font-size:12px;">Booking reference<br><strong style="display:inline-block;margin-top:4px;color:#174e3d;font-size:16px;letter-spacing:.8px;">' . $reference . '</strong></div>' : '') . '
           </td>
         </tr>
         <tr>
           <td style="padding:26px 30px 8px;">
-            <p style="margin:0 0 8px;color:#314f45;font-size:14px;line-height:1.65;">Dear <strong>' . $guestName . '</strong>,</p>
-            <p style="margin:0 0 17px;color:#314f45;font-size:14px;line-height:1.65;text-indent:28px;">We are pleased to confirm your reservation. Please review the information below before your scheduled booking.</p>
+            <p style="margin:0 0 8px;color:#314f45;font-size:14px;line-height:1.65;text-align:left;text-indent:0;">Dear <strong>' . $guestName . '</strong>,</p>
+            <p style="margin:0 0 17px;color:#314f45;font-size:14px;line-height:1.65;text-indent:28px;text-align:justify;">We are pleased to confirm your reservation. Please review the information below before your scheduled booking.</p>
             <h2 style="margin:0;padding:0 0 10px;color:#174e3d;font-size:14px;text-transform:uppercase;letter-spacing:.8px;">Reservation details</h2>
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border:1px solid #dce8e3;border-radius:10px;border-collapse:separate;border-spacing:0;overflow:hidden;background:#fbfdfc;">' . $detailRows . '</table>
           </td>
         </tr>
         ' . ($paymentRows !== '' ? '<tr><td style="padding:18px 30px 8px;"><h2 style="margin:0;padding:0 0 10px;color:#174e3d;font-size:14px;text-transform:uppercase;letter-spacing:.8px;">Payment summary</h2><table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border:1px solid #dce8e3;border-radius:10px;border-collapse:separate;border-spacing:0;overflow:hidden;background:#fbfdfc;">' . $paymentRows . '</table></td></tr>' : '') . '
+        ' . $touristReminder . '
         <tr>
           <td style="padding:20px 30px 28px;">
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border-left:4px solid #d99a25;border-radius:8px;background:#fff8e8;">
               <tr><td style="padding:14px 16px;color:#654b19;font-size:13px;line-height:1.55;"><strong style="display:block;margin-bottom:3px;color:#5b4214;">Important reminder</strong>' . $importantNote . '</td></tr>
             </table>
-            <p style="margin:21px 0 0;color:#61746d;font-size:13px;line-height:1.6;">Need help with your reservation? Reply to this email and the iTour Mercedes team will assist you.</p>
+            <p style="margin:21px 0 0;color:#61746d;font-size:13px;line-height:1.6;text-align:left;text-indent:0;">Need help with your reservation? Reply to this email and the iTour Mercedes team will assist you.</p>
+            ' . itourEmailQuickLinks() . '
           </td>
         </tr>
         <tr>

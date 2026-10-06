@@ -1,0 +1,23 @@
+.main-content .booking-row td.booking-history-actions { position: relative; padding-top: 28px !important; }
+.tourist-booking-count { position: absolute; top: 0; right: 0; min-width: 42px; padding: 4px 9px; border: 1px solid #d8cef3; border-radius: 0 13px 0 10px; color: #5e4097; background: #eee8fa; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
+.tourist-booking-count:hover { color: #fff; background: #7053a8; }
+.tourist-booking-count:focus-visible { outline: 2px solid #7053a8; outline-offset: 2px; }
+body.tourist-history-open { overflow: hidden; }
+.tourist-history-summary { margin-bottom: 18px; padding: 18px; border: 1px solid #ddd3ef; border-radius: 15px; background: linear-gradient(135deg, #eee8fa, #fff); }
+.tourist-history-summary strong { display: block; color: #263e36; font-size: 20px; }
+.tourist-history-summary span { display: block; margin-top: 7px; color: #7053a8; font-size: 13px; font-weight: 700; }
+.tourist-history-note { color: #6b8077; font-size: 12px; line-height: 1.5; }
+.tourist-history-list { display: grid; gap: 12px; }
+.tourist-history-entry { padding: 16px; border: 1px solid #d9e8e1; border-left: 4px solid #8d75b7; border-radius: 12px; background: #fff; }
+.tourist-history-entry header { display: flex; justify-content: space-between; gap: 12px; color: #7053a8; font-size: 11px; font-weight: 800; }
+.tourist-history-entry h4 { margin: 10px 0 5px; color: #174b3c; font-size: 15px; }
+.tourist-history-entry p { margin: 5px 0; color: #62796f; font-size: 12px; line-height: 1.5; }
+.tourist-history-entry dl { display: grid; grid-template-columns: 90px 1fr; gap: 7px; margin: 12px 0 0; font-size: 12px; }
+.tourist-history-entry dt { color: #71857c; }
+.tourist-history-entry dd { margin: 0; color: #294d40; font-weight: 600; }
+.tourist-history-status { border-radius: 20px; padding: 4px 8px; background: #edf5f1; color: #28624e; text-transform: capitalize; }
+.tourist-history-status[data-status="cancelled"], .tourist-history-status[data-status="declined"] { color: #a24455; background: #fff0f2; }
+.tourist-history-status[data-status="pending"] { color: #91611d; background: #fff5df; }
+.tourist-history-more { width: 100%; margin-top: 16px; padding: 12px; border: 1px solid #d8cef3; border-radius: 10px; color: #5e4097; background: #eee8fa; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.tourist-history-more[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { #touristBookingHistory, #touristBookingHistory .tourist-profile-drawer { transition: none; } }

@@ -75,7 +75,7 @@ function ensureGlobalAuthModal() {
       document.body.appendChild(portal);
     }
 
-    await loadScriptOnce("logsign.js?v=17", "logsign", () => typeof window.initLogSignEvents === "function");
+    await loadScriptOnce("logsign.js?v=18", "logsign", () => typeof window.initLogSignEvents === "function");
     if (typeof window.initLogSignEvents === "function") {
       window.initLogSignEvents();
     }
@@ -87,6 +87,27 @@ function ensureGlobalAuthModal() {
 
   return window.__globalAuthModalPromise;
 }
+
+// Keep booking-triggered login on the current page and retain the selected booking.
+document.addEventListener('click', async (event) => {
+  if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  if (!document.getElementById('openModalBtn')) return;
+  const link = event.target instanceof Element ? event.target.closest('a[href]') : null;
+  if (!link) return;
+  const url = new URL(link.href, window.location.href);
+  const bookingPages = ['tour_booking.php', 'hotel_booking.php'];
+  const page = bookingPages.find(name => url.pathname === new URL(name, window.location.href).pathname);
+  if (!page || url.origin !== window.location.origin) return;
+  event.preventDefault();
+  try {
+    await ensureGlobalAuthModal();
+    if (!window.AuthModalStore?.open) throw new Error('Login modal is unavailable');
+    await window.AuthModalStore.open({ returnTo: `${page}${url.search}` });
+  } catch (error) {
+    console.error('Unable to open booking login:', error);
+    window.location.href = url.href;
+  }
+}, true);
 
 function readNotifStore() {
   try {
@@ -388,7 +409,7 @@ function initHeader() {
         try {
           await ensureGlobalAuthModal();
           if (window.AuthModalStore && typeof window.AuthModalStore.open === "function") {
-            window.AuthModalStore.open();
+            await window.AuthModalStore.open();
           } else {
             const modal = document.getElementById("modalOverlay");
             if (modal) modal.style.display = "flex";

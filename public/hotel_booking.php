@@ -1092,8 +1092,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
         el.addEventListener("change", recalc);
         el.addEventListener("input", recalc);
       });
-      children.addEventListener("input", () => renderChildAgeRows());
-      children.addEventListener("change", () => renderChildAgeRows());
+      children.addEventListener("input", () => { renderChildAgeRows(); recalc(); });
+      children.addEventListener("change", () => { renderChildAgeRows(); recalc(); });
       paymentTypeInputs.forEach(el => el.addEventListener("change", recalc));
 
       const revalidateTouchedField = (fieldKey) => {
@@ -1153,6 +1153,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
           const payload = Object.fromEntries(formData.entries());
           payload.booking_domain = "hotel";
           payload.bookingType = "hotel";
+          payload.child_ages = getChildAges();
           payload.payment_type = getPaymentType();
           payload.returnUrl = `hotel_details.php?id=${encodeURIComponent(payload.hotel_id)}`;
           const response = await fetch("payments/create-booking-checkout.php", {

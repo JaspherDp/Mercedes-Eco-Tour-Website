@@ -1851,3 +1851,36 @@ body.other-fees-modal-open {
   background: #eef2f0;
   cursor: not-allowed;
 }
+
+/* Keep the adult and child counts together on every screen size. */
+.field-row.two.passenger-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.passenger-fields label { min-width: 0; }
+.passenger-fields input { min-width: 0; width: 100%; }
+.additional-boat-preferences {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #c9e2d8;
+  border-radius: 12px;
+  background: #f1f8f5;
+}
+.additional-boat-preferences[hidden], #boatPassengerHint[hidden] { display: none; }
+.additional-boat-preferences h3 { margin: 0; color: #1e6650; font-size: 15px; }
+.additional-boat-preferences .helper-text { margin: 0; }
+
+.tour-child-age-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid #c9e2d8;
+  border-radius: 12px;
+  background: #f1f8f5;
+}
+.tour-child-age-list[hidden] { display: none; }
+.tour-child-age-list label { min-width: 0; }
+.tour-child-age-list select { width: 100%; min-width: 0; }
+.tour-child-age-list .field-error { grid-column: 1 / -1; }
+@media (max-width: 480px) { .tour-child-age-list { grid-template-columns: 1fr; } }

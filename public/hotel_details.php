@@ -448,20 +448,20 @@ function ratingValue($value): float {
   <style>
     /* hard-match hotel_resorts search bar + calendar on hotel_details */
     #detailsSearchWrap {
-      padding: 7px clamp(24px, 8vw, 150px) !important;
+      padding: 7px 16px !important;
     }
     #detailsSearchWrap .details-search-toggle{display:none;}
     #detailsSearchWrap .search-container {
       background: #fff !important;
-      padding: 7px 16px !important;
+      padding: 7px 0 !important;
       border-radius: 18px !important;
       width: 100% !important;
-      max-width: 100% !important;
+      max-width: 1188px !important;
       margin: 0 auto !important;
       display: grid !important;
       grid-template-columns: minmax(150px, 1fr) minmax(210px, 1.25fr) minmax(170px, 1fr) 130px !important;
       gap: 10px !important;
-      align-items: end !important;
+      align-items: start !important;
       box-shadow: none !important;
       border: none !important;
       overflow: visible !important;
@@ -526,7 +526,7 @@ function ratingValue($value): float {
         grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
         gap: 9px 12px !important;
       }
-      #detailsSearchWrap .search-btn{align-self:end !important;}
+      #detailsSearchWrap .search-btn{align-self:start !important;}
       .flatpickr-calendar,
       .flatpickr-calendar.inline,
       .flatpickr-calendar.open{
@@ -557,7 +557,7 @@ function ratingValue($value): float {
       #detailsSearchWrap .search-container {
         grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 1fr) 78px !important;
         gap: 8px !important;
-        align-items: center !important;
+        align-items: start !important;
         padding: 7px 0 !important;
       }
       #detailsSearchWrap .search-btn {
@@ -566,7 +566,7 @@ function ratingValue($value): float {
         min-width: 78px !important;
         max-width: 78px !important;
         padding: 0 !important;
-        align-self: center !important;
+        align-self: start !important;
         overflow: hidden !important;
         color: #fff !important;
         font-size: 0 !important;
@@ -3051,23 +3051,9 @@ function ratingValue($value): float {
       });
 
       roomsContent.querySelectorAll(".room-book-btn").forEach(btn => {
-        btn.addEventListener("click", () => {
+        btn.addEventListener("click", async () => {
           // Check if button is disabled
           if (btn.disabled || btn.hasAttribute('disabled')) {
-            return;
-          }
-
-          if (!isLoggedIn) {
-            if (window.Swal) {
-              Swal.fire({
-                icon: "warning",
-                title: "Login Required",
-                text: "You must be logged in to reserve a room.",
-                confirmButtonColor: "#2b7a66"
-              });
-            } else {
-              alert("Login required. Please log in first.");
-            }
             return;
           }
 
@@ -3084,8 +3070,13 @@ function ratingValue($value): float {
             children: String(searchData.children || 0),
             child_ages: Array.isArray(searchData.childAges) ? searchData.childAges.join(",") : ""
           });
+          const bookingUrl = `hotel_booking.php?${params.toString()}`;
+          if (!isLoggedIn) {
+            await openRoomBookingLogin(bookingUrl);
+            return;
+          }
           clearPersistedSearchState();
-          window.location.href = `hotel_booking.php?${params.toString()}`;
+          window.location.href = bookingUrl;
         });
       });
     }
@@ -3265,7 +3256,7 @@ function ratingValue($value): float {
       updateIslandFieldState();
     }
 
-    function openResortsInNewTabBySearch(data) {
+    function showResortsSearchResults(data) {
       const params = new URLSearchParams({
         island: data.island,
         checkin: data.checkin,
@@ -3275,7 +3266,7 @@ function ratingValue($value): float {
         child_ages: data.childAges.join(","),
         rooms: String(data.rooms)
       });
-      window.open(`hotel_resorts.php?${params.toString()}`, "_blank");
+      window.location.assign(`hotel_resorts.php?${params.toString()}`);
     }
 
     function collectSearchData() {
@@ -3373,13 +3364,22 @@ function ratingValue($value): float {
       if (!valid) {
         setDetailsSearchExpanded(true);
         searchWrap.classList.add("search-highlight");
-        searchWrap.scrollIntoView({ behavior: "smooth", block: "start" });
+        if (window.matchMedia('(max-width: 768px)').matches) {
+          // The mobile search is hidden while scrolled down; return to its visible position.
+          requestAnimationFrame(() => {
+            window.scrollTo({ top: 0, behavior: "smooth" });
+            updateMobileHotelChrome();
+            syncTabsStickyPosition();
+          });
+        } else {
+          searchWrap.scrollIntoView({ behavior: "smooth", block: "start" });
+        }
         setTimeout(() => searchWrap.classList.remove("search-highlight"), 1300);
         return;
       }
 
       if (data.island && data.island !== (hotelData.island || "")) {
-        openResortsInNewTabBySearch(data);
+        showResortsSearchResults(data);
         return;
       }
 
@@ -3577,6 +3577,31 @@ function ratingValue($value): float {
       });
     }
 
+    async function openRoomBookingLogin(bookingUrl) {
+      try {
+        await ensureGlobalAuthModal();
+        await window.AuthModalStore.open({ returnTo: bookingUrl });
+      } catch (error) {
+        console.error('Unable to open booking login:', error);
+        if (window.Swal) Swal.fire({ icon: 'error', title: 'Unable to open login', text: 'Please try again.', confirmButtonColor: '#2b7a66' });
+      }
+    }
+
+    function reserveRoom() {
+      if (isLoggedIn) {
+        scrollToRooms();
+        return;
+      }
+      const data = collectSearchData();
+      const params = new URLSearchParams({ hotel_id: String(hotelData.id) });
+      if (data.checkin) params.set('checkin', data.checkin);
+      if (data.checkout) params.set('checkout', data.checkout);
+      if (data.adults > 0) params.set('adults', String(data.adults));
+      params.set('children', String(data.children));
+      params.set('child_ages', data.childAges.join(','));
+      openRoomBookingLogin(`hotel_booking.php?${params.toString()}`);
+    }
+
     function scrollToRooms() {
       collapseMobileSearchHeader();
       const roomsSection = document.getElementById("rooms");
@@ -3640,6 +3665,19 @@ function ratingValue($value): float {
         clearPersistedSearchState();
       }
 
+      // A newly opened stay starts from its card or current results, not an older draft.
+      // Refreshing or returning through browser history can still restore this stay's form.
+      const navigationType = performance.getEntriesByType("navigation")[0]?.type || "navigate";
+      if (navigationType === "navigate" && (pageSource === "featured" || pageSource === "result")) {
+        sessionStorage.removeItem(hotelSearchStorageKey);
+        sessionStorage.removeItem(hotelSearchDraftStorageKey);
+        sessionStorage.removeItem(hotelSearchExpandedStorageKey);
+        localStorage.removeItem(hotelSearchStorageKey);
+        if (pageSource === "featured") {
+          localStorage.removeItem(legacyHotelSearchStorageKey);
+        }
+      }
+
       const savedDataRaw = sessionStorage.getItem(hotelSearchStorageKey) || localStorage.getItem(hotelSearchStorageKey) || localStorage.getItem(legacyHotelSearchStorageKey);
       const savedData = parseStoredSearchData(savedDataRaw);
       const draftData = parseStoredSearchData(sessionStorage.getItem(hotelSearchDraftStorageKey));
@@ -3659,7 +3697,7 @@ function ratingValue($value): float {
         renderRoomsSearchPrompt();
       } else {
         if (pageSource === "featured") {
-          const featuredIsland = localStorage.getItem("hotelDetailsFeaturedIsland") || hotelData.island || "";
+          const featuredIsland = hotelData.island || "";
           if (featuredIsland) {
             islandInput.value = featuredIsland;
             updateIslandFieldState();
@@ -3759,8 +3797,8 @@ function ratingValue($value): float {
 
       openMapBtn.addEventListener("click", openMapModal);
       mobileMapBtn?.addEventListener("click", openMapModal);
-      reserveOverviewBtn.addEventListener("click", scrollToRooms);
-      mobileFloatingReserve?.addEventListener("click", scrollToRooms);
+      reserveOverviewBtn.addEventListener("click", reserveRoom);
+      mobileFloatingReserve?.addEventListener("click", reserveRoom);
       closeMapModal.addEventListener("click", closeMap);
       mapModal.addEventListener("click", (e) => {
         if (e.target === mapModal) closeMap();

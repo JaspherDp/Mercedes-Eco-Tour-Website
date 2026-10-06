@@ -416,7 +416,7 @@ $locations = [
           </div>
           <div class="booking-step-line" aria-hidden="true"></div>
           <div class="booking-step-indicator" data-step-indicator="2">
-            <span>2</span><strong>Guests & payment</strong>
+            <span>2</span><strong>Contact & payment</strong>
           </div>
           <div class="booking-step-line" aria-hidden="true"></div>
           <div class="booking-step-indicator" data-step-indicator="3">
@@ -478,6 +478,14 @@ $locations = [
           <input type="hidden" id="selectedBoatId" name="boat_id">
           <input type="hidden" id="selectedGuideId" name="guide_id">
 
+          <div id="additionalBoatPreferences" class="additional-boat-preferences" hidden></div>
+          <div class="field-row two passenger-fields" id="passengerFields">
+            <label>Adults<input type="number" id="numAdults" name="num_adults" min="0" max="100" value="1" required /></label>
+            <label>Children<input type="number" id="numChildren" name="num_children" min="0" max="100" value="0" required /></label>
+          </div>
+          <div id="tourChildAgeRows" class="tour-child-age-list" tabindex="-1" aria-live="polite" hidden></div>
+          <p class="helper-text" id="boatPassengerHint" hidden>Each boat accommodates a maximum of 8 passengers, including adults and children.</p>
+
           <div class="field-row two">
             <label>
               Tour Type
@@ -534,23 +542,12 @@ $locations = [
           <section class="booking-step-panel" data-booking-step="2" hidden>
             <div class="step-section-heading">
               <b>2</b>
-              <div><h2>Guests and payment</h2><p>Confirm your party size, contact details, and payment preference.</p></div>
+              <div><h2>Contact and payment</h2><p>Confirm your contact details, environmental fee category, and payment preference.</p></div>
             </div>
-          <div class="field-row two">
+          <div class="field-row">
             <label>
               Contact Number
               <input type="tel" id="contactNumber" name="contact_number" value="<?= htmlspecialchars($phoneDefault) ?>" placeholder="Enter active mobile number" required />
-            </label>
-            <label>
-              Adults
-              <input type="number" id="numAdults" name="num_adults" min="0" value="1" required />
-            </label>
-          </div>
-
-          <div class="field-row">
-            <label>
-              Children
-              <input type="number" id="numChildren" name="num_children" min="0" value="0" required />
             </label>
           </div>
 
@@ -774,6 +771,7 @@ $locations = [
       const otherFeesModal = document.getElementById("otherFeesModal");
       let otherFeesReturnFocus = null;
       let isOpeningPayment = false;
+      let leavingForPayment = false;
 
       const closeOtherFeesModal = () => {
         if (!otherFeesModal || otherFeesModal.hidden) return;
@@ -899,6 +897,7 @@ $locations = [
         "contact_number",
         "num_adults",
         "num_children",
+        "child_ages",
         "eco_category",
         "payment_option",
         "agree_privacy",
@@ -916,6 +915,7 @@ $locations = [
         contact_number: contactNumber,
         num_adults: numAdults,
         num_children: numChildren,
+        child_ages: document.getElementById('tourChildAgeRows'),
         eco_category: ecoCategory,
         payment_option: paymentOption,
         agree_privacy: agreePrivacy,
@@ -1361,7 +1361,31 @@ $locations = [
       const getSelectedLocations = () => locationInputs.filter((item) => item.checked).map((item) => item.value);
       const getAdultCount = () => Math.max(0, Number(numAdults.value || 0));
       const getChildCount = () => Math.max(0, Number(numChildren.value || 0));
-      const getFreeYoungChildCount = () => prefillChildAges
+      const tourChildAgeRows = document.getElementById('tourChildAgeRows');
+      const getChildAges = () => [...tourChildAgeRows.querySelectorAll('select')]
+        .map(select => select.value).filter(value => value !== '').map(Number);
+      const renderTourChildAges = (savedAges = null) => {
+        const previous = savedAges ?? [...tourChildAgeRows.querySelectorAll('select')].map(select => select.value);
+        const count = Math.min(100, Math.max(0, Math.floor(getChildCount())));
+        tourChildAgeRows.replaceChildren();
+        tourChildAgeRows.hidden = count === 0;
+        for (let index = 0; index < count; index++) {
+          const label = document.createElement('label');
+          label.textContent = `Child ${index + 1} age`;
+          const select = document.createElement('select');
+          select.name = 'child_ages[]';
+          select.required = true;
+          select.setAttribute('aria-label', `Age of child ${index + 1}`);
+          select.add(new Option('Select age', ''));
+          for (let age = 0; age <= 17; age++) select.add(new Option(`${age} year${age === 1 ? '' : 's'} old`, String(age)));
+          const saved = previous[index];
+          select.value = saved !== undefined && saved !== null ? String(saved) : '';
+          select.addEventListener('change', () => { updatePreview(); revalidateFieldErrors(['child_ages']); });
+          label.appendChild(select);
+          tourChildAgeRows.appendChild(label);
+        }
+      };
+      const getFreeYoungChildCount = () => getChildAges()
         .slice(0, getChildCount())
         .filter(age => Number(age) >= 0 && Number(age) <= 7).length;
       const getTotalGuests = () => getAdultCount() + getChildCount();
@@ -1792,7 +1816,83 @@ preferredSelect.addEventListener("change", function () {
         };
       };
 
+      const additionalBoatPreferences = document.getElementById('additionalBoatPreferences');
+      let acknowledgedBoatCount = 1;
+      let boatCapacityTimer;
+      let capacityAlertOpen = false;
+      const additionalBoatSelections = () => [...additionalBoatPreferences.querySelectorAll('select')];
+      const selectedAdditionalBoats = () => additionalBoatSelections().map(select => Number(select.value)).filter(id => id > 0);
+      const renderAdditionalBoatPreferences = (count) => {
+        const previous = additionalBoatSelections().map(select => select.value);
+        additionalBoatPreferences.replaceChildren();
+        additionalBoatPreferences.hidden = count <= 1 || bookingType.value !== 'boat';
+        if (additionalBoatPreferences.hidden) return;
+        const heading = document.createElement('h3');
+        heading.textContent = 'Additional preferred boats';
+        additionalBoatPreferences.appendChild(heading);
+        const used = new Set([Number(selectedBoatId.value)]);
+        for (let index = 0; index < count - 1; index++) {
+          const label = document.createElement('label');
+          label.textContent = `Preferred boat ${index + 2}`;
+          const select = document.createElement('select');
+          select.name = 'additional_boat_ids[]';
+          select.add(new Option('No specific preference', ''));
+          boats.forEach(boat => select.add(new Option(boat.name, String(boat.id))));
+          if (previous[index] && !used.has(Number(previous[index]))) select.value = previous[index];
+          if (select.value) used.add(Number(select.value));
+          label.appendChild(select);
+          additionalBoatPreferences.appendChild(label);
+        }
+        const note = document.createElement('p');
+        note.className = 'helper-text';
+        note.textContent = 'Additional boats are preferences, subject to availability and confirmation by the office.';
+        additionalBoatPreferences.appendChild(note);
+        syncAdditionalBoatOptions();
+      };
+      const syncAdditionalBoatOptions = () => {
+        const selected = new Set([Number(selectedBoatId.value), ...selectedAdditionalBoats()]);
+        additionalBoatSelections().forEach(select => {
+          [...select.options].forEach(option => {
+            option.disabled = Boolean(option.value && option.value !== select.value && selected.has(Number(option.value)));
+          });
+        });
+      };
+      const syncBoatPassengers = () => {
+        clearTimeout(boatCapacityTimer);
+        document.getElementById('boatPassengerHint').hidden = bookingType.value !== 'boat';
+        if (bookingType.value !== 'boat') {
+          acknowledgedBoatCount = 1;
+          renderAdditionalBoatPreferences(1);
+          return;
+        }
+        const count = Math.max(1, Math.ceil(getTotalGuests() / MAX_BOAT_PAX));
+        if (count <= acknowledgedBoatCount) {
+          acknowledgedBoatCount = count;
+          additionalBoatPreferences.hidden = count <= 1;
+          if (additionalBoatSelections().length !== count - 1 || selectedAdditionalBoats().includes(Number(selectedBoatId.value))) renderAdditionalBoatPreferences(count);
+          syncAdditionalBoatOptions();
+          return;
+        }
+        if (capacityAlertOpen) return;
+        additionalBoatPreferences.hidden = true;
+        boatCapacityTimer = setTimeout(async () => {
+          capacityAlertOpen = true;
+          try {
+            await Swal.fire({ icon: 'info', title: 'Another boat is required',
+              text: `1 boat accommodates a maximum of ${MAX_BOAT_PAX} passengers. Your ${getTotalGuests()} passengers need ${count} boats. Choose another preferred boat after this message.`,
+              confirmButtonText: 'Done', confirmButtonColor: '#2b7a66', allowOutsideClick: false, allowEscapeKey: false });
+            acknowledgedBoatCount = count;
+            renderAdditionalBoatPreferences(count);
+          } finally {
+            capacityAlertOpen = false;
+            syncBoatPassengers();
+          }
+        }, 350);
+      };
+      additionalBoatPreferences.addEventListener('change', () => { syncAdditionalBoatOptions(); updatePreview(); });
+
       const updatePreview = () => {
+        syncBoatPassengers();
         updateAddOnUI();
         const pricing = calculatePricing();
         const preferred = preferredSelect.value || "-";
@@ -1801,7 +1901,8 @@ preferredSelect.addEventListener("change", function () {
 
         previewType.textContent = getTypeLabel(pricing.type);
         previewPackage.textContent = pricing.packageTitle || "-";
-        previewPreferred.textContent = preferred;
+        const extraNames = selectedAdditionalBoats().map(id => boats.find(boat => Number(boat.id) === id)?.name).filter(Boolean);
+        previewPreferred.textContent = [preferred, ...extraNames].join(', ');
         previewAddon.textContent = pricing.addOnType ? pricing.addOnLabel : "-";
         previewTourType.textContent = tourType.value ? (tourType.value === "same-day" ? "Same Day" : "Overnight") : "-";
         previewDuration.textContent = tourDuration.value.trim() || "-";
@@ -1932,7 +2033,9 @@ preferredSelect.addEventListener("change", function () {
     ? validator(payload)
     : { success: true, errors: {} };
 
-  return result.success ? {} : (result.errors || {});
+  const errors = result.success ? {} : (result.errors || {});
+  if (getChildCount() > 0 && getChildAges().length !== getChildCount()) errors.child_ages = 'Please select an age for every child.';
+  return errors;
 };
       const renderValidationErrors = (errors) => {
         clearAllErrors();
@@ -1947,6 +2050,10 @@ preferredSelect.addEventListener("change", function () {
         const targetKey = fieldOrder.find((fieldKey) => !!errors[fieldKey]);
         if (!targetKey) return;
         const target = fieldTargets[targetKey];
+        if (targetKey === 'child_ages') {
+          const missingAge = [...tourChildAgeRows.querySelectorAll('select')].find(select => select.value === '');
+          if (missingAge) { missingAge.focus(); return; }
+        }
         if (target instanceof HTMLElement) {
           target.focus({ preventScroll: false });
         }
@@ -2070,8 +2177,8 @@ preferredSelect.addEventListener("change", function () {
       const nextStepButton = document.getElementById("tourNextStep");
       const stepStatus = document.getElementById("tourStepStatus");
       const stepFieldKeys = {
-        1: ["booking_type", "package_name", "selected_locations", "tour_type", "jump_off_port", "booking_date", "booking_end_date", "tour_duration"],
-        2: ["contact_number", "num_adults", "num_children", "eco_category", "payment_option"],
+        1: ["booking_type", "package_name", "selected_locations", "tour_type", "jump_off_port", "booking_date", "booking_end_date", "tour_duration", "num_adults", "num_children", "child_ages"],
+        2: ["contact_number", "eco_category", "payment_option"],
         3: ["agree_privacy", "agree_other_fees"]
       };
       let currentStep = 1;
@@ -2122,6 +2229,10 @@ preferredSelect.addEventListener("change", function () {
       };
 
       const validateCurrentStep = () => {
+        if (currentStep === 1 && bookingType.value === 'boat' && Math.ceil(getTotalGuests() / MAX_BOAT_PAX) > acknowledgedBoatCount) {
+          syncBoatPassengers();
+          return false;
+        }
         const allErrors = validateForm();
         const allowed = new Set(stepFieldKeys[currentStep] || []);
         const stepErrors = Object.fromEntries(Object.entries(allErrors).filter(([key]) => allowed.has(key)));
@@ -2180,11 +2291,12 @@ preferredSelect.addEventListener("change", function () {
 
           // ADD THESE
           boat_id: selectedBoatId.value || null,
+          additionalBoatIds: bookingType.value === 'boat' ? selectedAdditionalBoats() : [],
           guide_id: selectedGuideId.value || null,
 
           addOnService: pricing.addOnType,
           ecoCategory: ecoCategory.value,
-          childAges: BOOKING_DATA.prefillChildAges || [],
+          childAges: getChildAges(),
           paymentOption: pricing.selectedPaymentOption,
 
           paymentAmount: pricing.payableNow,
@@ -2364,12 +2476,14 @@ preferredSelect.addEventListener("change", function () {
         guestAvailabilityTimer = setTimeout(refreshResourceAvailability, 250);
       });
       numChildren.addEventListener("input", () => {
+        renderTourChildAges();
         updatePreview();
-        revalidateFieldErrors(["num_adults", "num_children"]);
+        revalidateFieldErrors(["num_adults", "num_children", "child_ages"]);
         clearTimeout(guestAvailabilityTimer);
         guestAvailabilityTimer = setTimeout(refreshResourceAvailability, 250);
       });
       agreePrivacy.addEventListener("change", () => revalidateFieldErrors(["agree_privacy"]));
+      numChildren.addEventListener('change', () => { renderTourChildAges(); updatePreview(); revalidateFieldErrors(['child_ages']); });
       agreeOtherFees.addEventListener("change", () => revalidateFieldErrors(["agree_other_fees"]));
 
       locationInputs.forEach((input) => {
@@ -2392,6 +2506,11 @@ preferredSelect.addEventListener("change", function () {
       bookingForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         if (isOpeningPayment) return;
+        if (bookingType.value === 'boat' && Math.ceil(getTotalGuests() / MAX_BOAT_PAX) > acknowledgedBoatCount) {
+          showBookingStep(1);
+          syncBoatPassengers();
+          return;
+        }
         const errors = validateForm();
         if (Object.keys(errors).length > 0) {
           const firstErrorKey = fieldOrder.find((key) => errors[key]);
@@ -2405,7 +2524,7 @@ preferredSelect.addEventListener("change", function () {
 
         clearAllErrors();
         const pricing = calculatePricing();
-        if (pricing.usesBoat && pricing.totalGuests > MAX_BOAT_PAX) {
+        if (pricing.usesBoat && pricing.totalGuests > MAX_BOAT_PAX && bookingType.value !== 'boat') {
           const proceed = await Swal.fire({
             icon: "info",
             title: "Multiple boats required",
@@ -2423,11 +2542,13 @@ preferredSelect.addEventListener("change", function () {
           const result = await submitBooking();
           if (result?.success && result?.checkout_url) {
             window.ItourPayMongoNavigation?.remember(result.return_token);
+            leavingForPayment = true;
             window.location.assign(result.checkout_url);
             return;
           }
           throw new Error(result?.message || "The payment page could not be opened.");
         } catch (err) {
+          leavingForPayment = false;
           if (!err?.rateLimited) setOpeningPaymentState(false);
           if (err?.rateLimited) return;
           Swal.fire({
@@ -2458,8 +2579,16 @@ preferredSelect.addEventListener("change", function () {
 
       updateSectionsByType();
       applySearchPrefill();
+      renderTourChildAges(prefillChildAges);
       refreshResourceAvailability();
       updatePreview();
+      const bookingSnapshot = () => new URLSearchParams(new FormData(bookingForm)).toString();
+      const initialBookingSnapshot = bookingSnapshot();
+      window.addEventListener('beforeunload', event => {
+        if (leavingForPayment || bookingSnapshot() === initialBookingSnapshot) return;
+        event.preventDefault();
+        event.returnValue = '';
+      });
     })();
   </script>
 <?php require __DIR__ . '/../includes/components/legal-policy-modal.php'; ?>

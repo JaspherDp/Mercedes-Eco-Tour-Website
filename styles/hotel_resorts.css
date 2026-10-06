@@ -3977,6 +3977,24 @@ body.hotel-map-open {
   top: 12px;
 }
 
+/* Keep the desktop search fields within the same edges as the results. */
+@media (min-width: 769px) {
+  #searchSection.search-fixed {
+    padding-inline: 0;
+  }
+
+  #searchSection.search-fixed .search-shell {
+    width: min(1440px, calc(100% - 48px));
+    margin-inline: auto;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1150px) {
+  #searchSection.search-fixed .search-shell {
+    width: min(1040px, calc(100% - 30px));
+  }
+}
+
 .hotel-main.search-active {
   width: min(1440px, calc(100% - 48px));
   min-height: calc(100vh + 420px);
@@ -6970,5 +6988,57 @@ body.hotel-map-open {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+}
+
+/* Two amenity rows keep featured stay cards aligned at every card width. */
+.hotel-featured-amenities {
+  height: 48px;
+  min-height: 48px;
+  flex: 0 0 48px;
+  gap: 4px;
+  align-content: flex-start;
+}
+
+.hotel-featured-amenities > .hotel-featured-amenity,
+.hotel-featured-amenities > .hotel-featured-more {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 0 6px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+  line-height: 22px;
+}
+
+.hotel-featured-amenities > .hotel-featured-amenity {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hotel-featured-amenities > .hotel-featured-more {
+  border: 0;
+  border-radius: 999px;
+  background: #eaf5ef;
+  color: #155e49;
+  font-family: inherit;
+}
+
+.hotel-featured-amenities > [hidden] {
+  display: none !important;
+}
+
+.hotel-featured-more:focus-visible {
+  outline: 2px solid #155e49;
+  outline-offset: 2px;
+}
+
+@media (hover: none) {
+  .hotel-featured-more:hover .hotel-featured-tooltip {
+    visibility: hidden;
+    opacity: 0;
   }
 }

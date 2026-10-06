@@ -169,8 +169,7 @@ function refundPageRedirect(string $type, string $title, string $message, int $r
 
 function refundTrackingUrl(): string
 {
-    $baseUrl = ItourTryCanonicalAppUrl('refund tracking email link');
-    return $baseUrl === '' ? '' : $baseUrl . '/php/profile.php?section=cancel-bookings';
+    return itourEmailProfileUrl(['section' => 'cancel-bookings']);
 }
 
 function sendRefundProcessingEmail(array $refund): bool

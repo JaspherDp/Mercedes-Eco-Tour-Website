@@ -21,12 +21,12 @@
         container.innerHTML = html;
         const loadAuthScript = () => {
           const script = document.createElement("script");
-          script.src = "logsign.js?v=17";
+          script.src = "logsign.js?v=18";
           script.onload = () => {
           if (typeof window.initLogSignEvents === "function") window.initLogSignEvents();
           const params = new URLSearchParams(window.location.search);
           if (params.get("open_login") === "1") {
-            document.getElementById("openModalBtn")?.click();
+            window.AuthModalStore?.open({ resume: true });
             params.delete("open_login");
             const query = params.toString();
             window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
