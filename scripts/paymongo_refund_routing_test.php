@@ -63,7 +63,7 @@ $end = strpos($page, "        if ((\$_POST['action'] ?? '') === 'process_manual_
 check($start !== false && $end !== false, 'Send-link handler missing.');
 $_POST['action'] = 'send_refund_link';
 $requestId = 1;
-$request = ['email' => 'guest@example.test', 'booking_reference' => 'TEST-1'];
+$request = ['email' => 'guest@example.test', 'booking_reference' => 'TEST-1', 'refundable_amount' => 5];
 $snapshot = ['data' => ['id' => 'ref_existing', 'attributes' => ['payment_id' => 'pay_existing', 'amount' => 100, 'currency' => 'PHP', 'status' => 'processing', 'transfer_link' => 'https://example.test/claim']]];
 $pdo = new class($snapshot) {
     public array $queries = [];
@@ -75,7 +75,7 @@ $pdo = new class($snapshot) {
             public function __construct(private array $snapshot) {}
             public function execute(array $values): void {}
             public function fetchAll(int $mode): array {
-                $row = ['booking_refund_id' => 3, 'provider_refund_id' => 'ref_existing', 'provider_payment_id' => 'pay_existing', 'amount_minor' => 100, 'provider_response' => json_encode($this->snapshot)];
+                $row = ['booking_refund_id' => 3, 'provider' => 'paymongo', 'status' => 'processing', 'provider_refund_id' => 'ref_existing', 'provider_payment_id' => 'pay_existing', 'amount_minor' => 100, 'provider_response' => json_encode($this->snapshot)];
                 $tampered = $row;
                 $tampered['provider_payment_id'] = 'pay_other';
                 return [$row, $tampered];

@@ -2057,6 +2057,24 @@ body {
 .refund-attempt-detail:first-of-type{border-top:0}
 
 /* Transaction statuses use the same uppercase treatment as booking statuses. */
+.refund-progress{min-width:235px;max-width:280px;display:grid;gap:6px;padding:10px 12px;background:#f6faf8;border:1px solid #dce8e2;border-radius:9px}
+.refund-progress-total,.refund-progress-line{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.refund-progress-total{padding-bottom:7px;margin-bottom:1px;border-bottom:1px solid #dce8e2}
+.refund-progress-total span{color:#526b61;font-size:10px;font-weight:750}
+.refund-progress-total strong{color:#155e48;font-size:15px;white-space:nowrap}
+.refund-progress-line{font-size:10px;line-height:1.4;color:#50665d}
+.refund-progress-line b{font-size:11px;white-space:nowrap}
+.refund-progress-line.returned b{color:#176149}
+.refund-progress-line.processing b{color:#94600c}
+.refund-progress-line.remaining b{color:#a65320}
+.refund-progress small{color:#708279;font-size:9px;line-height:1.4;white-space:normal}
+
+.refund-email-swal-popup{width:min(510px,calc(100vw - 32px));padding:26px 28px 24px;border-radius:6px}
+.refund-email-swal-title{padding:0;color:#3f4543;font-size:clamp(25px,3vw,31px);font-weight:700;line-height:1.2}
+.refund-email-swal-content{margin:14px 0 4px;color:#535b58;font-size:17px;line-height:1.45}
+.refund-email-swal-popup .swal2-actions{min-height:58px;margin:18px 0 0}
+.swal2-loader.refund-email-swal-loader{width:48px;height:48px;margin:0;border-width:4px;border-color:#2778c4 transparent #2778c4 transparent!important}
+
 /* Mounted on body while open so table scrolling cannot clip refund actions. */
 body > .refund-action-popover{position:fixed;z-index:1100;right:auto;bottom:auto;max-width:calc(100vw - 16px);overflow-y:auto;box-sizing:border-box;font-family:inherit}
 

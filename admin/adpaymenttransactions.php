@@ -330,21 +330,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
         }
         if (($_POST['action'] ?? '') === 'send_refund_link') {
             // Send saved claim links only; this action never creates a refund.
-            $lookup = $pdo->prepare("SELECT * FROM booking_refunds WHERE cancellation_request_id=? AND provider='paymongo' AND status IN ('pending','processing') AND provider_refund_id IS NOT NULL");
+            $lookup = $pdo->prepare("SELECT * FROM booking_refunds WHERE cancellation_request_id=? ORDER BY booking_refund_id");
             $lookup->execute([$requestId]);
-            $claims = [];
-            $ids = [];
-            foreach ($lookup->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                $snapshot = json_decode((string)$row['provider_response'], true);
-                $parsedClaim = bookingRefundParsePayMongoResponse(is_array($snapshot) ? $snapshot : []);
-                if ($parsedClaim['transfer_link'] === ''
-                    || !hash_equals((string)$row['provider_refund_id'], $parsedClaim['id'])
-                    || !hash_equals((string)$row['provider_payment_id'], $parsedClaim['payment_id'])
-                    || $parsedClaim['amount_minor'] !== (int)$row['amount_minor']
-                    || $parsedClaim['currency'] !== 'PHP') continue;
-                $claims[] = ['provider_refund_id' => $parsedClaim['id'], 'amount_minor' => (int)$row['amount_minor'], 'claim_url' => $parsedClaim['transfer_link']];
-                $ids[] = (int)$row['booking_refund_id'];
-            }
+            $emailHistory = $lookup->fetchAll(PDO::FETCH_ASSOC);
+            $claims = bookingRefundPendingClaimBatch($emailHistory);
+            $ids = array_column($claims, 'id');
             if ($claims === []) throw new RuntimeException('No saved claim link is available for a pending refund. Refresh its provider status first.');
             $sent = sendRefundProcessingEmail(array_merge($request, [
                 'amount' => array_sum(array_column($claims, 'amount_minor')) / 100,
@@ -353,6 +343,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
                 'timeline' => 'Waiting for your claim',
                 'timeline_detail' => 'Open the secure PayMongo link to select your receiving bank or e-wallet. The link expires three days after it was issued.',
                 'claim_actions' => bookingRefundClaimActions($claims),
+                'refund_progress' => bookingRefundProgressAmounts($emailHistory, (int)round((float)$request['refundable_amount'] * 100)),
             ]));
             $marks = implode(',', array_fill(0, count($ids), '?'));
             $pdo->prepare("UPDATE booking_refunds SET email_status=?,email_sent_at=CASE WHEN ?=1 THEN NOW() ELSE NULL END,email_error=? WHERE booking_refund_id IN ($marks)")
@@ -668,19 +659,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
 
         $currentStatus = bookingRefundSyncCancellationStatus($pdo, $requestId);
         $emailAmount = array_sum(array_column($submitted, 'amount_minor')) / 100;
+        // Include earlier unclaimed refunds in the same email as this batch.
+        // For example, an existing PHP 1 claim plus PHP 4 submitted now gives
+        // one email containing all PHP 5 of currently available claim links.
+        $pendingLookup = $pdo->prepare("SELECT * FROM booking_refunds WHERE cancellation_request_id=? ORDER BY booking_refund_id");
+        $pendingLookup->execute([$requestId]);
+        $emailHistory = $pendingLookup->fetchAll(PDO::FETCH_ASSOC);
+        $emailRefunds = array_column($submitted, null, 'id');
+        foreach (bookingRefundPendingClaimBatch($emailHistory) as $claim) {
+            $emailRefunds[$claim['id']] = $claim;
+        }
+        $emailRefunds = array_values($emailRefunds);
+        $emailTotal = array_sum(array_column($emailRefunds, 'amount_minor')) / 100;
         $method = (string)$submitted[0]['method'];
         $timeline = bookingRefundTimeline($method, (int)round($emailAmount * 100));
         $emailSent = sendRefundProcessingEmail(array_merge($request, [
-            'amount' => $emailAmount,
+            'amount' => $emailTotal,
             'method' => bookingRefundMethodLabel($method),
             'destination' => (string)($submitted[0]['destination'] ?? bookingRefundMethodLabel($method) . ' account used for payment'),
-            'provider_refund_id' => implode(', ', array_column($submitted, 'provider_refund_id')),
+            'provider_refund_id' => implode(', ', array_column($emailRefunds, 'provider_refund_id')),
             'timeline' => $timeline['short'],
             'timeline_detail' => $timeline['detail'],
             'claim_url' => (string)($submitted[0]['claim_url'] ?? ''),
-            'claim_actions' => bookingRefundClaimActions($submitted),
+            'claim_actions' => bookingRefundClaimActions($emailRefunds),
+            'refund_progress' => bookingRefundProgressAmounts($emailHistory, $targetMinor),
         ]));
-        $ids = array_column($submitted, 'id');
+        $ids = array_column($emailRefunds, 'id');
         $marks = implode(',', array_fill(0, count($ids), '?'));
         $emailUpdate = $pdo->prepare("UPDATE booking_refunds SET email_status=?,email_sent_at=CASE WHEN ?=1 THEN NOW() ELSE NULL END,email_error=? WHERE booking_refund_id IN ($marks)");
         $emailUpdate->execute(array_merge([$emailSent ? 'sent' : 'failed', $emailSent ? 1 : 0, $emailSent ? null : 'SMTP delivery failed.'], $ids));
@@ -691,7 +695,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
             $message = paymentMoney($emailAmount) . ' was preserved as submitted, but payment transaction ' . $failedTransactions . ' failed. The booking is partially refunded and requires attention. Successful transactions will not be resubmitted.';
             refundPageRedirect('error', 'Partially Refunded — Requires Attention', $message, $requestId);
         }
-        $message = paymentMoney($emailAmount) . ' was submitted to ' . $routeDescription . '. ' . ($emailSent ? 'The tourist was emailed the provider timeline.' : 'The refund was accepted, but the confirmation email could not be delivered.');
+        $message = paymentMoney($emailAmount) . ' was submitted to ' . $routeDescription . '. ' . ($emailSent ? 'One email was sent with all available refund claim links and the provider timeline.' : 'The refund was accepted, but the confirmation email could not be delivered.');
         refundPageRedirect('success', $currentStatus === 'completed' ? 'Refund Completed' : 'Refund Processing', $message, $requestId);
     } catch (Throwable $error) {
         if ($pdo->inTransaction()) $pdo->rollBack();
@@ -1021,6 +1025,8 @@ $refundRequestSql = "
 ";
 $refundRequests = $pdo->query($refundRequestSql)->fetchAll(PDO::FETCH_ASSOC);
 $refundRows = [];
+$refundUnsubmittedMinor = 0;
+$refundNeedsSubmissionCount = 0;
 $refundStats = ['all' => 0, 'ready' => 0, 'processing' => 0, 'partial' => 0, 'succeeded' => 0, 'failed' => 0, 'eligible_minor' => 0, 'refunded_minor' => 0, 'pending_minor' => 0];
 $sourceLookup = $pdo->prepare("
     SELECT pt.*,
@@ -1035,6 +1041,9 @@ foreach ($refundRequests as $request) {
     $targetMinor = (int)round((float)$request['refundable_amount'] * 100);
     $refundedMinor = (int)$request['refunded_minor'];
     $activeMinor = (int)$request['active_refund_minor'];
+    $unsubmittedMinor = max(0, $targetMinor - $refundedMinor - $activeMinor);
+    $refundUnsubmittedMinor += $unsubmittedMinor;
+    if ($unsubmittedMinor > 0) $refundNeedsSubmissionCount++;
     $state = $refundedMinor >= $targetMinor ? 'succeeded'
         : ($activeMinor > 0 ? 'processing'
             : ($refundedMinor > 0 ? 'partial' : ((int)$request['failed_refund_count'] > 0 ? 'failed' : 'ready')));
@@ -1086,6 +1095,8 @@ foreach ($refundRequests as $request) {
     $request['refund_state_label'] = bookingRefundStatusLabel($state);
     $request['target_minor'] = $targetMinor;
     $request['remaining_minor'] = max(0, $targetMinor - $refundedMinor - $activeMinor);
+    $request['active_minor'] = $activeMinor;
+    $request['claim_count'] = count(bookingRefundPendingClaimBatch($history));
     $request['method'] = $method;
     $request['method_label'] = bookingRefundMethodLabel($method);
     $request['provider'] = (string)($primarySource['provider'] ?? '');
@@ -1255,7 +1266,7 @@ $exportFilterSummary = $exportFilterLabels ? implode(' · ', $exportFilterLabels
   <title>Payments & Transactions | iTour Mercedes Admin</title>
   <link rel="icon" type="image/png" href="img/newlogo.png">
   <link rel="stylesheet" href="styles/admin_panel_theme.css">
-  <link rel="stylesheet" href="styles/adpaymenttransactions.css?v=38">
+  <link rel="stylesheet" href="styles/adpaymenttransactions.css?v=40">
   <link rel="stylesheet" href="styles/admin_receipt.css?v=2">
 <link rel="stylesheet" href="styles/payout_accounting.css?v=1"></head>
 <body data-ledger-view="<?= htmlspecialchars($activeLedgerView) ?>">
@@ -1493,14 +1504,14 @@ $exportFilterSummary = $exportFilterLabels ? implode(' · ', $exportFilterLabels
           <section class="refund-dashboard" aria-label="Refund processing queue">
             <div class="refund-summary-grid">
               <article><span>Eligible requests</span><strong><?= number_format($refundStats['all']) ?></strong><small><?= paymentMoney($refundStats['eligible_minor'] / 100) ?> approved</small></article>
-              <article><span>Ready to process</span><strong><?= number_format($refundStats['ready']) ?></strong><small>Waiting for administrator action</small></article>
-              <article><span>Provider processing</span><strong><?= number_format($refundStats['processing']) ?></strong><small>Returned to original channels</small></article>
+              <article><span>Not yet submitted</span><strong><?= paymentMoney($refundUnsubmittedMinor / 100) ?></strong><small><?= number_format($refundNeedsSubmissionCount) ?> booking<?= $refundNeedsSubmissionCount === 1 ? '' : 's' ?> with a remaining amount</small></article>
+              <article><span>Provider processing</span><strong><?= number_format($refundStats['processing']) ?></strong><small>Awaiting claim or provider completion</small></article>
               <article><span>Refunded</span><strong><?= number_format($refundStats['succeeded']) ?></strong><small>Provider-confirmed refunds</small></article>
               <article class="<?= $refundStats['failed'] > 0 ? 'attention' : '' ?>"><span>Needs attention</span><strong><?= number_format($refundStats['failed']) ?></strong><small>Failed attempts requiring review</small></article>
             </div>
             <div class="refund-policy-note">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 5 6v5c0 4.6 2.8 8 7 10 4.2-2 7-5.4 7-10V6l-7-3Z"/><path d="m9 12 2 2 4-4"/></svg>
-              <div><strong>Refund routing control</strong><span>Eligible full or partial amounts use PayMongo's Refund API when the original payment supports it. Manual transfer remains available only when the approved partial amount cannot be routed automatically.</span></div>
+              <div><strong>Refund routing control</strong><span>Eligible full or partial amounts use PayMongo's Refund API when the original payment supports it. Manual transfer remains available only when the approved partial amount cannot be routed automatically.<br>Eligible total is the approved amount, not money already sent. Process the remaining amount to submit outstanding refunds and email all available claim links together.</span></div>
             </div>
             <form method="get" class="refund-filters <?= ($refundSearch !== '' || $refundStateFilter !== 'all') ? 'has-clear' : '' ?>">
               <input type="hidden" name="view" value="refunds">
@@ -1515,7 +1526,7 @@ $exportFilterSummary = $exportFilterLabels ? implode(' · ', $exportFilterLabels
             </form>
             <div class="refund-table-wrap">
               <table class="refund-table">
-                <thead><tr><th>Tourist & booking</th><th>Booking type</th><th>Refund destination</th><th>Eligible refund</th><th>Provider status</th><th>Expected posting</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Tourist & booking</th><th>Booking type</th><th>Refund destination</th><th>Refund progress</th><th>Provider status</th><th>Expected posting</th><th>Actions</th></tr></thead>
                 <tbody>
                 <?php if (!$refundRows): ?>
                   <tr><td colspan="7"><div class="payment-empty"><span>✓</span><strong>No refunds match this view</strong><p>Approved, refund-eligible cancellations will appear here automatically.</p></div></td></tr>
@@ -1561,6 +1572,8 @@ $exportFilterSummary = $exportFilterLabels ? implode(' · ', $exportFilterLabels
                     'eligible_amount' => paymentMoney((float)$refund['refundable_amount']),
                     'non_refundable' => paymentMoney((float)$refund['non_refundable_amount']),
                     'refunded_amount' => paymentMoney(((int)$refund['refunded_minor']) / 100),
+                    'processing_amount' => paymentMoney(((int)$refund['active_minor']) / 100),
+                    'unsubmitted_amount' => paymentMoney(((int)$refund['remaining_minor']) / 100),
                     'status' => (string)$refund['refund_state_label'],
                     'status_class' => (string)$refund['refund_state'],
                     'method' => (string)$refund['method_label'],
@@ -1589,7 +1602,13 @@ $exportFilterSummary = $exportFilterLabels ? implode(' · ', $exportFilterLabels
                     <td><div class="refund-guest"><span class="refund-avatar"><?= htmlspecialchars($initial) ?><img src="adbookings.php?action=fetchTouristProfileImage&amp;id=<?= (int)$refund['booking_id'] ?>" alt="" onerror="this.remove()"></span><div><strong><?= htmlspecialchars((string)$refund['full_name'] ?: 'Guest') ?></strong><small><?= htmlspecialchars((string)$refund['booking_reference']) ?> · <?= htmlspecialchars(paymentLabel((string)$refund['booking_type'])) ?></small></div></div></td>
                     <td><div class="refund-cell refund-booking-type"><span class="refund-type-pill"><?= htmlspecialchars(paymentLabel((string)$refund['booking_type'])) ?></span><small>Service date: <?= date('M j, Y', strtotime((string)$refund['service_date'])) ?></small></div></td>
                     <td><div class="refund-cell refund-route"><strong><?= htmlspecialchars(!empty($refund['manual_required']) ? ((string)($refund['refund_destination_institution'] ?? '') ?: 'Refund account required') : (string)$refund['method_label']) ?></strong><small><?= !empty($refund['manual_required']) ? (!empty($refund['refund_destination_last4']) ? 'Manual transfer to account ending ' . htmlspecialchars((string)$refund['refund_destination_last4']) : 'Tourist must add refund account') : ($refund['automatic_available'] ? 'Returns through PayMongo API' : 'API refund unavailable') ?></small></div></td>
-                    <td><div class="refund-cell refund-amount"><strong><?= paymentMoney((float)$refund['refundable_amount']) ?></strong><small><?= htmlspecialchars(bookingCancellationPolicyLabel((string)$refund['refund_policy'])) ?></small></div></td>
+                    <td><div class="refund-progress">
+                      <div class="refund-progress-total"><span>Eligible total</span><strong><?= paymentMoney((float)$refund['refundable_amount']) ?></strong></div>
+                      <div class="refund-progress-line returned"><span>Received by tourist</span><b><?= paymentMoney(((int)$refund['refunded_minor']) / 100) ?></b></div>
+                      <div class="refund-progress-line processing"><span>Processing / awaiting claim</span><b><?= paymentMoney(((int)$refund['active_minor']) / 100) ?></b></div>
+                      <div class="refund-progress-line remaining"><span>Not yet submitted</span><b><?= paymentMoney(((int)$refund['remaining_minor']) / 100) ?></b></div>
+                      <small><?= (int)$refund['claim_count'] ?> pending claim link<?= (int)$refund['claim_count'] === 1 ? '' : 's' ?> &middot; <?= htmlspecialchars(bookingCancellationPolicyLabel((string)$refund['refund_policy'])) ?></small>
+                    </div></td>
                     <td><span class="refund-state <?= htmlspecialchars((string)$refund['refund_state']) ?>"><?= htmlspecialchars((string)$refund['refund_state_label']) ?></span><?php if ($refund['provider_refund_id'] || $refund['provider_transfer_id']): ?><small class="refund-provider-ref"><?= htmlspecialchars((string)($refund['provider_refund_id'] ?: $refund['provider_transfer_id'])) ?></small><?php endif; ?></td>
                     <td><div class="refund-cell"><strong><?= htmlspecialchars((string)$refund['timeline']['short']) ?></strong><small><?= $refund['automatic_available'] ? 'After provider acceptance' : 'Review refund requirements' ?></small></div></td>
                     <td class="refund-actions">
@@ -1603,9 +1622,14 @@ $exportFilterSummary = $exportFilterLabels ? implode(' · ', $exportFilterLabels
                           <?php else: ?><span class="refund-action-disabled" title="The payment does not meet PayMongo API refund requirements.">API refund unavailable</span><?php endif; ?>
                         <?php elseif ($refund['refund_state'] === 'processing'): ?>
                           <form method="post" data-refresh-refund><input type="hidden" name="action" value="refresh_refund"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>"><input type="hidden" name="cancellation_request_id" value="<?= $requestId ?>"><button type="submit"><svg class="refund-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.8-4L3 10"/><path d="M3 5v5h5M4 13a8 8 0 0 0 14.8 4L21 14"/><path d="M21 19v-5h-5"/></svg>Refresh provider status</button></form>
+                          <?php if ($refund['automatic_available'] && (int)$refund['remaining_minor'] >= 100): ?>
+                            <form method="post" data-process-refund data-refund-remaining="<?= (int)$refund['remaining_minor'] ?>"><input type="hidden" name="action" value="process_refund"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>"><input type="hidden" name="cancellation_request_id" value="<?= $requestId ?>"><button type="submit">Process remaining <?= paymentMoney(((int)$refund['remaining_minor']) / 100) ?></button></form>
+                          <?php elseif ((int)$refund['remaining_minor'] >= 100): ?>
+                            <span class="refund-action-disabled" title="Eligible PayMongo payments do not cover the remaining amount. Review the booking payment records.">Remaining refund needs review</span>
+                          <?php endif; ?>
                         <?php else: ?><span class="refund-action-success">✓ Provider confirmed</span><?php endif; ?>
-                        <?php if (in_array($refund['refund_state'], ['processing', 'partial'], true) && !empty($refund['provider_refund_id'])): ?>
-                          <form method="post"><input type="hidden" name="action" value="send_refund_link"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>"><input type="hidden" name="cancellation_request_id" value="<?= $requestId ?>"><button type="submit">Send refund link</button></form>
+                        <?php if (in_array($refund['refund_state'], ['processing', 'partial'], true) && (int)$refund['claim_count'] > 0): ?>
+                          <form method="post" data-send-refund-link><input type="hidden" name="action" value="send_refund_link"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>"><input type="hidden" name="cancellation_request_id" value="<?= $requestId ?>"><button type="submit">Email all pending claim links</button></form>
                         <?php endif; ?>
                       </div>
                     </td>
@@ -1814,6 +1838,6 @@ window.refundProcessingConfig = <?= json_encode([
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
-<script src="js/adpaymenttransactions.js?v=28"></script>
+<script src="js/adpaymenttransactions.js?v=31"></script>
 <?= PayoutFeeSync::script() ?></body>
 </html>

@@ -336,6 +336,44 @@ function bookingRefundClaimActions(array $submitted): array
     return $actions;
 }
 
+/** Amounts in centavos; failed attempts never count toward submitted funds. */
+function bookingRefundProgressAmounts(array $rows, int $eligibleMinor): array
+{
+    $returned = $processing = 0;
+    foreach ($rows as $row) {
+        $amount = max(0, (int)($row['amount_minor'] ?? 0));
+        if (($row['status'] ?? '') === 'succeeded') $returned += $amount;
+        elseif (in_array((string)($row['status'] ?? ''), ['initiating', 'pending', 'processing'], true)) $processing += $amount;
+    }
+    return ['eligible' => $eligibleMinor, 'returned' => $returned, 'processing' => $processing,
+        'unsubmitted' => max(0, $eligibleMinor - $returned - $processing)];
+}
+
+/** Valid, unclaimed provider links for one consolidated booking email. */
+function bookingRefundPendingClaimBatch(array $rows): array
+{
+    $claims = [];
+    foreach ($rows as $row) {
+        if (($row['provider'] ?? '') !== 'paymongo'
+            || !in_array((string)($row['status'] ?? ''), ['pending', 'processing'], true)) continue;
+        $snapshot = json_decode((string)($row['provider_response'] ?? ''), true);
+        $parsed = bookingRefundParsePayMongoResponse(is_array($snapshot) ? $snapshot : []);
+        if ($parsed['transfer_link'] === '' || $parsed['id'] === ''
+            || !in_array($parsed['status'], ['pending', 'processing'], true)
+            || !hash_equals((string)($row['provider_refund_id'] ?? ''), $parsed['id'])
+            || !hash_equals((string)($row['provider_payment_id'] ?? ''), $parsed['payment_id'])
+            || $parsed['amount_minor'] !== (int)($row['amount_minor'] ?? 0)
+            || $parsed['currency'] !== 'PHP') continue;
+        $claims[$parsed['id']] = [
+            'id' => (int)$row['booking_refund_id'],
+            'provider_refund_id' => $parsed['id'],
+            'amount_minor' => (int)$row['amount_minor'],
+            'claim_url' => $parsed['transfer_link'],
+        ];
+    }
+    return array_values($claims);
+}
+
 /** @return array{state:string,requires_attention:bool} */
 function bookingRefundOperationOutcome(array $submitted, array $failures): array
 {

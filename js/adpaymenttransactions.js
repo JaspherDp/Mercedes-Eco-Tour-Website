@@ -47,7 +47,7 @@
         ${detail('Booking reference', refund.booking_reference)}${detail('Booking type', refund.booking_type)}${detail('Destination / assignment', refund.service)}${detail('Service date', refund.service_date)}${detail('Cancellation requested', refund.requested_at)}${detail('Tourist reason', refund.reason)}
       </section>
       <section class="drawer-section"><h4>Refund calculation</h4>
-        ${detail('Amount paid', refund.amount_paid)}${detail('Eligibility rule', refund.policy)}${detail('Eligible refund', refund.eligible_amount)}${detail('Non-refundable', refund.non_refundable)}${detail('Provider-confirmed', refund.refunded_amount)}
+        ${detail('Amount paid', refund.amount_paid)}${detail('Eligibility rule', refund.policy)}${detail('Eligible refund', refund.eligible_amount)}${detail('Non-refundable', refund.non_refundable)}${detail('Provider-confirmed', refund.refunded_amount)}${detail('Processing / awaiting claim', refund.processing_amount)}${detail('Not yet submitted', refund.unsubmitted_amount)}
       </section>
       <section class="refund-routing-card"><header><span>↩</span><div><small>RETURN ROUTE</small><strong>${escapeHtml(refund.route || 'Original payment method')}</strong></div></header>
         ${detail('Original payment channel', refund.method)}${detail('Destination', refund.destination)}${detail('Payment provider', refund.provider)}${detail('Original payment ID', refund.payment_reference)}${detail('Merchant reference', refund.merchant_reference)}${detail('Payment date', refund.payment_date)}${detail('Refund reference', refund.provider_refund_id || 'Created after submission')}${refund.manual_refund_channel ? detail('Manual refund channel', refund.manual_refund_channel) : ''}${refund.manual_sender_account ? detail('Admin source account', refund.manual_sender_account) : ''}${refund.manual_refund_note ? detail('Administrator note', refund.manual_refund_note) : ''}
@@ -952,7 +952,9 @@
     if (!window.Swal) { if (window.confirm('Send this refund to the original payment method?')) form.submit(); return; }
     const result = await Swal.fire({
       icon: 'warning', title: 'Process this refund?',
-      html: '<p style="line-height:1.55">PayMongo will return only the approved eligible amount to the original payment method. If the booking has multiple payments, each Payment ID is processed separately.</p>',
+      html: Number(form.dataset.refundRemaining || 0) > 0
+        ? `<p style="line-height:1.55">Submit the remaining ${bookingMoney(Number(form.dataset.refundRemaining) / 100)} for refund? Amounts already processing or returned are excluded. Separate payment transactions may receive separate claim links.</p>`
+        : '<p style="line-height:1.55">PayMongo will process the approved amount that has not yet been submitted. Separate payment transactions may receive separate claim links.</p>',
       showCancelButton: true, confirmButtonText: 'Yes, process refund', cancelButtonText: 'Cancel',
       confirmButtonColor: '#176b55', cancelButtonColor: '#687b75', focusCancel: true
     });
@@ -1014,6 +1016,39 @@
     } catch (error) {
       Swal.fire({icon:'error',title:'Manual Refund Unavailable',text:error.message || 'The refund details could not be loaded.',confirmButtonColor:'#176b55'});
     }
+  }));
+  document.querySelectorAll('[data-send-refund-link]').forEach(form => form.addEventListener('submit', event => {
+    event.preventDefault();
+    if (form.dataset.submitting === 'true') return;
+    form.dataset.submitting = 'true';
+    form.querySelectorAll('button[type="submit"]').forEach(button => {
+      button.disabled = true;
+      button.textContent = 'Sending...';
+    });
+    closeRefundMenus();
+    if (window.Swal) {
+      Swal.fire({
+        title: 'Sending Refund Link',
+        html: 'Please wait while the refund claim link is emailed to the tourist.',
+        color: '#173f34',
+        background: '#ffffff',
+        allowOutsideClick: false,
+        allowEscapeKey: false,
+        allowEnterKey: false,
+        showConfirmButton: false,
+        showCancelButton: false,
+        showDenyButton: false,
+        didOpen: () => Swal.showLoading(),
+        customClass: {
+          popup: 'refund-email-swal-popup',
+          title: 'refund-email-swal-title',
+          htmlContainer: 'refund-email-swal-content',
+          loader: 'refund-email-swal-loader'
+        }
+      });
+    }
+    // Give the spinner time to paint before submitting, as on booking acceptance.
+    window.setTimeout(() => form.submit(), 80);
   }));
   document.querySelectorAll('[data-refresh-refund]').forEach(form => form.addEventListener('submit', event => {
     if (!window.Swal) return;
