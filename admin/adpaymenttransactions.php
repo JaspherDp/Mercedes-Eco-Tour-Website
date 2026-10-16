@@ -260,8 +260,8 @@ function payMongoQrRefundDiagnostic(
     $walk($sanitized);
     $diagnostic = [
         'recorded_at' => date(DATE_ATOM),
-        'mode' => 'test',
-        'request' => ['method' => 'POST', 'path' => '/v1/refunds', 'payment_id' => $paymentId, 'amount_minor' => $amountMinor],
+        'mode' => $service->isLiveMode() ? 'live' : 'test',
+        'request' => ['method' => 'POST', 'host' => 'refunds-api.paymongo.com', 'path' => '/v1/refunds', 'payment_id' => $paymentId, 'amount_minor' => $amountMinor],
         'http_status' => $error ? $error->getHttpStatus() : $service->getLastHttpStatus(),
         'refund_id' => trim((string)($sanitized['data']['id'] ?? '')) ?: null,
         'refund_status' => trim((string)($attributes['status'] ?? '')) ?: null,
@@ -591,9 +591,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
                     )
                     : null;
                 $failedProviderRefundId = $responseBindingValidated ? trim((string)($providerResponse['data']['id'] ?? '')) : '';
-                $update = $pdo->prepare("UPDATE booking_refunds SET provider_refund_id=COALESCE(NULLIF(?,''),provider_refund_id),status='failed',failure_code=?,failure_message=?,provider_response=?,provider_http_status=?,provider_diagnostic=? WHERE booking_refund_id=?");
+                // Normalize empty IDs in PHP; comparing two SQL string parameters
+                // with NULLIF can mix connection and database collations.
+                $update = $pdo->prepare("UPDATE booking_refunds SET provider_refund_id=COALESCE(?,provider_refund_id),status='failed',failure_code=?,failure_message=?,provider_response=?,provider_http_status=?,provider_diagnostic=? WHERE booking_refund_id=?");
                 $update->execute([
-                    $failedProviderRefundId,
+                    $failedProviderRefundId !== '' ? $failedProviderRefundId : null,
                     mb_substr($failureCode, 0, 100),
                     mb_substr($failureMessage, 0, 500),
                     $providerResponse !== null ? json_encode($providerResponse, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) : null,

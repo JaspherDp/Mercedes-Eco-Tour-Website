@@ -32,6 +32,7 @@ final class PayMongoException extends RuntimeException
 final class PayMongoService
 {
     private const API_BASE_URL = 'https://api.paymongo.com';
+    private const QR_REFUNDS_BASE_URL = 'https://refunds-api.paymongo.com';
     private int $lastHttpStatus = 0;
 
     public function __construct(
@@ -228,7 +229,7 @@ final class PayMongoService
         }
         $attributes = ['payment_id' => $paymentId, 'amount' => $amountMinor, 'reason' => $reason];
         if (trim($notes) !== '') $attributes['notes'] = mb_substr(trim($notes), 0, 255);
-        return $this->request('POST', '/v1/refunds', ['data' => ['attributes' => $attributes]], $idempotencyKey);
+        return $this->request('POST', '/v1/refunds', ['data' => ['attributes' => $attributes]], $idempotencyKey, self::QR_REFUNDS_BASE_URL);
     }
 
     /** @return array<string, mixed> */
@@ -461,7 +462,7 @@ final class PayMongoService
         if ($this->dnsServers !== '') {
             $options[CURLOPT_DNS_SERVERS] = $this->dnsServers;
         }
-        if ($apiBaseUrl !== self::API_BASE_URL) {
+        if (!in_array($apiBaseUrl, [self::API_BASE_URL, self::QR_REFUNDS_BASE_URL], true)) {
             throw new InvalidArgumentException('The PayMongo API host is not allowed.');
         }
         $apiHost = (string)parse_url($apiBaseUrl, PHP_URL_HOST);
