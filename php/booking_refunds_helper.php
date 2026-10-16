@@ -301,6 +301,27 @@ function bookingRefundTimeline(string $method, int $amountMinor = 0): array
 }
 
 /** @return array{id:string,status:string,amount_minor:int,payment_id:string,currency:string,livemode:mixed,transfer_link:string} */
+function bookingRefundFailureDetails(array $attributes): array
+{
+    $nested = $attributes['error'] ?? $attributes['failure_reason'] ?? $attributes['errors'][0] ?? [];
+    $nested = is_array($nested) ? $nested : [];
+    $firstText = static function (array $values, int $limit): ?string {
+        foreach ($values as $value) {
+            if (!is_string($value) && !is_numeric($value)) continue;
+            $text = trim((string)PaymentHelper::sanitizePayMongoDiagnostic((string)$value));
+            if ($text !== '') return mb_substr($text, 0, $limit);
+        }
+        return null;
+    };
+    return [
+        'code' => $firstText([$attributes['failure_code'] ?? null, $attributes['error_code'] ?? null,
+            $attributes['provider_error_code'] ?? null, $nested['code'] ?? null], 100),
+        'message' => $firstText([$attributes['failure_message'] ?? null, $attributes['failure_reason'] ?? null,
+            $attributes['error_message'] ?? null, $attributes['provider_error_message'] ?? null,
+            $nested['detail'] ?? null, $nested['message'] ?? null], 500),
+    ];
+}
+
 function bookingRefundParsePayMongoResponse(array $response): array
 {
     $data = is_array($response['data'] ?? null) ? $response['data'] : [];

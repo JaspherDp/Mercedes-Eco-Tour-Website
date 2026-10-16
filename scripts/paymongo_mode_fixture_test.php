@@ -87,7 +87,8 @@ function modeDatabase(): PayMongoFixturePDO
     CREATE TABLE booking_refunds (
         booking_refund_id INTEGER PRIMARY KEY, payment_transaction_id INTEGER, cancellation_request_id INTEGER,
         provider TEXT, provider_refund_id TEXT UNIQUE, provider_payment_id TEXT,
-        amount_minor INTEGER, currency TEXT, status TEXT, provider_response TEXT, completed_at TEXT
+        amount_minor INTEGER, currency TEXT, status TEXT, provider_response TEXT, completed_at TEXT,
+        failure_code TEXT, failure_message TEXT
     );
     CREATE TABLE booking_cancellation_requests (
         cancellation_request_id INTEGER PRIMARY KEY, refundable_amount NUMERIC, refund_status TEXT, refund_updated_at TEXT
@@ -267,7 +268,16 @@ try {
         $refund = ['id' => 'ref_fixture', 'payment_id' => $paymentId, 'amount_minor' => 500000, 'currency' => 'PHP', 'status' => 'succeeded', 'livemode' => $live];
         modeReject(fn() => RefundWebhookReconciler::reconcile($pdo, array_replace($refund, ['livemode' => !$live])), 'Cross-mode refund accepted.');
         modeReject(fn() => RefundWebhookReconciler::reconcile($pdo, array_replace($refund, ['amount_minor' => 1])), 'Wrong refund amount accepted.');
+        $failedRefund = array_replace($refund, ['status' => 'failed', 'failure_code' => 'fixture_bank_rejection', 'failure_message' => 'Fixture receiving bank rejected the transfer.']);
+        modeAssert(RefundWebhookReconciler::reconcile($pdo, $failedRefund)['updated'], 'Failed refund was not saved.');
+        $failedRow = $pdo->query('SELECT * FROM booking_refunds WHERE booking_refund_id=1')->fetch(PDO::FETCH_ASSOC);
+        modeAssert($failedRow['failure_code'] === 'fixture_bank_rejection' && $failedRow['failure_message'] === $failedRefund['failure_message'], 'Provider failure details were discarded.');
+        modeAssert(str_contains($failedRow['provider_response'], 'fixture_bank_rejection'), 'Provider snapshot discarded failure details.');
+        $failedRefund['failure_message'] = 'Fixture receiving bank supplied a more detailed reason.';
+        modeAssert(RefundWebhookReconciler::reconcile($pdo, $failedRefund)['updated'], 'A later failure reason was not saved for an already failed refund.');
         modeAssert(RefundWebhookReconciler::reconcile($pdo, $refund)['updated'], 'Valid refund was not applied.');
+        $completedRow = $pdo->query('SELECT * FROM booking_refunds WHERE booking_refund_id=1')->fetch(PDO::FETCH_ASSOC);
+        modeAssert($completedRow['failure_code'] === null && $completedRow['failure_message'] === null, 'Successful reconciliation retained a stale failure reason.');
         modeAssert(RefundWebhookReconciler::reconcile($pdo, $refund)['idempotent'], 'Duplicate refund reapplied.');
         modeAssert(RefundWebhookReconciler::reconcile($pdo, array_replace($refund, ['status' => 'pending']))['idempotent'], 'Late refund event downgraded success.');
         modeAssert($pdo->query('SELECT refund_status FROM booking_cancellation_requests')->fetchColumn() === 'completed', 'Refund aggregate not completed.');

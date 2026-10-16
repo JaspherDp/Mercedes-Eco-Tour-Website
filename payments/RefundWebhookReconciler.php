@@ -56,12 +56,15 @@ final class RefundWebhookReconciler
         $attributes = is_array($resource['attributes'] ?? null) ? $resource['attributes'] : $resource;
         $refundId = trim((string)($resource['id'] ?? $attributes['id'] ?? ''));
         if (!preg_match('/^ref_[A-Za-z0-9]+$/', $refundId)) return null;
+        $failure = bookingRefundFailureDetails($attributes);
         return [
             'id' => $refundId,
             'payment_id' => trim((string)($attributes['payment_id'] ?? $parentPaymentId)),
             'amount_minor' => is_numeric($attributes['amount'] ?? null) ? (int)$attributes['amount'] : 0,
             'currency' => strtoupper(trim((string)($attributes['currency'] ?? $parentCurrency))),
             'status' => strtolower(trim((string)($attributes['status'] ?? ''))),
+            'failure_code' => $failure['code'],
+            'failure_message' => $failure['message'],
         ];
     }
 
@@ -84,7 +87,7 @@ final class RefundWebhookReconciler
         try {
             $find = $pdo->prepare(
                 'SELECT br.booking_refund_id,br.cancellation_request_id,br.provider,br.provider_refund_id,
-                        br.provider_payment_id,br.amount_minor,br.currency,br.status,br.provider_response,
+                        br.provider_payment_id,br.amount_minor,br.currency,br.status,br.provider_response,br.failure_code,br.failure_message,
                         pt.metadata AS payment_metadata
                  FROM booking_refunds br
                  INNER JOIN payment_transactions pt ON pt.payment_transaction_id=br.payment_transaction_id
@@ -105,7 +108,11 @@ final class RefundWebhookReconciler
 
             $localStatus = strtolower((string)$local['status']);
             $nextStatus = self::monotonicStatus($localStatus, $providerStatus);
-            if ($nextStatus === $localStatus) {
+            $failure = bookingRefundFailureDetails($providerRefund);
+            $failureCode = $nextStatus === 'failed' ? ($failure['code'] ?? $local['failure_code'] ?? 'provider_refund_failed') : null;
+            $failureMessage = $nextStatus === 'failed' ? ($failure['message'] ?? $local['failure_message'] ?? 'PayMongo reported that the refund failed without providing a reason. Check the PayMongo Dashboard or contact support.') : null;
+            $diagnosticChanged = $failureCode !== $local['failure_code'] || $failureMessage !== $local['failure_message'];
+            if ($nextStatus === $localStatus && !$diagnosticChanged) {
                 $pdo->commit();
                 return ['matched' => true, 'updated' => false, 'idempotent' => true, 'status' => $localStatus];
             }
@@ -113,10 +120,10 @@ final class RefundWebhookReconciler
             $providerSnapshot = self::mergeProviderSnapshot($local['provider_response'] ?? null, $providerRefund, $nextStatus);
             $update = $pdo->prepare(
                 "UPDATE booking_refunds
-                 SET status=?,provider_response=?,completed_at=CASE WHEN ?=1 THEN NOW() ELSE completed_at END
+                 SET status=?,provider_response=?,failure_code=?,failure_message=?,completed_at=CASE WHEN ?=1 THEN NOW() ELSE completed_at END
                  WHERE booking_refund_id=? AND status<>'succeeded'"
             );
-            $update->execute([$nextStatus, $providerSnapshot, $nextStatus === 'succeeded' ? 1 : 0, (int)$local['booking_refund_id']]);
+            $update->execute([$nextStatus, $providerSnapshot, $failureCode, $failureMessage, $nextStatus === 'succeeded' ? 1 : 0, (int)$local['booking_refund_id']]);
             bookingRefundSyncCancellationStatus($pdo, (int)$local['cancellation_request_id']);
             $pdo->commit();
             return [
@@ -150,6 +157,10 @@ final class RefundWebhookReconciler
         $attributes['amount'] = (int)($providerRefund['amount_minor'] ?? 0);
         $attributes['currency'] = strtoupper(trim((string)($providerRefund['currency'] ?? '')));
         $attributes['status'] = $status;
+        foreach (['failure_code', 'failure_message'] as $field) {
+            if ($status !== 'failed') unset($attributes[$field]);
+            elseif (isset($providerRefund[$field])) $attributes[$field] = $providerRefund[$field];
+        }
         if (isset($providerRefund['livemode'])) $attributes['livemode'] = $providerRefund['livemode'];
         unset($attributes);
 

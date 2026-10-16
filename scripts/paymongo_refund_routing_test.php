@@ -11,9 +11,14 @@ function curl_init(string $url): object { return (object)['url' => $url, 'option
 function curl_setopt(object $handle, int $option, mixed $value): bool { $handle->options[$option] = $value; return true; }
 function curl_exec(object $handle): string {
     $GLOBALS['refund_fixture_requests'][] = $handle;
+    if (isset($GLOBALS['refund_fixture_responses'][$handle->url])) {
+        $fixture = $GLOBALS['refund_fixture_responses'][$handle->url];
+        $handle->status = $fixture['status'];
+        return json_encode($fixture['body']);
+    }
     return json_encode(['data' => ['id' => 'ref_fixture', 'attributes' => ['status' => 'processing']]]);
 }
-function curl_getinfo(object $handle, int $option): int { return 200; }
+function curl_getinfo(object $handle, int $option): int { return $handle->status ?? 200; }
 function curl_errno(object $handle): int { return 0; }
 function curl_error(object $handle): string { return ''; }
 function curl_close(object $handle): void {}
@@ -21,7 +26,7 @@ function curl_close(object $handle): void {}
 $source = file_get_contents(__DIR__ . '/../payments/PayMongoService.php');
 $source = preg_replace('/^<\?php\s*declare\(strict_types=1\);/', '', $source);
 $source = preg_replace('/^require_once .*;\R/m', '', $source);
-eval('namespace RefundRoutingFixture; use \\PaymentHelper; use \\RuntimeException; use \\InvalidArgumentException; use \\LogicException; use \\JsonException; use \\Throwable; ' . $source);
+eval('namespace RefundRoutingFixture; use \\PaymentHelper; use \\RuntimeException; use \\InvalidArgumentException; use \\UnexpectedValueException; use \\LogicException; use \\JsonException; use \\Throwable; ' . $source);
 
 function check(bool $condition, string $message): void {
     if (!$condition) throw new \RuntimeException($message);
@@ -127,6 +132,40 @@ try {
 check($pdo->saved, 'Accepted refund recovery save was not attempted.');
 echo "Accepted-refund database-failure safeguard test passed.\n";
 
+// QR status refresh must be read-only and must not use the standard refund host.
+$qrUrl = 'https://refunds-api.paymongo.com/v1/refunds/ref_fixture';
+$paymentUrl = 'https://api.paymongo.com/v1/payments/pay_fixture';
+$refundSnapshot = ['data' => ['id' => 'ref_fixture', 'attributes' => ['payment_id' => 'pay_fixture', 'amount' => 100, 'currency' => 'PHP', 'status' => 'processing', 'livemode' => false]]];
+$GLOBALS['refund_fixture_responses'][$qrUrl] = ['status' => 200, 'body' => $refundSnapshot];
+$result = $service->retrieveQrPhRefund('ref_fixture', 'pay_fixture');
+check($result['data']['id'] === 'ref_fixture', 'QR lookup did not return the provider refund.');
+$last = end($GLOBALS['refund_fixture_requests']);
+check($last->url === $qrUrl && $last->options[CURLOPT_CUSTOMREQUEST] === 'GET', 'QR status used the wrong host or method.');
+
+$GLOBALS['refund_fixture_responses'][$qrUrl] = ['status' => 404, 'body' => ['errors' => [['code' => 'resource_not_found', 'detail' => 'No such refund.']]]];
+$GLOBALS['refund_fixture_responses'][$paymentUrl] = ['status' => 200, 'body' => ['data' => ['id' => 'pay_fixture', 'attributes' => [
+    'livemode' => false, 'currency' => 'PHP', 'refunds' => [['id' => 'ref_fixture', 'attributes' => ['amount' => 100, 'status' => 'refunding']]],
+]]]];
+$result = $service->retrieveQrPhRefund('ref_fixture', 'pay_fixture');
+check($result['data']['id'] === 'ref_fixture' && $result['data']['attributes']['payment_id'] === 'pay_fixture', 'Payment fallback did not bind the refund.');
+check($result['data']['attributes']['status'] === 'refunding', 'Pending refund was incorrectly failed or completed.');
+$GLOBALS['refund_fixture_responses'][$paymentUrl]['body']['data']['attributes']['refunds'] = [];
+try {
+    $service->retrieveQrPhRefund('ref_fixture', 'pay_fixture');
+    throw new \RuntimeException('An absent provider refund was treated as a confirmed state.');
+} catch (PayMongoException $error) {
+    check(str_contains($error->getMessage(), 'left unchanged'), 'Unavailable lookup lacks a safe recovery message.');
+}
+$GLOBALS['refund_fixture_responses'][$paymentUrl]['body']['data']['id'] = 'pay_other';
+try {
+    $service->retrieveQrPhRefund('ref_fixture', 'pay_fixture');
+    throw new \RuntimeException('A different Payment was accepted.');
+} catch (\UnexpectedValueException) {}
+foreach (array_slice($GLOBALS['refund_fixture_requests'], 2) as $lookup) {
+    check($lookup->options[CURLOPT_CUSTOMREQUEST] === 'GET', 'Refreshing status created a payment operation.');
+}
+echo "QR refund status routing and read-only fallback tests passed.\n";
+
 if (!in_array('--mysql', $argv, true)) exit;
 $host = \PaymentHelper::env('DB_HOST');
 if (!in_array(strtolower($host), ['localhost', '127.0.0.1', '::1'], true)
@@ -174,9 +213,9 @@ $row = $pdo->query('SELECT * FROM booking_refunds WHERE booking_refund_id=1')->f
 check($row['status'] === 'processing' && $row['completed_at'] === null, 'Accepted refund incorrectly failed or completed.');
 check(str_contains($row['provider_response'], '/claim'), 'Accepted claim link was lost.');
 
-$refresh = $pdo->prepare(queryLiteral($page, 'UPDATE booking_refunds SET status=?, provider_response=?, failure_code=CASE'));
-$refresh->execute(['processing', $snapshot, 0, 0, 0, 1]);
-$refresh->execute(['failed', $snapshot, 1, 1, 0, 1]);
+$refresh = $pdo->prepare(queryLiteral($page, 'UPDATE booking_refunds SET status=?, provider_response=?, failure_code='));
+$refresh->execute(['processing', $snapshot, null, null, 0, 1]);
+$refresh->execute(['failed', $snapshot, 'provider_refund_failed', 'PayMongo reported that the refund failed.', 0, 1]);
 $row = $pdo->query('SELECT * FROM booking_refunds WHERE booking_refund_id=1')->fetch(\PDO::FETCH_ASSOC);
 check($row['failure_code'] === 'provider_refund_failed' && $row['completed_at'] === null, 'Provider failure refresh was not recorded.');
 
@@ -191,9 +230,9 @@ check($row['email_status'] === 'failed' && $row['email_sent_at'] === null, 'Emai
 
 $webhookSource = file_get_contents(__DIR__ . '/../payments/RefundWebhookReconciler.php');
 $webhook = $pdo->prepare(queryLiteral($webhookSource, "UPDATE booking_refunds\n"));
-$webhook->execute(['succeeded', $snapshot, 1, 1]);
+$webhook->execute(['succeeded', $snapshot, null, null, 1, 1]);
 $row = $pdo->query('SELECT * FROM booking_refunds WHERE booking_refund_id=1')->fetch(\PDO::FETCH_ASSOC);
 check($row['status'] === 'succeeded' && $row['completed_at'] !== null, 'Webhook completion was not persisted.');
-$webhook->execute(['processing', $snapshot, 0, 1]);
+$webhook->execute(['processing', $snapshot, null, null, 0, 1]);
 check($pdo->query('SELECT status FROM booking_refunds WHERE booking_refund_id=1')->fetchColumn() === 'succeeded', 'A late update downgraded a completed refund.');
 echo "Mixed-collation success, refresh, email and webhook query tests passed.\n";

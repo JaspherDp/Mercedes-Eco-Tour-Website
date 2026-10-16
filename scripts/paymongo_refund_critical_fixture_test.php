@@ -26,6 +26,14 @@ refundCriticalAssert(
 );
 
 // B/C. Failed and unknown provider states never enter the submitted path.
+$failedEvent = RefundWebhookReconciler::refundResourcesForEvent('payment.refund.updated', [
+    'id' => 'ref_failureFixture', 'attributes' => ['payment_id' => 'pay_fixture', 'amount' => 100,
+        'currency' => 'PHP', 'status' => 'failed', 'provider_error_code' => 'fixture_rejection',
+        'provider_error_message' => 'Fixture provider explained the transfer failure.'],
+]);
+refundCriticalAssert($failedEvent[0]['failure_code'] === 'fixture_rejection' && $failedEvent[0]['failure_message'] === 'Fixture provider explained the transfer failure.', 'Webhook normalization lost the provider failure reason.');
+refundCriticalAssert(bookingRefundFailureDetails(['failure_reason' => ['code' => 'fixture_code', 'message' => 'Fixture nested reason.']]) === ['code' => 'fixture_code', 'message' => 'Fixture nested reason.'], 'Nested provider failure details were lost.');
+refundCriticalAssert(bookingRefundFailureDetails([]) === ['code' => null, 'message' => null], 'Missing provider details fabricated a reason.');
 refundCriticalAssert(bookingRefundProviderResponseDisposition('failed') === 'failed', 'Failed refund was treated as submitted.');
 refundCriticalAssert(bookingRefundProviderResponseDisposition('mystery') === 'unexpected', 'Unknown refund status was treated as pending.');
 refundCriticalAssert(bookingRefundParsePayMongoResponse(['data' => ['id' => 'ref_unknown', 'attributes' => []]])['status'] === 'unknown', 'Missing status was normalized to pending.');
@@ -64,6 +72,9 @@ $allEmail = RefundConfirmationEmailTemplate(['guest_name' => 'Fixture Guest', 'b
     'refund_progress' => bookingRefundProgressAmounts($bookingHistory, 500)]);
 foreach (range(0, 3) as $index) refundCriticalAssert(str_contains($allEmail, 'https://example.test/claim-' . $index), 'Consolidated email lost a payment claim.');
 refundCriticalAssert(substr_count($allEmail, 'Claim this refund securely') === 4, 'Email must include one button per refund.');
+refundCriticalAssert(str_contains($allEmail, 'initial payment and subsequent balance payments') && str_contains($allEmail, 'Together, these amounts make up the claim total'), 'Multiple claim links lack the formal explanation.');
+$singleEmail = RefundConfirmationEmailTemplate(['amount' => 1, 'claim_actions' => [bookingRefundClaimActions($allClaims)[0]]]);
+refundCriticalAssert(!str_contains($singleEmail, 'initial payment and subsequent balance payments'), 'A single claim incorrectly describes multiple links.');
 refundCriticalAssert(str_contains($allEmail, 'Total eligible refund') && str_contains($allEmail, 'Claim total in this email'), 'Email total labels are missing.');
 refundCriticalAssert(preg_match('/<p style="[^"]*text-align:center;text-indent:0;">Use every secure PayMongo link/', $allEmail) === 1, 'Email header instruction is not centered.');
 $bookingHistory[] = array_merge($bookingHistory[0], ['status' => 'failed']);

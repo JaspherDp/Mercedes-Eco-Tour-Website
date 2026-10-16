@@ -399,7 +399,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
         $service = PayMongoService::fromEnvironment();
 
         if (($_POST['action'] ?? '') === 'refresh_refund') {
-            $rows = $pdo->prepare("SELECT * FROM booking_refunds WHERE cancellation_request_id=? AND (provider_refund_id IS NOT NULL OR provider_transfer_id IS NOT NULL) AND status IN ('pending','processing','initiating')");
+            $rows = $pdo->prepare("SELECT * FROM booking_refunds WHERE cancellation_request_id=? AND (provider_refund_id IS NOT NULL OR provider_transfer_id IS NOT NULL) AND status IN ('pending','processing','initiating','failed')");
             $rows->execute([$requestId]);
             $updated = 0;
             foreach ($rows->fetchAll(PDO::FETCH_ASSOC) as $refundRow) {
@@ -430,8 +430,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
                     && empty($response['data']['attributes']['transfer_link'])) {
                     $response['data']['attributes']['transfer_link'] = $existingTransferLink;
                 }
-                $update = $pdo->prepare("UPDATE booking_refunds SET status=?, provider_response=?, failure_code=CASE WHEN ?=1 THEN COALESCE(failure_code,'provider_refund_failed') ELSE NULL END, failure_message=CASE WHEN ?=1 THEN COALESCE(failure_message,'PayMongo reported that the refund failed.') ELSE NULL END, completed_at=CASE WHEN ?=1 THEN NOW() ELSE completed_at END WHERE booking_refund_id=? AND status<>'succeeded'");
-                $update->execute([$nextStatus, json_encode($response, JSON_UNESCAPED_SLASHES), $nextStatus === 'failed' ? 1 : 0, $nextStatus === 'failed' ? 1 : 0, $nextStatus === 'succeeded' ? 1 : 0, (int)$refundRow['booking_refund_id']]);
+                $providerFailure = bookingRefundFailureDetails((array)($response['data']['attributes'] ?? []));
+                $failureCode = $nextStatus === 'failed' ? ($providerFailure['code'] ?? $refundRow['failure_code'] ?? 'provider_refund_failed') : null;
+                $failureMessage = $nextStatus === 'failed' ? ($providerFailure['message'] ?? $refundRow['failure_message'] ?? 'PayMongo reported that the refund failed without providing a reason. Check the PayMongo Dashboard or contact support.') : null;
+                $update = $pdo->prepare("UPDATE booking_refunds SET status=?, provider_response=?, failure_code=?, failure_message=?, completed_at=CASE WHEN ?=1 THEN NOW() ELSE completed_at END WHERE booking_refund_id=? AND status<>'succeeded'");
+                $update->execute([$nextStatus, json_encode($response, JSON_UNESCAPED_SLASHES), $failureCode, $failureMessage, $nextStatus === 'succeeded' ? 1 : 0, (int)$refundRow['booking_refund_id']]);
+                PaymentHelper::logPayMongo('refund_status_refreshed', ['transaction_id' => (int)$refundRow['booking_refund_id'], 'payment_id' => (string)$refundRow['provider_payment_id'], 'status' => $nextStatus, 'http_status' => $service->getLastHttpStatus()]);
                 $updated++;
             }
             $status = bookingRefundSyncCancellationStatus($pdo, $requestId);
@@ -700,7 +704,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
     } catch (Throwable $error) {
         if ($pdo->inTransaction()) $pdo->rollBack();
         $errorMessage = $error->getMessage();
-        refundPageRedirect('error', 'Refund Not Processed', $errorMessage, $requestId);
+        refundPageRedirect('error', ($_POST['action'] ?? '') === 'refresh_refund' ? 'Refund Status Not Updated' : 'Refund Not Processed', $errorMessage, $requestId);
     }
 }
 
@@ -1628,6 +1632,9 @@ $exportFilterSummary = $exportFilterLabels ? implode(' · ', $exportFilterLabels
                             <span class="refund-action-disabled" title="Eligible PayMongo payments do not cover the remaining amount. Review the booking payment records.">Remaining refund needs review</span>
                           <?php endif; ?>
                         <?php else: ?><span class="refund-action-success">✓ Provider confirmed</span><?php endif; ?>
+                        <?php if (in_array($refund['refund_state'], ['failed', 'partial'], true) && !empty($refund['provider_refund_id'])): ?>
+                          <form method="post" data-refresh-refund><input type="hidden" name="action" value="refresh_refund"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>"><input type="hidden" name="cancellation_request_id" value="<?= $requestId ?>"><button type="submit">Refresh provider status</button></form>
+                        <?php endif; ?>
                         <?php if (in_array($refund['refund_state'], ['processing', 'partial'], true) && (int)$refund['claim_count'] > 0): ?>
                           <form method="post" data-send-refund-link><input type="hidden" name="action" value="send_refund_link"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>"><input type="hidden" name="cancellation_request_id" value="<?= $requestId ?>"><button type="submit">Email all pending claim links</button></form>
                         <?php endif; ?>

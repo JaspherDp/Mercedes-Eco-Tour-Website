@@ -246,9 +246,41 @@ final class PayMongoService
     public function retrieveQrPhRefund(string $refundId, string $paymentId): array
     {
         $refundId = trim($refundId);
+        $paymentId = trim($paymentId);
         if (!preg_match('/^ref_[A-Za-z0-9]+$/', $refundId)) throw new InvalidArgumentException('PayMongo Refund ID is invalid.');
-        if (!preg_match('/^pay_[A-Za-z0-9]+$/', trim($paymentId))) throw new InvalidArgumentException('PayMongo Payment ID is invalid.');
-        return $this->retrieveRefund($refundId);
+        if (!preg_match('/^pay_[A-Za-z0-9]+$/', $paymentId)) throw new InvalidArgumentException('PayMongo Payment ID is invalid.');
+        try {
+            return $this->request('GET', '/v1/refunds/' . rawurlencode($refundId), null, null, self::QR_REFUNDS_BASE_URL);
+        } catch (PayMongoException $lookupError) {
+            // QR refunds may not be exposed through an individual lookup.
+            // The original Payment can also report its refund resources.
+            if (!in_array($lookupError->getHttpStatus(), [404, 405], true)) throw $lookupError;
+            $payment = $this->retrievePayment($paymentId);
+            $resource = is_array($payment['data'] ?? null) ? $payment['data'] : [];
+            $attributes = is_array($resource['attributes'] ?? null) ? $resource['attributes'] : [];
+            if (!hash_equals($paymentId, (string)($resource['id'] ?? ''))) {
+                throw new UnexpectedValueException('PayMongo returned a different Payment while checking the QR refund.');
+            }
+            foreach ((array)($attributes['refunds'] ?? []) as $refund) {
+                if (!is_array($refund)) continue;
+                if (is_array($refund['data'] ?? null)) $refund = $refund['data'];
+                $refundAttributes = is_array($refund['attributes'] ?? null) ? $refund['attributes'] : $refund;
+                if (!hash_equals($refundId, (string)($refund['id'] ?? $refundAttributes['id'] ?? ''))) continue;
+                $refundAttributes['payment_id'] ??= $paymentId;
+                $refundAttributes['currency'] ??= $attributes['currency'] ?? '';
+                $refundAttributes['livemode'] ??= $attributes['livemode'] ?? null;
+                if (!hash_equals($paymentId, (string)$refundAttributes['payment_id'])) {
+                    throw new UnexpectedValueException('PayMongo returned a refund for a different Payment.');
+                }
+                if (!is_numeric($refundAttributes['amount'] ?? null) || (int)$refundAttributes['amount'] < 1
+                    || strtoupper((string)$refundAttributes['currency']) !== 'PHP'
+                    || trim((string)($refundAttributes['status'] ?? '')) === '') {
+                    throw new UnexpectedValueException('PayMongo returned incomplete QR refund details. The local status was left unchanged; review the existing refund in the PayMongo Dashboard.');
+                }
+                return ['data' => ['id' => $refundId, 'type' => 'refund', 'attributes' => $refundAttributes]];
+            }
+            throw new PayMongoException('PayMongo has not exposed this QR refund through its status endpoints. Its local status was left unchanged. Check the existing refund in the PayMongo Dashboard or contact PayMongo support; do not create a replacement while it is Refunding.', $lookupError->getHttpStatus(), [], $lookupError);
+        }
     }
 
     /** @return array<string, mixed> */
