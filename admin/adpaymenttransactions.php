@@ -1205,7 +1205,7 @@ $exportFilterSummary = $exportFilterLabels ? implode(' · ', $exportFilterLabels
   <title>Payments & Transactions | iTour Mercedes Admin</title>
   <link rel="icon" type="image/png" href="img/newlogo.png">
   <link rel="stylesheet" href="styles/admin_panel_theme.css">
-  <link rel="stylesheet" href="styles/adpaymenttransactions.css?v=37">
+  <link rel="stylesheet" href="styles/adpaymenttransactions.css?v=38">
   <link rel="stylesheet" href="styles/admin_receipt.css?v=2">
 <link rel="stylesheet" href="styles/payout_accounting.css?v=1"></head>
 <body data-ledger-view="<?= htmlspecialchars($activeLedgerView) ?>">
@@ -1761,6 +1761,6 @@ window.refundProcessingConfig = <?= json_encode([
 </script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
-<script src="js/adpaymenttransactions.js?v=27"></script>
+<script src="js/adpaymenttransactions.js?v=28"></script>
 <?= PayoutFeeSync::script() ?></body>
 </html>

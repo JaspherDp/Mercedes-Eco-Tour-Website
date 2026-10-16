@@ -2057,6 +2057,9 @@ body {
 .refund-attempt-detail:first-of-type{border-top:0}
 
 /* Transaction statuses use the same uppercase treatment as booking statuses. */
+/* Mounted on body while open so table scrolling cannot clip refund actions. */
+body > .refund-action-popover{position:fixed;z-index:1100;right:auto;bottom:auto;max-width:calc(100vw - 16px);overflow-y:auto;box-sizing:border-box;font-family:inherit}
+
 .transaction-table .status-badge,
 .transaction-panel .status-badge,
 .payment-drawer .status-badge{text-transform:uppercase;letter-spacing:.025em}

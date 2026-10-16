@@ -68,12 +68,31 @@
     setPageLock(false);
   }
 
+  const refundMenuOwners = new Map();
+
   function closeRefundMenus(except = null) {
     document.querySelectorAll('.refund-action-popover').forEach(menu => {
       if (menu === except) return;
       menu.hidden = true;
-      menu.previousElementSibling?.setAttribute('aria-expanded', 'false');
+      const button = refundMenuOwners.get(menu);
+      button?.setAttribute('aria-expanded', 'false');
+      if (button) button.after(menu);
     });
+  }
+
+  function positionRefundMenu(menu, button) {
+    const edge = 8;
+    const gap = 6;
+    const anchor = button.getBoundingClientRect();
+    const viewportWidth = document.documentElement.clientWidth;
+    const viewportHeight = document.documentElement.clientHeight;
+    menu.style.maxHeight = `${Math.max(0, viewportHeight - edge * 2)}px`;
+    const bounds = menu.getBoundingClientRect();
+    const below = anchor.bottom + gap;
+    const top = below + bounds.height <= viewportHeight - edge
+      ? below : anchor.top - gap - bounds.height;
+    menu.style.left = `${Math.max(edge, Math.min(anchor.right - bounds.width, viewportWidth - bounds.width - edge))}px`;
+    menu.style.top = `${Math.max(edge, Math.min(top, viewportHeight - bounds.height - edge))}px`;
   }
 
   function setPageLock(locked) {
@@ -904,17 +923,29 @@
     openRefundDrawer(JSON.parse(button.dataset.refundDetails));
   }));
   document.querySelectorAll('[data-close-refund-drawer]').forEach(button => button.addEventListener('click', closeRefundDrawer));
-  document.querySelectorAll('.refund-action-menu').forEach(button => button.addEventListener('click', event => {
-    event.stopPropagation();
+  document.querySelectorAll('.refund-action-menu').forEach(button => {
     const menu = button.nextElementSibling;
-    const willOpen = Boolean(menu?.hidden);
-    closeRefundMenus(menu);
-    if (menu) menu.hidden = !willOpen;
-    button.setAttribute('aria-expanded', willOpen ? 'true' : 'false');
-  }));
-  document.addEventListener('click', event => {
-    if (!event.target.closest('.refund-actions')) closeRefundMenus();
+    if (!menu) return;
+    refundMenuOwners.set(menu, button);
+    button.addEventListener('click', event => {
+      event.stopPropagation();
+      const willOpen = menu.hidden;
+      closeRefundMenus();
+      if (!willOpen) return;
+      // Escape the table's scroll container and the panel's overflow clipping.
+      document.body.appendChild(menu);
+      menu.hidden = false;
+      button.setAttribute('aria-expanded', 'true');
+      positionRefundMenu(menu, button);
+    });
   });
+  document.addEventListener('click', event => {
+    if (!event.target.closest('.refund-actions, .refund-action-popover')) closeRefundMenus();
+  });
+  window.addEventListener('resize', () => closeRefundMenus());
+  document.addEventListener('scroll', event => {
+    if (!event.target.closest?.('.refund-action-popover')) closeRefundMenus();
+  }, true);
   document.querySelectorAll('[data-process-refund]').forEach(form => form.addEventListener('submit', async event => {
     event.preventDefault();
     closeRefundMenus();
@@ -1142,6 +1173,7 @@
     tabs.innerHTML = `<button type="button" class="active" role="tab" aria-selected="true" data-admin-ledger-tab="transactions">Transactions <b>${Number(document.querySelector('.transaction-results strong')?.textContent.replace(/,/g,'') || 0).toLocaleString()}</b></button><button type="button" role="tab" aria-selected="false" data-admin-ledger-tab="receivables">Receivables <b>${receivableCount.toLocaleString()}</b></button><button type="button" role="tab" aria-selected="false" data-admin-ledger-tab="refunds">Refunds <b>${document.querySelectorAll('.refund-table tbody tr[id^="refund-request-"]').length}</b></button>`;
     heading?.appendChild(tabs);
     const setLedgerTab = name => {
+      closeRefundMenus();
       const receivablesActive = name === 'receivables';
       const refundsActive = name === 'refunds';
       transactionBody.hidden = receivablesActive || refundsActive;
@@ -1183,6 +1215,12 @@
   document.querySelectorAll('.payment-notice button').forEach(button => button.addEventListener('click', () => button.parentElement.remove()));
   document.addEventListener('keydown', event => {
     if (event.key !== 'Escape') return;
+    const openMenu = [...refundMenuOwners.keys()].find(menu => !menu.hidden);
+    if (openMenu) {
+      closeRefundMenus();
+      refundMenuOwners.get(openMenu)?.focus();
+      return;
+    }
     if (exportModal?.classList.contains('show')) { closeExportModal(); return; }
     if (document.getElementById('adminPhoneRegistrationModal')?.classList.contains('show')) { closePhoneRegistrationModal(); return; }
     if (document.getElementById('adminPaymentPhoneOverviewModal')?.classList.contains('show')) { closePhoneOverviewModal(); return; }
