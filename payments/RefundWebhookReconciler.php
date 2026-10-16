@@ -113,10 +113,10 @@ final class RefundWebhookReconciler
             $providerSnapshot = self::mergeProviderSnapshot($local['provider_response'] ?? null, $providerRefund, $nextStatus);
             $update = $pdo->prepare(
                 "UPDATE booking_refunds
-                 SET status=?,provider_response=?,completed_at=CASE WHEN ?='succeeded' THEN NOW() ELSE completed_at END
+                 SET status=?,provider_response=?,completed_at=CASE WHEN ?=1 THEN NOW() ELSE completed_at END
                  WHERE booking_refund_id=? AND status<>'succeeded'"
             );
-            $update->execute([$nextStatus, $providerSnapshot, $nextStatus, (int)$local['booking_refund_id']]);
+            $update->execute([$nextStatus, $providerSnapshot, $nextStatus === 'succeeded' ? 1 : 0, (int)$local['booking_refund_id']]);
             bookingRefundSyncCancellationStatus($pdo, (int)$local['cancellation_request_id']);
             $pdo->commit();
             return [

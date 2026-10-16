@@ -203,6 +203,9 @@ function sendRefundProcessingEmail(array $refund): bool
             . ' for booking ' . (string)$refund['booking_reference'] . ' has been submitted to '
             . (string)($refund['method'] ?? 'your original payment method') . '. Estimated posting time: '
             . (string)($refund['timeline'] ?? 'depends on the provider') . '. Track it at ' . refundTrackingUrl();
+        foreach (bookingRefundClaimActions((array)($refund['claim_actions'] ?? [])) as $claim) {
+            $mail->AltBody .= "\nClaim your refund: " . $claim['claim_url'];
+        }
         return BookingConfirmationEmailSend($mail);
     } catch (Throwable $error) {
         error_log('Refund confirmation email failed: ' . $error->getMessage());
@@ -315,7 +318,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['manual_refund_details']
     exit;
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] ?? ''), ['process_refund', 'process_manual_refund', 'refresh_refund'], true)) {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] ?? ''), ['process_refund', 'process_manual_refund', 'refresh_refund', 'send_refund_link'], true)) {
     $requestId = max(0, (int)($_POST['cancellation_request_id'] ?? 0));
     if (!hash_equals($csrfToken, (string)($_POST['csrf_token'] ?? ''))) {
         refundPageRedirect('error', 'Request Expired', 'Refresh the page and try again.', $requestId);
@@ -324,6 +327,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
         $request = refundRequestRecord($pdo, $requestId);
         if (!$request || strtolower((string)$request['request_status']) !== 'approved' || (float)$request['refundable_amount'] <= 0) {
             throw new RuntimeException('This cancellation is not ready for a refund.');
+        }
+        if (($_POST['action'] ?? '') === 'send_refund_link') {
+            // Send saved claim links only; this action never creates a refund.
+            $lookup = $pdo->prepare("SELECT * FROM booking_refunds WHERE cancellation_request_id=? AND provider='paymongo' AND status IN ('pending','processing') AND provider_refund_id IS NOT NULL");
+            $lookup->execute([$requestId]);
+            $claims = [];
+            $ids = [];
+            foreach ($lookup->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $snapshot = json_decode((string)$row['provider_response'], true);
+                $parsedClaim = bookingRefundParsePayMongoResponse(is_array($snapshot) ? $snapshot : []);
+                if ($parsedClaim['transfer_link'] === ''
+                    || !hash_equals((string)$row['provider_refund_id'], $parsedClaim['id'])
+                    || !hash_equals((string)$row['provider_payment_id'], $parsedClaim['payment_id'])
+                    || $parsedClaim['amount_minor'] !== (int)$row['amount_minor']
+                    || $parsedClaim['currency'] !== 'PHP') continue;
+                $claims[] = ['provider_refund_id' => $parsedClaim['id'], 'amount_minor' => (int)$row['amount_minor'], 'claim_url' => $parsedClaim['transfer_link']];
+                $ids[] = (int)$row['booking_refund_id'];
+            }
+            if ($claims === []) throw new RuntimeException('No saved claim link is available for a pending refund. Refresh its provider status first.');
+            $sent = sendRefundProcessingEmail(array_merge($request, [
+                'amount' => array_sum(array_column($claims, 'amount_minor')) / 100,
+                'method' => 'QR Ph', 'destination' => 'Your selected bank or e-wallet',
+                'provider_refund_id' => implode(', ', array_column($claims, 'provider_refund_id')),
+                'timeline' => 'Waiting for your claim',
+                'timeline_detail' => 'Open the secure PayMongo link to select your receiving bank or e-wallet. The link expires three days after it was issued.',
+                'claim_actions' => bookingRefundClaimActions($claims),
+            ]));
+            $marks = implode(',', array_fill(0, count($ids), '?'));
+            $pdo->prepare("UPDATE booking_refunds SET email_status=?,email_sent_at=CASE WHEN ?=1 THEN NOW() ELSE NULL END,email_error=? WHERE booking_refund_id IN ($marks)")
+                ->execute(array_merge([$sent ? 'sent' : 'failed', $sent ? 1 : 0, $sent ? null : 'SMTP delivery failed.'], $ids));
+            refundPageRedirect($sent ? 'success' : 'error', $sent ? 'Refund Link Sent' : 'Refund Email Not Sent', $sent ? 'The existing refund claim link was emailed to the tourist. No new refund was created.' : 'The email could not be delivered. The existing refund remains unchanged; check the SMTP error log.', $requestId);
         }
         if (($_POST['action'] ?? '') === 'process_manual_refund') {
             if (strtolower((string)$request['refund_policy']) !== 'partial_refund') throw new RuntimeException('Only partial refunds use the manual refund workflow.');
@@ -365,8 +399,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
                 'timeline_detail' => 'The administrator recorded the transfer as sent. Posting time now depends on the receiving bank or e-wallet.',
                 'manual_completed' => true,
             ]));
-            $pdo->prepare("UPDATE booking_refunds SET email_status=?,email_sent_at=CASE WHEN ?='sent' THEN NOW() ELSE NULL END,email_error=? WHERE booking_refund_id=?")
-                ->execute([$emailSent ? 'sent' : 'failed', $emailSent ? 'sent' : 'failed', $emailSent ? null : 'SMTP delivery failed.', $refundId]);
+            $pdo->prepare("UPDATE booking_refunds SET email_status=?,email_sent_at=CASE WHEN ?=1 THEN NOW() ELSE NULL END,email_error=? WHERE booking_refund_id=?")
+                ->execute([$emailSent ? 'sent' : 'failed', $emailSent ? 1 : 0, $emailSent ? null : 'SMTP delivery failed.', $refundId]);
             logActivity($pdo, 'Admin', (int)($_SESSION['admin_id'] ?? 0), (string)($_SESSION['username'] ?? 'Administrator'), 'Manual Refund Recorded', 'Recorded ' . paymentMoney($remainingMinor / 100) . ' sent for ' . (string)$request['booking_reference'] . ' under transfer reference ' . $providerReference . '.', 'Payments & Transactions', $requestId);
             refundPageRedirect('success', 'Manual Refund Completed', paymentMoney($remainingMinor / 100) . ' was recorded as sent to ' . $destinationLabel . '. ' . ($emailSent ? 'The tourist was notified.' : 'The email could not be delivered.'), $requestId);
         }
@@ -405,8 +439,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
                     && empty($response['data']['attributes']['transfer_link'])) {
                     $response['data']['attributes']['transfer_link'] = $existingTransferLink;
                 }
-                $update = $pdo->prepare("UPDATE booking_refunds SET status=?, provider_response=?, failure_code=CASE WHEN ?='failed' THEN COALESCE(failure_code,'provider_refund_failed') ELSE NULL END, failure_message=CASE WHEN ?='failed' THEN COALESCE(failure_message,'PayMongo reported that the refund failed.') ELSE NULL END, completed_at=CASE WHEN ?='succeeded' THEN NOW() ELSE completed_at END WHERE booking_refund_id=? AND status<>'succeeded'");
-                $update->execute([$nextStatus, json_encode($response, JSON_UNESCAPED_SLASHES), $nextStatus, $nextStatus, $nextStatus, (int)$refundRow['booking_refund_id']]);
+                $update = $pdo->prepare("UPDATE booking_refunds SET status=?, provider_response=?, failure_code=CASE WHEN ?=1 THEN COALESCE(failure_code,'provider_refund_failed') ELSE NULL END, failure_message=CASE WHEN ?=1 THEN COALESCE(failure_message,'PayMongo reported that the refund failed.') ELSE NULL END, completed_at=CASE WHEN ?=1 THEN NOW() ELSE completed_at END WHERE booking_refund_id=? AND status<>'succeeded'");
+                $update->execute([$nextStatus, json_encode($response, JSON_UNESCAPED_SLASHES), $nextStatus === 'failed' ? 1 : 0, $nextStatus === 'failed' ? 1 : 0, $nextStatus === 'succeeded' ? 1 : 0, (int)$refundRow['booking_refund_id']]);
                 $updated++;
             }
             $status = bookingRefundSyncCancellationStatus($pdo, $requestId);
@@ -534,14 +568,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
                 }
                 $responseBindingValidated = true;
                 $disposition = bookingRefundProviderResponseDisposition($parsed['status']);
-                $update = $pdo->prepare('UPDATE booking_refunds SET provider_refund_id=?,status=?,provider_response=?,provider_http_status=?,provider_diagnostic=?,completed_at=CASE WHEN ?=\'succeeded\' THEN NOW() ELSE NULL END WHERE booking_refund_id=?');
+                $update = $pdo->prepare('UPDATE booking_refunds SET provider_refund_id=?,status=?,provider_response=?,provider_http_status=?,provider_diagnostic=?,completed_at=CASE WHEN ?=1 THEN NOW() ELSE NULL END WHERE booking_refund_id=?');
                 $update->execute([
                     $parsed['id'],
                     $parsed['status'],
                     json_encode($response, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE),
                     $isQrPhRefund ? $service->getLastHttpStatus() : null,
                     $qrDiagnostic !== null ? json_encode($qrDiagnostic, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE) : null,
-                    $parsed['status'],
+                    $parsed['status'] === 'succeeded' ? 1 : 0,
                     $refundId,
                 ]);
                 if ($disposition !== 'submitted') {
@@ -558,6 +592,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
                 $submitted[] = ['id' => $refundId, 'provider_refund_id' => $parsed['id'], 'amount_minor' => $amountMinor, 'method' => $remoteMethod, 'destination' => bookingRefundMethodLabel($remoteMethod) . ' account used for payment', 'claim_url' => $parsed['transfer_link']];
                 $remainingMinor -= $amountMinor;
             } catch (Throwable $providerError) {
+                // A local persistence error cannot turn an accepted provider
+                // refund into a failed, retryable payment operation.
+                if ($responseBindingValidated
+                    && bookingRefundProviderResponseDisposition($parsed['status']) === 'submitted') {
+                    error_log('Accepted PayMongo refund requires local reconciliation: ' . $parsed['id'] . ': ' . $providerError->getMessage());
+                    try {
+                        $pdo->prepare('UPDATE booking_refunds SET provider_refund_id=?,status=?,provider_response=?,provider_http_status=?,failure_code=NULL,failure_message=NULL WHERE booking_refund_id=? AND status<>\'succeeded\'')
+                            ->execute([$parsed['id'], $parsed['status'], json_encode($response, JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE), $service->getLastHttpStatus(), $refundId]);
+                        bookingRefundSyncCancellationStatus($pdo, $requestId);
+                    } catch (Throwable $storageError) {
+                        error_log('PayMongo refund recovery save failed: ' . $parsed['id'] . ': ' . $storageError->getMessage());
+                    }
+                    throw new RuntimeException('PayMongo accepted refund ' . $parsed['id'] . ', but local processing could not finish. Do not retry this refund. Review the existing refund in PayMongo and reconcile its status before continuing.', 0, $providerError);
+                }
                 $failureCode = 'paymongo_error';
                 $failureMessage = $providerError->getMessage();
                 $providerResponse = isset($response) && is_array($response) ? $response : null;
@@ -634,8 +682,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array((string)($_POST['action'] 
         ]));
         $ids = array_column($submitted, 'id');
         $marks = implode(',', array_fill(0, count($ids), '?'));
-        $emailUpdate = $pdo->prepare("UPDATE booking_refunds SET email_status=?,email_sent_at=CASE WHEN ?='sent' THEN NOW() ELSE NULL END,email_error=? WHERE booking_refund_id IN ($marks)");
-        $emailUpdate->execute(array_merge([$emailSent ? 'sent' : 'failed', $emailSent ? 'sent' : 'failed', $emailSent ? null : 'SMTP delivery failed.'], $ids));
+        $emailUpdate = $pdo->prepare("UPDATE booking_refunds SET email_status=?,email_sent_at=CASE WHEN ?=1 THEN NOW() ELSE NULL END,email_error=? WHERE booking_refund_id IN ($marks)");
+        $emailUpdate->execute(array_merge([$emailSent ? 'sent' : 'failed', $emailSent ? 1 : 0, $emailSent ? null : 'SMTP delivery failed.'], $ids));
         $routeDescription = 'the original ' . bookingRefundMethodLabel($method) . ' payment';
         logActivity($pdo, 'Admin', (int)($_SESSION['admin_id'] ?? 0), (string)($_SESSION['username'] ?? 'Administrator'), 'Refund Submitted', 'Submitted ' . paymentMoney($emailAmount) . ' to ' . $routeDescription . ' for ' . (string)$request['booking_reference'] . '.', 'Payments & Transactions', $requestId);
         if ($outcome['state'] === 'partial') {
@@ -1556,6 +1604,9 @@ $exportFilterSummary = $exportFilterLabels ? implode(' · ', $exportFilterLabels
                         <?php elseif ($refund['refund_state'] === 'processing'): ?>
                           <form method="post" data-refresh-refund><input type="hidden" name="action" value="refresh_refund"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>"><input type="hidden" name="cancellation_request_id" value="<?= $requestId ?>"><button type="submit"><svg class="refund-action-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.8-4L3 10"/><path d="M3 5v5h5M4 13a8 8 0 0 0 14.8 4L21 14"/><path d="M21 19v-5h-5"/></svg>Refresh provider status</button></form>
                         <?php else: ?><span class="refund-action-success">✓ Provider confirmed</span><?php endif; ?>
+                        <?php if (in_array($refund['refund_state'], ['processing', 'partial'], true) && !empty($refund['provider_refund_id'])): ?>
+                          <form method="post"><input type="hidden" name="action" value="send_refund_link"><input type="hidden" name="csrf_token" value="<?= htmlspecialchars($csrfToken) ?>"><input type="hidden" name="cancellation_request_id" value="<?= $requestId ?>"><button type="submit">Send refund link</button></form>
+                        <?php endif; ?>
                       </div>
                     </td>
                   </tr>
