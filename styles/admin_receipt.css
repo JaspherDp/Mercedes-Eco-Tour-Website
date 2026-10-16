@@ -16,6 +16,11 @@
 }
 
 .admin-receipt-overlay.show { display: flex; }
+.op-billing-modal .op-billing-footer { flex-wrap: wrap; }
+body.payment-summary-open { overflow: hidden; }
+.admin-receipt-head, .admin-receipt-footer { flex-shrink: 0; }
+.admin-receipt-stage { min-height: 0; }
+.admin-receipt-paper .receipt-line-detail { display: block; margin-top: 4px; color: #71857e; font-size: 9px; font-weight: 400; line-height: 1.4; }
 
 .admin-receipt-shell {
   width: min(720px, 100%);
@@ -142,6 +147,10 @@
 .admin-receipt-paper .receipt-summary small { display: block; margin-bottom: 3px; color: #81928c; font-size: 8px; font-weight: 800; }
 .admin-receipt-paper .receipt-summary strong { display: block; overflow-wrap: anywhere; font-size: 11px; }
 .admin-receipt-paper .receipt-foot { margin-top: 25px; padding: 12px; color: #647a72; background: #f5f9f7; border-radius: 8px; font-size: 9px; line-height: 1.55; }
+.payment-summary-export.admin-receipt-paper { width: 560px; max-width: none; min-height: 0; padding: 35px 38px; }
+.payment-summary-export.admin-receipt-paper .receipt-summary { grid-template-columns: repeat(3, 1fr); }
+.payment-summary-export.admin-receipt-paper .receipt-brand-logo { width: 48px; height: 48px; flex-basis: 48px; }
+.payment-summary-export.admin-receipt-paper .receipt-brand-wordmark { width: 158px; height: 36px; }
 .admin-receipt-footer { display: flex; justify-content: flex-end; gap: 9px; padding: 14px 22px; border-top: 1px solid #dce7e3; background: #fff; }
 .admin-receipt-btn { min-height: 39px; padding: 9px 14px; border: 1px solid transparent; border-radius: 8px; font: inherit; font-size: 11px; font-weight: 850; cursor: pointer; }
 .admin-receipt-btn.secondary { color: #405b54; background: #fff; border-color: #cfdcd7; }
@@ -151,6 +160,7 @@
 .admin-receipt-btn:disabled { color: #899b95; background: #e4eae8; box-shadow: none; cursor: wait; }
 
 @media (max-width: 640px) {
+  .op-billing-modal .op-billing-footer { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .admin-receipt-overlay { padding: 0; align-items: stretch; }
   .admin-receipt-shell { max-height: 100vh; border-radius: 0; }
   .admin-receipt-stage { padding: 12px; }

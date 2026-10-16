@@ -39,6 +39,25 @@ function reportTrendSparkline(array $change): string {
 }
 function reportCsvCell(string $value): string { return preg_match('/^\s*[=+\-@]/u', $value) ? "'" . $value : $value; }
 
+function reportLocationRanking(array $rows): array {
+    $locations = [];
+    foreach ($rows as $row) {
+        $seen = [];
+        foreach (explode(',', trim((string)$row['label']) ?: 'Not specified') as $label) {
+            $label = preg_replace('/\s+/u', ' ', trim($label));
+            if ($label === '') continue;
+            $key = mb_strtolower($label, 'UTF-8');
+            if (isset($seen[$key])) continue;
+            $seen[$key] = true;
+            if (!isset($locations[$key])) $locations[$key] = ['label' => $label, 'bookings' => 0];
+            $locations[$key]['bookings'] += (int)$row['bookings'];
+        }
+    }
+    $locations = array_values($locations);
+    usort($locations, fn($a, $b) => $b['bookings'] <=> $a['bookings'] ?: strcasecmp($a['label'], $b['label']));
+    return array_slice($locations, 0, 6);
+}
+
 $preset = strtolower(trim((string)($_GET['range'] ?? '30d')));
 $allowedPresets = ['7d', '30d', '90d', 'this_year', 'custom'];
 if (!in_array($preset, $allowedPresets, true)) $preset = '30d';
@@ -145,18 +164,31 @@ $typeRows = reportRows($pdo, "SELECT LOWER(COALESCE(b.booking_type,'other')) lab
 $typeData = ['package' => 0, 'boat' => 0, 'tourguide' => 0]; foreach ($typeRows as $row) if (isset($typeData[$row['label']])) $typeData[$row['label']] = (int)$row['total'];
 if ($includeHotels) $typeData['hotel'] = (int)reportScalar($pdo, 'SELECT COUNT(*) FROM hotel_room_bookings hb WHERE DATE(hb.created_at) BETWEEN :date_from AND :date_to', $hotelParams);
 $statusRows = reportRows($pdo, "SELECT CASE WHEN LOWER(COALESCE(b.is_complete,''))='completed' THEN 'Completed' WHEN LOWER(COALESCE(b.is_complete,'')) IN ('cancelled','declined') OR LOWER(COALESCE(b.status,''))='declined' THEN 'Cancelled / declined' WHEN LOWER(COALESCE(b.status,''))='accepted' THEN 'Confirmed' ELSE 'Pending' END label, COUNT(*) total{$bookingBase} GROUP BY label ORDER BY total DESC", $bookingParams);
-$destinationRows = reportRows($pdo, "SELECT COALESCE(NULLIF(TRIM(b.location),''),'Not specified') label, COUNT(*) bookings{$bookingBase} GROUP BY label ORDER BY bookings DESC LIMIT 6", $bookingParams);
-$serviceRows = reportRows($pdo, "SELECT COALESCE(NULLIF(TRIM(b.package_name),''),NULLIF(TRIM(b.preferred_resource),''),NULLIF(TRIM(b.location),''),'Unspecified service') service, LOWER(COALESCE(b.booking_type,'other')) type, COUNT(*) bookings, COALESCE(SUM(b.grand_total),0) booking_value, SUM(CASE WHEN LOWER(COALESCE(b.is_complete,''))='completed' THEN 1 ELSE 0 END) completed{$bookingBase} GROUP BY service,type ORDER BY bookings DESC,booking_value DESC LIMIT 7", $bookingParams);
+$destinationRows = reportRows($pdo, "SELECT COALESCE(NULLIF(TRIM(b.location),''),'Not specified') label, COUNT(*) bookings{$bookingBase} GROUP BY label", $bookingParams);
 if ($includeHotels) {
     $hotelStatuses = reportRows($pdo, "SELECT CASE WHEN LOWER(COALESCE(hb.booking_status,''))='completed' THEN 'Completed' WHEN LOWER(COALESCE(hb.booking_status,'')) IN ('cancelled','no-show','declined') THEN 'Cancelled / declined' WHEN LOWER(COALESCE(hb.booking_status,'')) IN ('confirmed','checked-in') THEN 'Confirmed' ELSE 'Pending' END label, COUNT(*) total FROM hotel_room_bookings hb WHERE DATE(hb.created_at) BETWEEN :date_from AND :date_to GROUP BY label", $hotelParams);
     $statusMap=[]; foreach(array_merge($statusRows,$hotelStatuses) as $row)$statusMap[(string)$row['label']]=($statusMap[(string)$row['label']]??0)+(int)$row['total'];
     $statusRows=[]; foreach($statusMap as $label=>$total)$statusRows[]=['label'=>$label,'total'=>$total]; usort($statusRows,fn($a,$b)=>$b['total']<=>$a['total']);
     $hotelDestinations = reportRows($pdo, "SELECT COALESCE(NULLIF(TRIM(hr.island),''),NULLIF(TRIM(hr.name),''),'Not specified') label, COUNT(*) bookings FROM hotel_room_bookings hb LEFT JOIN hotel_resorts hr ON hr.hotel_resort_id=hb.hotel_resort_id WHERE DATE(hb.created_at) BETWEEN :date_from AND :date_to GROUP BY label", $hotelParams);
-    $destinationMap=[]; foreach(array_merge($destinationRows,$hotelDestinations) as $row)$destinationMap[(string)$row['label']]=($destinationMap[(string)$row['label']]??0)+(int)$row['bookings']; arsort($destinationMap);
-    $destinationRows=[]; foreach(array_slice($destinationMap,0,6,true) as $label=>$bookings)$destinationRows[]=['label'=>$label,'bookings'=>$bookings];
-    $hotelServices = reportRows($pdo, "SELECT COALESCE(NULLIF(TRIM(hr.name),''),'Hotel / resort stay') service, 'hotel' type, COUNT(*) bookings, COALESCE(SUM(hb.total_amount),0) booking_value, SUM(CASE WHEN LOWER(COALESCE(hb.booking_status,''))='completed' THEN 1 ELSE 0 END) completed FROM hotel_room_bookings hb LEFT JOIN hotel_resorts hr ON hr.hotel_resort_id=hb.hotel_resort_id WHERE DATE(hb.created_at) BETWEEN :date_from AND :date_to GROUP BY service", $hotelParams);
-    $serviceRows=array_merge($serviceRows,$hotelServices); usort($serviceRows,fn($a,$b)=>(int)$b['bookings']<=>(int)$a['bookings'] ?: (float)$b['booking_value']<=>(float)$a['booking_value']); $serviceRows=array_slice($serviceRows,0,7);
+    $destinationRows = array_merge($destinationRows, $hotelDestinations);
 }
+$destinationRows = reportLocationRanking($destinationRows);
+// Accommodation ranking always includes every property, even with no bookings in this period.
+$serviceRows = reportRows($pdo, "
+    SELECT hr.hotel_resort_id, COALESCE(NULLIF(TRIM(hr.name), ''), 'Unnamed property') service,
+           LOWER(COALESCE(NULLIF(TRIM(hr.type), ''), 'hotel')) type,
+           COUNT(hb.hotel_booking_id) bookings, COALESCE(SUM(hb.total_amount), 0) booking_value,
+           COALESCE(SUM(CASE WHEN LOWER(COALESCE(hb.booking_status, '')) = 'completed' THEN 1 ELSE 0 END), 0) completed
+    FROM hotel_resorts hr
+    LEFT JOIN hotel_room_bookings hb ON hb.hotel_resort_id = hr.hotel_resort_id
+        AND DATE(hb.created_at) BETWEEN :date_from AND :date_to
+    GROUP BY hr.hotel_resort_id, hr.name, hr.type
+    ORDER BY bookings DESC, booking_value DESC, service ASC, hr.hotel_resort_id ASC
+", $hotelParams);
+$mostHotelBookings = $serviceRows ? max(array_map('intval', array_column($serviceRows, 'bookings'))) : 0;
+$hotelBookingsOutsidePeriod = $mostHotelBookings === 0
+    ? (int)reportScalar($pdo, "SELECT COUNT(*) FROM hotel_room_bookings hb INNER JOIN hotel_resorts hr ON hr.hotel_resort_id=hb.hotel_resort_id WHERE hb.created_at IS NULL OR DATE(hb.created_at) NOT BETWEEN :date_from AND :date_to", $hotelParams)
+    : 0;
 $paymentMethods = reportRows($pdo, "SELECT COALESCE(NULLIF(LOWER(pt.payment_method_type),''),'other') label, COALESCE(SUM(pt.amount_minor),0)/100 total{$revenueSql} GROUP BY label ORDER BY total DESC", $paymentParams);
 
 if (isset($_GET['export']) && $_GET['export'] === 'csv') {
@@ -172,7 +204,7 @@ if (isset($_GET['export']) && $_GET['export'] === 'csv') {
     fputcsv($out, ['Metric', 'Value']);
     fputcsv($out, ['Total bookings', $totalBookings]); fputcsv($out, ['Gross payments collected', number_format($revenue, 2, '.', '')]);
     fputcsv($out, ['Unique tourists', $uniqueVisitors]); fputcsv($out, ['Completion rate', number_format($completionRate, 1) . '%']);
-    fputcsv($out, []); fputcsv($out, ['Top service', 'Type', 'Bookings', 'Booking value', 'Completed']);
+    fputcsv($out, []); fputcsv($out, ['Hotel / Resort', 'Type', 'Bookings', 'Booking value', 'Completed']);
     foreach ($serviceRows as $row) fputcsv($out, [reportCsvCell((string)$row['service']), ucfirst((string)$row['type']), $row['bookings'], $row['booking_value'], $row['completed']]);
     fclose($out); exit;
 }
@@ -201,7 +233,7 @@ $tourismReportExcelUrl = $tourismReportEndpoint . '?' . http_build_query($touris
   <title>Reports & Analytics | iTour Mercedes Admin</title>
   <link rel="icon" type="image/png" href="img/newlogo.png">
   <link rel="stylesheet" href="styles/admin_panel_theme.css">
-<link rel="stylesheet" href="styles/adreportsanalytics.css?v=12">
+<link rel="stylesheet" href="styles/adreportsanalytics.css?v=15">
   <link rel="stylesheet" href="styles/adreportsanalytics-tourism-fixes.css?v=3">
 </head>
 <body>
@@ -278,11 +310,11 @@ $tourismReportExcelUrl = $tourismReportEndpoint . '?' . http_build_query($touris
 
       <section class="analytics-grid secondary-grid">
         <article class="report-card destination-card">
-          <header class="card-heading"><div><span class="eyebrow">DESTINATION DEMAND</span><h2>Most booked locations</h2><p>Top destinations by reservation volume</p></div><div class="chart-tools"><button type="button" data-chart-download="destinationChart" data-filename="destination-demand" title="Download chart" aria-label="Download destination demand chart"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg></button><button type="button" data-chart-expand title="Expand chart" aria-label="Expand destination demand chart"><svg viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg></button></div></header>
+          <header class="card-heading"><div><span class="eyebrow">DESTINATION DEMAND</span><h2>Most booked locations</h2></div><div class="chart-tools"><button type="button" data-chart-download="destinationChart" data-filename="destination-demand" title="Download chart" aria-label="Download destination demand chart"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg></button><button type="button" data-chart-expand title="Expand chart" aria-label="Expand destination demand chart"><svg viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg></button></div></header>
           <div class="chart-wrap"><canvas id="destinationChart"></canvas></div>
         </article>
         <article class="report-card status-card">
-          <header class="card-heading"><div><span class="eyebrow">BOOKING HEALTH</span><h2>Status overview</h2><p>Current outcome of selected bookings</p></div><div class="chart-tools"><button type="button" data-chart-download="statusChart" data-filename="booking-status" title="Download chart" aria-label="Download booking status chart"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg></button><button type="button" data-chart-expand title="Expand chart" aria-label="Expand booking status chart"><svg viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg></button></div></header>
+          <header class="card-heading"><div><span class="eyebrow">BOOKING HEALTH</span><h2>Status overview</h2></div><div class="chart-tools"><button type="button" data-chart-download="statusChart" data-filename="booking-status" title="Download chart" aria-label="Download booking status chart"><svg viewBox="0 0 24 24"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 20h14"/></svg></button><button type="button" data-chart-expand title="Expand chart" aria-label="Expand booking status chart"><svg viewBox="0 0 24 24"><path d="M8 3H3v5M16 3h5v5M8 21H3v-5M16 21h5v-5"/></svg></button></div></header>
           <div class="status-content"><div class="status-chart"><canvas id="statusChart"></canvas></div><div class="status-list" id="statusLegend"></div></div>
         </article>
         <article class="report-card insight-card">
@@ -296,9 +328,12 @@ $tourismReportExcelUrl = $tourismReportEndpoint . '?' . http_build_query($touris
       </section>
 
       <section class="report-card services-card">
-        <header class="card-heading table-heading"><div><span class="eyebrow">SERVICE PERFORMANCE</span><h2>Top performing services</h2><p>Ranked by booking volume in the selected period</p></div><span class="table-count"><?= count($serviceRows) ?> services shown</span></header>
-        <div class="report-table-wrap"><table><thead><tr><th>Rank</th><th>Service</th><th>Type</th><th>Bookings</th><th>Completion</th><th>Booking value</th></tr></thead><tbody>
-        <?php if (!$serviceRows): ?><tr><td colspan="6"><div class="table-empty">No service activity found for this period.</div></td></tr><?php else: foreach ($serviceRows as $index=>$row): $rate=(int)$row['bookings']?((int)$row['completed']/(int)$row['bookings'])*100:0; ?><tr><td><span class="rank <?= $index<3?'top':'' ?>"><?= $index+1 ?></span></td><td><strong class="service-name"><?= htmlspecialchars((string)$row['service']) ?></strong></td><td><span class="type-badge <?= htmlspecialchars((string)$row['type']) ?>"><?= htmlspecialchars(ucfirst((string)$row['type'])) ?></span></td><td><b><?= number_format((int)$row['bookings']) ?></b></td><td><div class="completion-cell"><span><i style="width:<?= number_format($rate,1,'.','') ?>%"></i></span><b><?= number_format($rate,0) ?>%</b></div></td><td><strong><?= reportMoney((float)$row['booking_value']) ?></strong></td></tr><?php endforeach; endif; ?>
+        <?php if ($mostHotelBookings === 0 && $hotelBookingsOutsidePeriod > 0): ?>
+          <p class="hotel-period-note">No hotel or resort bookings were created in this selected period. <?= number_format($hotelBookingsOutsidePeriod) ?> booking<?= $hotelBookingsOutsidePeriod === 1 ? '' : 's' ?> exist outside this date range. Adjust the date filter to view them.</p>
+        <?php endif; ?>
+        <header class="card-heading table-heading"><div><span class="eyebrow">HOTEL PERFORMANCE</span><h2>Top performing hotels &amp; resorts</h2><div class="hotel-performance-legend"><span class="most-booked">Most booked</span><span class="moderate">Moderate</span><span class="no-bookings">No bookings</span></div></div><div class="hotel-performance-heading-meta"><p>All properties ranked by bookings created in the selected period</p><span class="table-count"><?= count($serviceRows) ?> properties shown</span></div></header>
+        <div class="report-table-wrap"><table><thead><tr><th>Rank</th><th>Hotel / Resort</th><th>Type</th><th>Bookings</th><th>Completion</th><th>Booking value</th></tr></thead><tbody>
+        <?php if (!$serviceRows): ?><tr><td colspan="6"><div class="table-empty">No hotels or resorts have been registered.</div></td></tr><?php else: foreach ($serviceRows as $index=>$row): $rate=(int)$row['bookings']?((int)$row['completed']/(int)$row['bookings'])*100:0;  $performance=(int)$row['bookings'] === 0 ? 'no-bookings' : ((int)$row['bookings'] === $mostHotelBookings ? 'most-booked' : 'moderate'); ?><tr class="hotel-performance-row <?= $performance ?>"><td><span class="rank <?= $performance === 'most-booked' ? 'top' : '' ?>"><?= $index+1 ?></span></td><td><strong class="service-name"><?= htmlspecialchars((string)$row['service']) ?></strong></td><td><span class="type-badge <?= htmlspecialchars((string)$row['type']) ?>"><?= htmlspecialchars(ucfirst((string)$row['type'])) ?></span></td><td><b><?= number_format((int)$row['bookings']) ?></b></td><td><div class="completion-cell"><span><i style="width:<?= number_format($rate,1,'.','') ?>%"></i></span><b><?= number_format($rate,0) ?>%</b></div></td><td><strong><?= reportMoney((float)$row['booking_value']) ?></strong></td></tr><?php endforeach; endif; ?>
         </tbody></table></div>
       </section>
       <footer class="reports-footer"><span>Data covers bookings created and payments collected from <?= htmlspecialchars($dateLabel) ?>.</span><button type="button" id="printReport"><svg viewBox="0 0 24 24"><path d="M6 9V3h12v6M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2M6 14h12v7H6z"/></svg>Print report</button></footer>
@@ -319,8 +354,8 @@ $tourismReportExcelUrl = $tourismReportEndpoint . '?' . http_build_query($touris
         <section class="detail-panel"><div class="detail-panel-title"><span>COLLECTION BREAKDOWN</span><h3>Payment channels</h3></div><div class="detail-channel-list">
           <?php if (!$paymentMethods): ?><p class="detail-empty">No successful collections in this period.</p><?php else: $paymentMaximum=max(array_map('floatval',array_column($paymentMethods,'total'))); foreach($paymentMethods as $method): $methodShare=$revenue>0?((float)$method['total']/$revenue)*100:0; ?><div><span><b><?= htmlspecialchars(ucwords(str_replace(['_','-'],' ',(string)$method['label']))) ?></b><small><?= number_format($methodShare,1) ?>% of collections</small></span><i><em style="width:<?= $paymentMaximum>0?number_format(((float)$method['total']/$paymentMaximum)*100,1,'.',''):0 ?>%"></em></i><strong><?= reportMoney((float)$method['total']) ?></strong></div><?php endforeach; endif; ?>
         </div></section>
-        <section class="detail-panel"><div class="detail-panel-title"><span>TOP SERVICES</span><h3>Booking performance</h3></div><div class="detail-service-list">
-          <?php if (!$serviceRows): ?><p class="detail-empty">No service activity in this period.</p><?php else: foreach(array_slice($serviceRows,0,5) as $index=>$service): ?><div><span><?= $index+1 ?></span><p><b><?= htmlspecialchars((string)$service['service']) ?></b><small><?= htmlspecialchars(ucfirst((string)$service['type'])) ?> · <?= number_format((int)$service['bookings']) ?> bookings</small></p><strong><?= reportMoney((float)$service['booking_value']) ?></strong></div><?php endforeach; endif; ?>
+        <section class="detail-panel"><div class="detail-panel-title"><span>TOP HOTELS &amp; RESORTS</span><h3>Property booking performance</h3></div><div class="detail-service-list">
+          <?php if (!$serviceRows): ?><p class="detail-empty">No hotels or resorts have been registered.</p><?php else: foreach(array_slice($serviceRows,0,5) as $index=>$service): ?><div><span><?= $index+1 ?></span><p><b><?= htmlspecialchars((string)$service['service']) ?></b><small><?= htmlspecialchars(ucfirst((string)$service['type'])) ?> · <?= number_format((int)$service['bookings']) ?> bookings</small></p><strong><?= reportMoney((float)$service['booking_value']) ?></strong></div><?php endforeach; endif; ?>
         </div></section>
       </div>
     </div>

@@ -80,12 +80,9 @@ if (self.__ITOUR_FIREBASE_CONFIGURED__) {
     const title = String(data.title || 'iTour Mercedes').slice(0, 120);
     const body = String(data.body || 'You have a new Administrator notification.').slice(0, 300);
     const targetUrl = safeInternalUrl(String(data.url || '')) || configuredAppUrl.href;
-    const iconUrl = new URL('img/newlogo.png', configuredAppUrl.href.endsWith('/') ? configuredAppUrl.href : `${configuredAppUrl.href}/`).href;
 
     return self.registration.showNotification(title, {
       body,
-      icon: iconUrl,
-      badge: iconUrl,
       tag: String(data.tag || 'itour-admin-notification').slice(0, 120),
       data: { url: targetUrl }
     });

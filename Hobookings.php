@@ -1118,17 +1118,17 @@ switch ($actionNotice) {
         $actionNoticeIcon = 'error';
         break;
     case 'expense-added':
-        $actionNoticeText = 'Additional expense added successfully.';
+        $actionNoticeText = 'Add-ons saved successfully.';
         $actionNoticeIcon = 'success';
         break;
 
     case 'expense-failed':
-        $actionNoticeText = 'Failed to add expense.';
+        $actionNoticeText = 'Failed to save add-ons.';
         $actionNoticeIcon = 'error';
         break;
 
     case 'expense-invalid':
-        $actionNoticeText = 'Please complete all expense fields.';
+        $actionNoticeText = 'Please complete all add-on fields.';
         $actionNoticeIcon = 'warning';
         break;
 }
@@ -1414,7 +1414,8 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Hobookings | Hotel Owner Bookings</title>
   <link rel="icon" type="image/png" href="img/newlogo.png" />
-  <link rel="stylesheet" href="styles/Ho_panel.css?v=notifications-4" />
+  <link rel="stylesheet" href="styles/Ho_panel.css?v=notifications-5" />
+  <link rel="stylesheet" href="styles/admin_receipt.css?v=3" />
   <link rel="stylesheet" href="styles/required-fields.css" />
   <script src="js/required-fields.js" defer></script>
   <script src="js/paymongo-return-navigation.js"></script>
@@ -1905,7 +1906,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
                               data-booking-id="<?= (int)$row['hotel_booking_id'] ?>"
                               data-guest="<?= htmlspecialchars($row['guest_name']) ?>"
                             >
-                              Billing
+                              View Billing
                             </button>
                             <?php if ($bookingCanCheckInToday): ?>
                               <?php if ((int)($row['hotel_room_id'] ?? 0) > 0): ?>
@@ -2290,7 +2291,8 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
       </div>
       <footer class="ho-billing-footer">
         <button type="button" class="ho-billing-btn close" id="hoCloseBilling">Close</button>
-        <button type="button" class="ho-billing-btn expense" id="hoBillingAddExpense">Add Expense</button>
+        <button type="button" class="ho-billing-btn expense" id="hoBillingPaymentSummary" disabled>Payment Receipt</button>
+        <button type="button" class="ho-billing-btn expense" id="hoBillingAddExpense">Add-ons</button>
         <div class="ho-billing-pay-wrap">
           <button type="button" class="ho-billing-btn pay" id="hoBillingPayBalance">Pay Balance</button>
           <small id="hoBillingPaidNote" hidden>Already paid</small>
@@ -2360,8 +2362,8 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
 
       <div class="ho-expense-modal-head">
         <div class="ho-expense-head-icon" aria-hidden="true">+</div>
-        <div><span>GUEST FOLIO</span><h3 id="hoExpenseTitle">Add Additional Expense</h3><p>Record itemized charges accurately against this booking.</p></div>
-        <button type="button" class="ho-close" id="hoCloseExpenseModal" aria-label="Close expense modal">
+        <div><span>GUEST FOLIO</span><h3 id="hoExpenseTitle">Add-ons</h3><p>Record itemized charges accurately against this booking.</p></div>
+        <button type="button" class="ho-close" id="hoCloseExpenseModal" aria-label="Close add-ons modal">
           &times;
         </button>
       </div>
@@ -2381,7 +2383,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
   <div id="hoExpenseRows">
 
     <div class="ho-expense-row" data-expense-row>
-      <div class="ho-expense-row-head"><span>EXPENSE ITEM 01</span><strong data-expense-row-total>₱0.00</strong></div>
+      <div class="ho-expense-row-head"><span>ADD-ON ITEM 01</span><strong data-expense-row-total>₱0.00</strong></div>
 
       <div class="ho-row-field">
         <label>Type</label>
@@ -2433,7 +2435,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
     </button>
 
     <button type="submit" class="ho-btn confirm">
-      Save Charges
+      Save Add-ons
     </button>
 
   </div>
@@ -3785,7 +3787,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
               <div class="ho-bd-section-title">
                 <span>${bookingDetailIcons.payment}</span>
                 <div><h4>Payment summary</h4><p>Current financial status of this booking</p></div>
-                <button type="button" class="ho-bd-go-billing" data-details-billing data-booking-id="${Number(data.booking_id || 0)}">Go to Billing</button>
+                <button type="button" class="ho-bd-go-billing" data-details-billing data-booking-id="${Number(data.booking_id || 0)}">View Billing</button>
               </div>
               <div class="ho-bd-payment-lines">
                 <div><span>Total booking amount</span><strong>${formatBookingMoney(data.total)}</strong></div>
@@ -3877,7 +3879,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
 const billingModal = document.getElementById('hoBillingModal');
 const billingBody = document.getElementById('hoBillingBody');
 const balancePaymentModal = document.getElementById('hoBalancePaymentModal');
-const hotelBillingState = { bookingId: 0, reference: '', guest: '', balance: 0, paid: false, canEdit: false };
+const hotelBillingState = { receipt: null, bookingId: 0, reference: '', guest: '', balance: 0, paid: false, canEdit: false };
 
 const closeHotelBilling = () => {
   billingModal?.classList.remove('open');
@@ -3894,6 +3896,8 @@ const closeHotelBalancePayment = () => {
 const renderHotelBilling = async (bookingId, guestName) => {
   if (!billingModal || !billingBody || !bookingId) return;
   hotelBillingState.bookingId = Number(bookingId);
+  hotelBillingState.receipt = null;
+  document.getElementById('hoBillingPaymentSummary').disabled = true;
   hotelBillingState.guest = guestName || 'Guest';
   billingModal.classList.add('open');
   billingModal.setAttribute('aria-hidden', 'false');
@@ -3936,6 +3940,9 @@ const renderHotelBilling = async (bookingId, guestName) => {
       checkoutPayment > 0 ? `<div><span>Paid during check-out · ${escapeProfileText(String(booking.checkout_payment_method || 'Not recorded').replace('_', ' ').toUpperCase())}</span><strong>${formatBookingMoney(checkoutPayment)}</strong></div>` : ''
     ].filter(Boolean).join('') || '<div><span>No payments recorded</span><strong>₱0.00</strong></div>';
 
+    if (hotelBillingState.bookingId !== Number(bookingId)) return;
+    hotelBillingState.receipt = { kind: 'hotel', booking, expenses, guest, serviceName: booking.room_type || 'Hotel room', serviceAmount: roomCharge, checkoutCharges, billingTotal: total, amountPaid, balance, paymentStatus };
+    document.getElementById('hoBillingPaymentSummary').disabled = false;
     hotelBillingState.guest = guest;
     hotelBillingState.reference = String(booking.booking_reference || booking.hotel_booking_id || '');
     hotelBillingState.balance = balance;
@@ -3984,6 +3991,10 @@ document.querySelectorAll('[data-open-billing]').forEach(button => {
     closeRowActions(null);
     renderHotelBilling(button.dataset.bookingId, button.dataset.guest);
   });
+});
+
+document.getElementById('hoBillingPaymentSummary').addEventListener('click', () => {
+  if (hotelBillingState.receipt) window.BookingPaymentSummary.open(hotelBillingState.receipt);
 });
 
 document.getElementById('hoCloseBilling')?.addEventListener('click', closeHotelBilling);
@@ -4116,7 +4127,7 @@ function createExpenseRow() {
   row.dataset.expenseRow = '';
 
   row.innerHTML = `
-    <div class="ho-expense-row-head"><span>EXPENSE ITEM</span><strong data-expense-row-total>₱0.00</strong></div>
+    <div class="ho-expense-row-head"><span>ADD-ON ITEM</span><strong data-expense-row-total>₱0.00</strong></div>
     <div class="ho-row-field">
       <label>Type</label>
       <select name="expense_type[]" required>
@@ -4187,7 +4198,7 @@ function updateHotelExpenseTotals() {
     grandTotal += rowTotal;
     const label = row.querySelector('.ho-expense-row-head span');
     const total = row.querySelector('[data-expense-row-total]');
-    if (label) label.textContent = `EXPENSE ITEM ${String(index + 1).padStart(2, '0')}`;
+    if (label) label.textContent = `ADD-ON ITEM ${String(index + 1).padStart(2, '0')}`;
     if (total) total.textContent = formatBookingMoney(rowTotal);
   });
   const grandTotalElement = document.getElementById('hoExpenseGrandTotal');
@@ -4427,6 +4438,7 @@ updateHotelExpenseTotals();
 
     })();
   </script>
+<script src="js/booking-payment-summary.js?v=3"></script>
 </body>
 </html>
 

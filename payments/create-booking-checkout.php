@@ -7,6 +7,7 @@ require_once __DIR__ . '/../php/db_connection.php';
 require_once __DIR__ . '/../php/tourist_auth_helper.php';
 require_once __DIR__ . '/../php/hotel_rooms_helper.php';
 require_once __DIR__ . '/../php/additional_fees_helper.php';
+require_once __DIR__ . '/../php/payment_receipt_breakdown.php';
 require_once __DIR__ . '/../php/package_checkout_authority_helper.php';
 require_once __DIR__ . '/../php/tour_resource_availability_helper.php';
 require_once __DIR__ . '/../php/request_rate_limiter.php';
@@ -237,6 +238,16 @@ try {
             $serviceTotal = $rates['tourguide'];
             if ($addOn === 'boat') $serviceTotal += $rates['boat'] * $requiredBoats;
         }
+        $priceRows = [];
+        if ($domain === 'package') {
+            $priceRows[] = PaymentReceiptLine('Tour package fare — ' . $packageName, $serviceTotal,
+                'Package inclusions are bundled; separate boat and guide prices are not billed individually.', $guestCount, (float)$package['price']);
+        } else {
+            if ($domain === 'boat' || $addOn === 'boat') $priceRows[] = PaymentReceiptLine('Boat hire', $rates['boat'] * $requiredBoats,
+                $tourType === 'overnight' ? 'Overnight rate' : 'Day-tour rate', $requiredBoats, $rates['boat']);
+            if ($domain === 'tourguide' || $addOn === 'tourguide') $priceRows[] = PaymentReceiptLine('Tour guide fee', $rates['tourguide'],
+                $tourType === 'overnight' ? 'Overnight rate' : 'Day-tour rate', 1, $rates['tourguide']);
+        }
         $configuredFees = additionalFeesForBooking(getAdditionalFees($pdo));
         $ecoRates = $configuredFees['environmental'];
         $eco = strtolower(bookingCheckoutText($input['ecoCategory'] ?? '', 20));
@@ -244,6 +255,7 @@ try {
             throw new DomainException('Select a valid environmental-fee category.');
         }
         $environmental = $ecoRates[$eco] * $adults;
+        $priceRows[] = PaymentReceiptLine('Environmental fee', $environmental, ucfirst($eco) . ' category', $adults, $ecoRates[$eco]);
         $childAgesInput = $input['childAges'] ?? [];
         if (!is_array($childAgesInput) || count($childAgesInput) !== $children) {
             throw new DomainException('Provide one valid age for every child.');
@@ -263,7 +275,13 @@ try {
                 ? (float)$entrance['Canimog Island'][$rateKey]
                 : ($entrance[$location] ?? 0);
             $fees += $entranceRate * $entranceGuests;
-            if ($usesBoat) $fees += ($docking[$location] ?? 0) * $requiredBoats;
+            if ($entranceRate > 0) $priceRows[] = PaymentReceiptLine('Entrance fee — ' . $location, $entranceRate * $entranceGuests,
+                $freeChildren > 0 ? $freeChildren . ' child(ren) age 7 or below exempt.' : '', $entranceGuests, (float)$entranceRate);
+            if ($usesBoat) {
+                $dockingRate = (float)($docking[$location] ?? 0);
+                $fees += $dockingRate * $requiredBoats;
+                if ($dockingRate > 0) $priceRows[] = PaymentReceiptLine('Docking / landing fee — ' . $location, $dockingRate * $requiredBoats, '', $requiredBoats, $dockingRate);
+            }
         }
         $total = round($serviceTotal + $fees, 2);
         $rawResourceId = $domain === 'boat' ? ($input['boat_id'] ?? 0)
@@ -335,6 +353,7 @@ try {
             'additional_boat_ids' => $validatedAdditionalBoatIds,
             'additional_boat_names' => $additionalBoatNames,
             'child_ages' => $childAges,
+            'price_breakdown' => ['version' => 1, 'rows' => $priceRows],
         ];
         $serviceName = $packageName !== '' ? $packageName : ucfirst($domain) . ' booking';
         $lineDescription = $bookingDate . ' | ' . $guestCount . ' guest(s)';

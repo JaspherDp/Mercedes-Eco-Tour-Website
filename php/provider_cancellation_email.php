@@ -47,28 +47,63 @@ function bookingWorkflowEmailShell(string $eyebrow, string $title, string $intro
         . '<p style="margin:22px 0 0;font-size:12px;line-height:1.6;color:#75857f;text-align:left;text-indent:0;">If you need assistance, reply to this email and our tourism team will help you.</p>' . itourEmailQuickLinks() . '</td></tr></table></td></tr></table></body></html>';
 }
 
+function bookingWorkflowConfigureSmtp(PHPMailer $mail): void
+{
+    $mail->isSMTP();
+    $mail->Host = PaymentHelper::env('SMTP_HOST', 'smtp.gmail.com');
+    $mail->SMTPAuth = true;
+    $mail->Username = PaymentHelper::env('SMTP_USERNAME', 'itourmercedes@gmail.com');
+    $mail->Password = PaymentHelper::env('SMTP_PASSWORD');
+    $mail->Port = (int)PaymentHelper::env('SMTP_PORT', '587');
+    $mail->SMTPSecure = $mail->Port === 465
+        ? PHPMailer::ENCRYPTION_SMTPS
+        : PHPMailer::ENCRYPTION_STARTTLS;
+    $mail->Timeout = 45;
+    $ssl = ['verify_peer' => true, 'verify_peer_name' => true, 'allow_self_signed' => false];
+    $configuredCaBundle = PaymentHelper::env('SMTP_CA_FILE');
+    if ($configuredCaBundle !== '') {
+        if (!is_file($configuredCaBundle) || !is_readable($configuredCaBundle)) {
+            throw new RuntimeException('The configured SMTP_CA_FILE is missing or unreadable.');
+        }
+        $ssl['cafile'] = $configuredCaBundle;
+    } else {
+        // These bundles are optional deployment files. Without one, PHP uses
+        // its configured/system CA store; never force a nonexistent cafile.
+        $candidates = PHP_OS_FAMILY === 'Windows'
+            ? [__DIR__ . '/../certs/smtp-ca-bundle.local.pem', __DIR__ . '/../certs/firebase-ca-bundle.pem']
+            : [__DIR__ . '/../certs/firebase-ca-bundle.pem'];
+        foreach ($candidates as $candidate) {
+            if (is_file($candidate) && is_readable($candidate)) {
+                $ssl['cafile'] = $candidate;
+                break;
+            }
+        }
+    }
+    $mail->SMTPOptions = ['ssl' => $ssl];
+}
+
+function bookingWorkflowEmailFailureMessage(?string $message = null): string
+{
+    static $lastMessage = 'The email server did not accept the message. Check the server PHP error log for the SMTP error, then try again.';
+    if ($message !== null) $lastMessage = $message;
+    return $lastMessage;
+}
+
 function sendBookingWorkflowEmail(string $email, string $name, string $subject, string $html, string $plain): bool
 {
-    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) return false;
+    bookingWorkflowEmailFailureMessage('The email server did not accept the message. Check the server PHP error log for the SMTP error, then try again.');
+    $email = trim($email);
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        bookingWorkflowEmailFailureMessage('The tourist email address is missing or invalid. Correct it before resending the notice.');
+        error_log('Booking workflow email failed: missing or invalid recipient address.');
+        return false;
+    }
     $mail = new PHPMailer(true);
     try {
-        $mail->isSMTP();
-        $mail->Host = getenv('SMTP_HOST') ?: 'smtp.gmail.com';
-        $mail->SMTPAuth = true;
-        $mail->Username = getenv('SMTP_USERNAME') ?: 'itourmercedes@gmail.com';
-        $mail->Password = PaymentHelper::env('SMTP_PASSWORD');
-        $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->Port = (int)(getenv('SMTP_PORT') ?: 587);
-        $mail->Timeout = 45;
-        $trustedCaBundle = realpath(__DIR__ . '/../certs/firebase-ca-bundle.pem');
-        $mail->SMTPOptions = [
-            'ssl' => [
-                'verify_peer' => true,
-                'verify_peer_name' => true,
-                'allow_self_signed' => false,
-                'cafile' => $trustedCaBundle !== false ? $trustedCaBundle : (string)ini_get('openssl.cafile'),
-            ],
-        ];
+        bookingWorkflowConfigureSmtp($mail);
+        if ($mail->Password === '') {
+            throw new RuntimeException('SMTP_PASSWORD is missing from the private environment configuration.');
+        }
         $mail->CharSet = 'UTF-8';
         $mail->setFrom($mail->Username, 'iTour Mercedes');
         $mail->addReplyTo($mail->Username, 'iTour Mercedes');
@@ -77,9 +112,18 @@ function sendBookingWorkflowEmail(string $email, string $name, string $subject, 
         $mail->Subject = $subject;
         $mail->Body = $html;
         $mail->AltBody = $plain;
-        return BookingConfirmationEmailSend($mail);
+        if (BookingConfirmationEmailSend($mail)) return true;
+        throw new RuntimeException($mail->ErrorInfo ?: 'The SMTP server did not accept the message.');
     } catch (Throwable $error) {
         error_log('Booking workflow email failed: ' . $error->getMessage());
+        $detail = strtolower($error->getMessage());
+        if (str_contains($detail, 'certificate') || str_contains($detail, 'smtp_ca_file')) {
+            bookingWorkflowEmailFailureMessage('The email connection failed certificate verification. Check the server trusted CA certificates and SMTP_CA_FILE setting, then try again.');
+        } elseif (str_contains($detail, 'authenticat') || str_contains($detail, 'smtp_password')) {
+            bookingWorkflowEmailFailureMessage('The email server authentication failed. Check SMTP_USERNAME and SMTP_PASSWORD in the private server configuration, then try again.');
+        } elseif (str_contains($detail, 'connect') || str_contains($detail, 'timed out')) {
+            bookingWorkflowEmailFailureMessage('The website could not connect to the email server. Check SMTP_HOST, SMTP_PORT and hosting outbound SMTP access, then try again.');
+        }
         return false;
     }
 }

@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/WalkinGuestPayment.php';
 
 require_once __DIR__ . '/../php/session_security.php';
 AppSessionStart();
@@ -438,9 +439,12 @@ try {
                     b.package_name, b.location, b.preferred_resource,
                     b.booking_date, b.pax, b.num_adults, b.num_children,
                     b.tour_type, b.tour_range, b.payment_amount, b.grand_total,
-                    t.full_name, t.email, t.phone_number
+                    b.walkin_guest_name,
+                    COALESCE(t.full_name,b.walkin_guest_name) AS full_name,
+                    COALESCE(t.email,b.walkin_guest_email) AS email,
+                    COALESCE(NULLIF(b.phone_number,''),t.phone_number) AS phone_number
              FROM bookings b
-             INNER JOIN tourist t ON t.tourist_id = b.tourist_id
+             LEFT JOIN tourist t ON t.tourist_id = b.tourist_id
              WHERE b.booking_id = ?{$touristOwnershipSql}
              LIMIT 1 FOR UPDATE"
         );
@@ -466,7 +470,7 @@ try {
         }
         if ($isAdminStaff || $isOperatorStaff) {
             $touristId = (int)$booking['tourist_id'];
-            if ($touristId < 1) {
+            if ($touristId < 1 && !WalkinGuestPayment::isGuestBooking($booking)) {
                 throw new DomainException('This booking has no valid tourist account for payment reconciliation.');
             }
             if ($completeAfterPayment && $status !== 'accepted') {
@@ -511,6 +515,11 @@ try {
         }
     }
     $balanceMinor = PaymentHelper::amountToCentavos($paymentAmount);
+    if (!empty($_POST['walkin_full_payment']) && (!$isAdminStaff || $bookingDomain === 'hotel'
+        || stripos((string)($booking['preferred_resource'] ?? ''), 'Walk-in booking') === false
+        || abs($paymentAmount - $remainingBalance) > 0.009)) {
+        throw new DomainException('Walk-in QR payments must collect the full booking balance.');
+    }
     $touristName = trim((string)$booking['full_name']);
     $touristEmail = trim((string)$booking['email']);
     $touristPhone = trim((string)$booking['phone_number']);
@@ -563,6 +572,12 @@ try {
                 (int)$existing['payment_transaction_id'],
             ]);
             $existing['metadata'] = json_encode($existingMetadata, JSON_THROW_ON_ERROR | JSON_UNESCAPED_SLASHES);
+        }
+        if ($isAdminStaff && !empty($_POST['walkin_full_payment']) && empty($existingMetadata['accept_walkin_after_payment'])) {
+            $existingMetadata['accept_walkin_after_payment'] = true;
+            $updateWalkinIntent = $pdo->prepare('UPDATE payment_transactions SET metadata=? WHERE payment_transaction_id=?');
+            $updateWalkinIntent->execute([json_encode($existingMetadata, JSON_THROW_ON_ERROR), (int)$existing['payment_transaction_id']]);
+            $existing['metadata'] = json_encode($existingMetadata, JSON_THROW_ON_ERROR);
         }
     }
 
@@ -633,7 +648,11 @@ try {
             'booking_domain' => $bookingDomain,
             'booking_id' => (string)$bookingId,
         ];
+        if (($isAdminStaff || $isOperatorStaff) && $touristId === 0 && WalkinGuestPayment::isGuestBooking($booking)) {
+            $metadataPayload['walkin_guest_booking_id'] = (string)$bookingId;
+        }
         if ($isAdminStaff) {
+            $metadataPayload['accept_walkin_after_payment'] = !empty($_POST['walkin_full_payment']);
             $metadataPayload['admin_id'] = (string)((int)($_SESSION['admin_id'] ?? 0));
             $metadataPayload['admin_name'] = trim((string)($_SESSION['admin_name'] ?? 'Administrator'));
             $metadataPayload['complete_after_payment'] = $completeAfterPayment;

@@ -1,0 +1,30 @@
+#expenseModal .expense-modal-box { max-width: 760px; }
+#expenseModal .admin-addon-guest { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; padding: 14px; border: 1px solid #dce8e3; border-radius: 10px; background: #f7fbf9; }
+.admin-addon-guest small { display: block; margin-bottom: 5px; color: #6c847a; font-size: 9px; font-weight: 800; letter-spacing: .07em; }
+.admin-addon-guest strong { color: #163f32; font-size: 13px; }
+.admin-addon-guest > span { flex: none; padding: 5px 9px; border-radius: 20px; background: #e4f4ec; color: #176448; font-size: 9px; font-weight: 800; }
+.admin-addon-row { position: relative; margin-bottom: 15px; overflow: hidden; border: 1px solid #d5e4dd; border-radius: 11px; background: #fff; }
+.admin-addon-row > header { display: flex; align-items: center; justify-content: space-between; box-sizing: border-box; min-height: 38px; gap: 12px; padding: 7px 50px 7px 14px; background: #f3f8f6; border-bottom: 1px solid #e2ece7; }
+.admin-addon-row > header span { color: #607c70; font-size: 9px; font-weight: 800; letter-spacing: .06em; }
+.admin-addon-row > header strong { color: #17634d; font-size: 11px; }
+.admin-addon-fields { display: grid; grid-template-columns: minmax(0,1.3fr) minmax(0,1.5fr) minmax(55px,.5fr) minmax(85px,.85fr); gap: 10px; align-items: end; padding: 14px; }
+.admin-addon-fields label { display: flex; flex-direction: column; gap: 5px; min-width: 0; margin: 0; color: #294f40; font-size: 10px; font-weight: 750; }
+#expenseModal .admin-addon-fields .expense-input { box-sizing: border-box; width: 100%; min-width: 0; height: 39px; padding: 9px 10px; border-radius: 8px; font-size: 11px; }
+.admin-addon-price { position: relative; display: block; }
+.admin-addon-price > span { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #6f827a; font-weight: 500; }
+#expenseModal .admin-addon-price .expense-input { padding-left: 26px; }
+.admin-addon-notes { grid-column: 1 / -1; }
+.admin-addon-remove { position: absolute; top: 5px; right: 10px; display: grid; place-items: center; box-sizing: border-box; width: 28px; height: 28px; padding: 0; border: 1px solid #f1cbd3; border-radius: 7px; background: #fff1f3; color: #bd2642; font-size: 18px; line-height: 1; cursor: pointer; }
+.admin-addon-remove:disabled { opacity: .4; cursor: not-allowed; }
+.admin-addon-total { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 22px; padding: 14px; border-radius: 9px; background: #e4f2ec; color: #16513c; font-size: 11px; font-weight: 800; }
+.admin-addon-total strong { font-size: 17px; }
+#expenseModal .expense-actions { align-items: center; justify-content: space-between; background: #fff; border-top: 0; margin-top: 0; }
+.admin-addon-footer-right { display: flex; gap: 8px; }
+#adminAddonAdd:disabled { opacity: .5; cursor: not-allowed; }
+@media (max-width: 640px) {
+  .admin-addon-fields { grid-template-columns: minmax(0,1fr) minmax(0,1fr); }
+  .admin-addon-notes { grid-column: 1 / -1; }
+  #expenseModal .expense-actions { flex-wrap: wrap; gap: 10px; }
+  #expenseModal .expense-actions .expense-action-btn { min-width: 0; padding: 9px 11px; }
+  .admin-addon-footer-right { flex: 1; }
+}

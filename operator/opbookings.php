@@ -9,6 +9,7 @@ require_once __DIR__ . '/../php/booking_reference_helper.php';
 require_once __DIR__ . '/../php/tour_resource_availability_helper.php';
 require_once __DIR__ . '/../php/firebase_config.php';
 require_once __DIR__ . '/../php/input_validation.php';
+require_once __DIR__ . '/../php/payment_receipt_breakdown.php';
 require_once __DIR__ . '/../payments/PayMongoService.php';
 require_once __DIR__ . '/../payments/PaymentReconciler.php';
 
@@ -109,9 +110,7 @@ if (($_GET['action'] ?? '') === 'fetch_billing') {
         if ($bookingId <= 0) throw new RuntimeException('Invalid booking reference.');
 
         $billingStmt = $pdo->prepare("
-            SELECT b.booking_id, b.booking_reference, b.package_name, b.grand_total,
-                   b.payment_amount, b.remaining_balance, b.payment_method, b.is_paid,
-                   b.status, b.is_complete,
+            SELECT b.*,
                    COALESCE(NULLIF(TRIM(t.full_name), ''), CONCAT('Tourist #', b.tourist_id)) AS guest_name
             FROM bookings b
             LEFT JOIN tourist t ON t.tourist_id = b.tourist_id
@@ -123,16 +122,20 @@ if (($_GET['action'] ?? '') === 'fetch_billing') {
         if (!$billingBooking) throw new RuntimeException('Booking not found or access was denied.');
 
         $expenseStmt = $pdo->prepare("
-            SELECT expense_type, amount, note, created_at
+            SELECT *
             FROM booking_expenses
             WHERE booking_id = ?
             ORDER BY created_at ASC
         ");
         $expenseStmt->execute([$bookingId]);
+        $receiptExpenses = $expenseStmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $receiptBase = max(0, max((float)$billingBooking['grand_total'], (float)$billingBooking['payment_amount'] + (float)$billingBooking['remaining_balance']) - array_sum(array_column($receiptExpenses, 'amount')));
+        $receiptBreakdown = PaymentReceiptTourBreakdown($pdo, $billingBooking, $receiptBase);
         echo json_encode([
             'success' => true,
             'booking' => $billingBooking,
-            'expenses' => $expenseStmt->fetchAll(PDO::FETCH_ASSOC) ?: []
+            'receipt_breakdown' => $receiptBreakdown,
+            'expenses' => $receiptExpenses
         ]);
     } catch (Throwable $error) {
         http_response_code(400);
@@ -912,6 +915,7 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
   <link rel="icon" type="image/png" href="img/newlogo.png" />
   <link rel="stylesheet" href="styles/Ho_panel.css" />
   <link rel="stylesheet" href="styles/operator_booking_drawer.css?v=2" />
+  <link rel="stylesheet" href="styles/admin_receipt.css?v=3" />
   <link rel="stylesheet" href="styles/required-fields.css" />
   <script src="js/required-fields.js" defer></script>
   <style>
@@ -1489,6 +1493,7 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
     .op-qr-device-action { min-height: 35px; padding: 7px 11px; border: 1px solid #bcd7cd; border-radius: 8px; color: #1f654f; background: #fff; font: inherit; font-size: 9px; font-weight: 850; cursor: pointer; white-space: nowrap; }
     .op-qr-device-action:disabled { cursor: wait; opacity: .6; }
     .op-phone-toolbar { display: inline-flex; align-items: center; gap: 7px; min-height: 40px; padding: 9px 13px; border: 1px solid #17604c; border-radius: 999px; color: #fff; background: linear-gradient(135deg,#278066,#17604c); font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; box-shadow: 0 6px 14px rgba(23,96,76,.2); transition: transform .18s ease, box-shadow .18s ease, background .18s ease; }
+    #opOpenWalkinBooking { font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
     .op-phone-toolbar span { color: #fff; }
     .op-phone-toolbar svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; }
     .op-phone-toolbar:hover { transform: translateY(-1px); background: linear-gradient(135deg,#226d59,#174e3f); box-shadow: 0 9px 19px rgba(27,91,71,.25); }
@@ -1890,6 +1895,7 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             data-view
                             data-booking='<?= htmlspecialchars(json_encode([
                               'id' => (string)($row['booking_reference'] ?: $row['booking_id']),
+                              'booking_id' => (int)$row['booking_id'],
                               'guest' => (string)$row['guest_name'],
                               'email' => (string)$row['guest_email'],
                               'profile_image' => $profilePath,
@@ -1928,11 +1934,7 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
                             </form>
                           <?php endif; ?>
 
-                          <?php if ($status === 'accepted' && $remainingBalance > 0): ?>
-                            <button type="button" class="ho-btn op-action-payment" data-payment data-id="<?= (int)$row['booking_id'] ?>" data-balance="<?= htmlspecialchars((string)$remainingBalance) ?>">Record Payment</button>
-                          <?php endif; ?>
-
-                          <button type="button" class="ho-btn op-action-billing" data-billing data-id="<?= (int)$row['booking_id'] ?>">Billing</button>
+                          <button type="button" class="ho-btn op-action-billing" data-billing data-id="<?= (int)$row['booking_id'] ?>">View Billing</button>
 
                           <?php if ($status === 'accepted' && strtolower((string)$row['is_complete']) !== 'completed'): ?>
                             <button type="button" class="ho-btn op-action-complete" data-complete data-id="<?= (int)$row['booking_id'] ?>" data-balance="<?= htmlspecialchars((string)$remainingBalance) ?>">Mark Completed</button>
@@ -2284,7 +2286,8 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
       </div>
       <footer class="op-billing-footer">
         <button type="button" data-close-billing>Close</button>
-        <button type="button" class="secondary" id="opBillingAddExpense">Add Expense</button>
+        <button type="button" class="secondary" id="opBillingPaymentSummary" disabled>Payment Receipt</button>
+        <button type="button" class="secondary" id="opBillingAddExpense">Add-ons</button>
         <button type="button" class="primary" id="opBillingPayBalance">Pay Balance</button>
       </footer>
     </section>
@@ -2294,12 +2297,11 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
     <div class="ho-modal-card op-payment-card" role="dialog" aria-modal="true" aria-labelledby="opPaymentTitle">
       <header class="op-payment-header">
         <span class="op-payment-header-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 10h18M7 15h4"/></svg></span>
-        <div class="op-payment-header-copy"><small>PAYMENT COLLECTION</small><h3 id="opPaymentTitle">Pay Balance</h3><p>Record cash or create a secure PayMongo QR.</p></div>
+        <div class="op-payment-header-copy"><small>PAYMENT COLLECTION</small><h3 id="opPaymentTitle">Pay Balance</h3><p id="opPaymentContextNote">Record cash or create a secure PayMongo QR.</p></div>
         <button type="button" class="op-payment-close" data-close-modal="opPaymentModal" aria-label="Close pay balance">&times;</button>
       </header>
       <form id="opPaymentForm" class="op-modal-form op-payment-form">
         <input type="hidden" name="booking_id" id="opPaymentBookingId">
-        <input type="hidden" name="complete_after_payment" id="opCompleteAfterPayment" value="">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($opPayMongoCsrf, ENT_QUOTES, 'UTF-8') ?>">
         <div class="op-payment-balance-callout">Remaining balance:<strong id="opPaymentInfo">₱0.00</strong></div>
         <label>Payment Method<select name="payment_method" id="opPaymentMethod" required><option value="" selected disabled>Select payment method</option><option value="cash">Cash</option><option value="qr_code">QR Code (PayMongo)</option></select></label>
@@ -2364,23 +2366,23 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <span class="op-expense-header-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v18M17 7.5c0-2-2-3-5-3s-5 1.3-5 3 1.5 2.5 5 3.5 5 1.8 5 3.8-2 3.2-5 3.2-5-1.2-5-3.2"/></svg></span>
         <div class="op-expense-header-copy">
           <small>BOOKING CHARGE</small>
-          <h3 id="opExpenseTitle">Add Expense</h3>
+          <h3 id="opExpenseTitle">Add-ons</h3>
           <p>Add an itemized charge to this booking account.</p>
         </div>
-        <button type="button" class="op-expense-close" data-close-modal="opExpenseModal" aria-label="Close add expense">&times;</button>
+        <button type="button" class="op-expense-close" data-close-modal="opExpenseModal" aria-label="Close add-ons">&times;</button>
       </header>
       <form id="opExpenseForm" class="op-modal-form op-expense-form">
         <input type="hidden" name="booking_id" id="opExpenseBookingId">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($operatorBookingCsrf, ENT_QUOTES, 'UTF-8') ?>">
-        <label>Expense Type
-          <select name="expense_type" required><option value="additional_boat">Additional Boat</option><option value="additional_tourguide">Additional Tour Guide</option><option value="food">Food</option><option value="others">Other Expense</option></select>
+        <label>Add-on Type
+          <select name="expense_type" required><option value="additional_boat">Additional Boat</option><option value="additional_tourguide">Additional Tour Guide</option><option value="food">Food</option><option value="others">Other Add-on</option></select>
           <small>Select the category that best describes this additional charge.</small>
         </label>
         <label>Amount
           <span class="op-expense-money"><span>₱</span><input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" required></span>
         </label>
-        <label>Note <small>Optional description shown in the billing breakdown.</small><textarea name="note" maxlength="255" placeholder="Add a short explanation for this expense"></textarea></label>
-        <div class="op-modal-actions op-expense-footer"><button type="button" class="ho-btn" data-close-modal="opExpenseModal">Cancel</button><button type="submit" class="ho-btn confirm">Save Expense</button></div>
+        <label>Note <small>Optional description shown in the billing breakdown.</small><textarea name="note" maxlength="255" placeholder="Add a short explanation for this add-on"></textarea></label>
+        <div class="op-modal-actions op-expense-footer"><button type="button" class="ho-btn" data-close-modal="opExpenseModal">Cancel</button><button type="submit" class="ho-btn confirm">Save Add-ons</button></div>
       </form>
     </div>
   </div>
@@ -3168,7 +3170,7 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
             </section>
 
             <section class="ho-bd-drawer-section ho-bd-payment-card">
-              <div class="ho-bd-section-title"><span>${bookingDetailIcons.payment}</span><div><h4>Payment summary</h4><p>Current financial status of this booking</p></div></div>
+              <div class="ho-bd-section-title"><span>${bookingDetailIcons.payment}</span><div><h4>Payment summary</h4><p>Current financial status of this booking</p></div><button type="button" class="ho-bd-go-billing" data-details-billing data-booking-id="${Number(data.booking_id || 0)}">View Billing</button></div>
               <div class="ho-bd-payment-lines">
                 <div><span>Grand total</span><strong>${formatDetailMoney(grandTotal)}</strong></div>
                 <div><span>Amount received</span><strong>${formatDetailMoney(paidAmount)}</strong></div>
@@ -3185,6 +3187,12 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
               <p><strong>Booking record verified</strong>Details shown here are loaded directly from the operator's current booking record.</p>
             </div>
           `;
+          grid.querySelector('[data-details-billing]')?.addEventListener('click', event => {
+            const bookingId = Number(event.currentTarget.dataset.bookingId || 0);
+            if (bookingId <= 0) return;
+            closeBookingDetails();
+            openBilling(bookingId);
+          });
           lastDetailsTrigger = btn;
           closeRowActions();
           modal.classList.add('show');
@@ -3221,7 +3229,7 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
       const billingSubtitle = document.getElementById('opBillingSubtitle');
       const billingAddExpense = document.getElementById('opBillingAddExpense');
       const billingPayBalance = document.getElementById('opBillingPayBalance');
-      const billingState = { bookingId: 0, balance: 0, canAddExpense: false };
+      const billingState = { receipt: null, bookingId: 0, balance: 0, canAddExpense: false };
       const opPayMongoCsrf = <?= json_encode($opPayMongoCsrf, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
       const operatorBookingCsrf = <?= json_encode($operatorBookingCsrf, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
       const opPayMongoEndpoint = <?= json_encode(
@@ -3256,6 +3264,7 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
         if (!contentType.includes('application/json')) throw new Error('The payment service returned an unexpected response.');
         return response.json();
       };
+      const paymentFlow = { fromMarkCompleted: false };
       const updatePaymentMethod = () => {
         const qr = paymentMethod?.value === 'qr_code';
         const devicePanel = document.getElementById('opQrDevicePanel');
@@ -3265,20 +3274,25 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
           : paymentMethod?.value === 'cash'
             ? 'Confirm only after receiving the cash payment from the tourist.'
             : 'Choose how the tourist will settle this balance.';
-        if (paymentSubmit) paymentSubmit.textContent = qr ? 'Send PayMongo QR' : 'Confirm Payment';
+        if (paymentSubmit) paymentSubmit.textContent = qr ? 'Send PayMongo QR' : (paymentFlow.fromMarkCompleted ? 'Pay Balance' : 'Confirm Payment');
         if (qr) startOperatorPaymentPhonePolling();
         else stopOperatorPaymentPhonePolling();
       };
-      const preparePaymentModal = (bookingId, balance, completeAfterPayment = false) => {
+      const preparePaymentModal = (bookingId, balance, fromMarkCompleted = false) => {
         const normalizedBalance = Math.max(0, Number(balance || 0));
         document.getElementById('opPaymentBookingId').value = String(bookingId || '');
-        document.getElementById('opCompleteAfterPayment').value = completeAfterPayment ? '1' : '';
+        paymentFlow.fromMarkCompleted = Boolean(fromMarkCompleted);
+        document.getElementById('opPaymentTitle').textContent = fromMarkCompleted ? 'Pay the Balance Before Completing This Booking' : 'Pay Balance';
+        document.getElementById('opPaymentContextNote').textContent = fromMarkCompleted
+          ? 'The full balance must be collected to mark this booking as completed.'
+          : 'Record cash or create a secure PayMongo QR.';
         if (paymentMethod) paymentMethod.value = '';
         document.getElementById('opPaymentInfo').textContent = billingMoney(normalizedBalance);
         const amount = document.querySelector('#opPaymentForm [name="amount"]');
         if (amount) {
           amount.value = normalizedBalance.toFixed(2);
           amount.max = normalizedBalance.toFixed(2);
+          amount.readOnly = Boolean(fromMarkCompleted);
         }
         updatePaymentMethod();
         openModal(paymentModal);
@@ -3442,7 +3456,7 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
         if (!response.ok || !result.success) throw new Error(result.message || 'The pending QR payment could not be cancelled.');
         return Boolean(result.cancelled);
       }
-      async function monitorOperatorPhoneQrPayment(token, bookingId) {
+      async function monitorOperatorPhoneQrPayment(token, bookingId, fromMarkCompleted = false) {
         let cancelRequested = false;
         Swal.fire({ title: 'QR Sent to Operator Phone', text: 'Waiting for the tourist payment. The booking updates automatically after PayMongo verifies it.', allowOutsideClick: false, allowEscapeKey: false, showCancelButton: true, showConfirmButton: false, cancelButtonText: 'Cancel Payment', cancelButtonColor: '#b5444f', didOpen: () => Swal.showLoading() }).then(result => {
           if (result.dismiss === Swal.DismissReason.cancel) cancelRequested = true;
@@ -3464,7 +3478,14 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
             if (!response.ok || !result.success) throw new Error(result.message || 'Payment status could not be checked.');
             if (result.status === 'paid') {
               sessionStorage.removeItem('itour_operator_paymongo_pending');
-              await Swal.fire({ icon: 'success', title: 'QR Payment Verified', text: `${billingMoney(result.amount)} was applied to Booking ${result.booking_reference || result.booking_id}.`, confirmButtonColor: '#176b55' });
+              await Swal.fire({
+                icon: 'success',
+                title: fromMarkCompleted ? 'Payment Successful' : 'QR Payment Verified',
+                text: fromMarkCompleted
+                  ? 'The balance is now fully paid. You can now mark the booking as completed.'
+                  : `${billingMoney(result.amount)} was applied to Booking ${result.booking_reference || result.booking_id}.`,
+                confirmButtonColor: '#176b55'
+              });
               window.location.reload(); return true;
             }
             if (['cancelled', 'failed'].includes(result.status)) {
@@ -3483,7 +3504,7 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
         additional_boat: 'Additional Boat',
         additional_tourguide: 'Additional Tour Guide',
         food: 'Food',
-        others: 'Other Expense',
+        others: 'Other Add-on',
         'Environmental Fee': 'Environmental Fee',
         'Entrance Fee': 'Entrance Fee',
         'Docking / Landing Fee': 'Docking / Landing Fee',
@@ -3497,6 +3518,8 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
       const openBilling = async bookingId => {
         if (!billingModal || !billingBody || !bookingId) return;
         billingState.bookingId = Number(bookingId);
+        billingState.receipt = null;
+        document.getElementById('opBillingPaymentSummary').disabled = true;
         billingState.balance = 0;
         billingModal.classList.add('show');
         billingModal.setAttribute('aria-hidden', 'false');
@@ -3525,11 +3548,14 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
           const normalizedStatus = String(booking.status || '').toLowerCase();
           const expenseRows = expenses.length ? expenses.map(expense => {
             const rawType = String(expense.expense_type || 'Expense');
-            const label = expenseLabels[rawType] || rawType.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
-            const note = String(expense.note || '').trim();
+            const label = expense.expense_name || expenseLabels[rawType] || rawType.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
+            const note = [expense.quantity && expense.unit_price != null ? `${expense.quantity} × ${billingMoney(expense.unit_price)}` : '', expense.note].filter(Boolean).join(' · ');
             return `<div class="op-billing-line"><span>${escapeBilling(label)}${note ? `<small>${escapeBilling(note)}</small>` : ''}</span><strong>${billingMoney(expense.amount)}</strong></div>`;
           }).join('') : '<div class="op-billing-line"><span>No additional expenses</span><strong>\u20B10.00</strong></div>';
 
+          if (billingState.bookingId !== Number(bookingId)) return;
+          billingState.receipt = { priceBreakdown: payload.receipt_breakdown, kind: 'operator', booking, expenses, serviceName: booking.package_name || 'Tour package', serviceAmount, billingTotal, amountPaid, balance, paymentStatus };
+          document.getElementById('opBillingPaymentSummary').disabled = false;
           billingState.balance = balance;
           billingState.canAddExpense = ['pending', 'accepted'].includes(normalizedStatus);
           billingSubtitle.textContent = `${booking.guest_name || 'Guest'} · ${booking.package_name || 'Tour package'}`;
@@ -3567,6 +3593,9 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
       document.querySelectorAll('[data-billing]').forEach(button => {
         button.addEventListener('click', () => openBilling(button.dataset.id));
       });
+      document.getElementById('opBillingPaymentSummary').addEventListener('click', () => {
+        if (billingState.receipt) window.BookingPaymentSummary.open(billingState.receipt);
+      });
       document.querySelectorAll('[data-close-billing]').forEach(button => button.addEventListener('click', closeBilling));
       billingModal?.addEventListener('mousedown', event => { if (event.target === billingModal) closeBilling(); });
       document.addEventListener('keydown', event => { if (event.key === 'Escape') closeBilling(); });
@@ -3592,11 +3621,6 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
         if (event.target === modal) { closeModal(modal); if (modal === paymentModal) stopOperatorPaymentPhonePolling(); }
       }));
 
-      document.querySelectorAll('[data-payment]').forEach(button => {
-        button.addEventListener('click', () => {
-          preparePaymentModal(button.dataset.id, Number(button.dataset.balance || 0));
-        });
-      });
       document.querySelectorAll('[data-expense]').forEach(button => {
         button.addEventListener('click', () => {
           document.getElementById('opExpenseBookingId').value = button.dataset.id || '';
@@ -3665,7 +3689,7 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
         const amountInput = form.elements.amount;
         const amount = Number(amountInput?.value || 0);
         const maximum = Number(amountInput?.max || 0);
-        const completeAfterPayment = form.elements.complete_after_payment?.value === '1';
+        const fromMarkCompleted = paymentFlow.fromMarkCompleted;
         if (!method) {
           await Swal.fire('Payment Method Required', 'Select Cash or QR Code before continuing.', 'warning');
           return;
@@ -3678,13 +3702,13 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
           await Swal.fire('Invalid Amount', 'Payment cannot exceed the current balance.', 'warning');
           return;
         }
-        if (completeAfterPayment && Math.abs(amount - maximum) > 0.009) {
+        if (fromMarkCompleted && Math.abs(amount - maximum) > 0.009) {
           await Swal.fire('Full Payment Required', 'Collect the entire balance before completing this booking.', 'warning');
           return;
         }
         if (method === 'qr_code' && !(await requireOperatorPaymentPhone())) return;
 
-        const idleLabel = method === 'qr_code' ? 'Send PayMongo QR' : 'Confirm Payment';
+        const idleLabel = method === 'qr_code' ? 'Send PayMongo QR' : (fromMarkCompleted ? 'Pay Balance' : 'Confirm Payment');
         if (paymentSubmit) {
           paymentSubmit.disabled = true;
           paymentSubmit.classList.add('is-loading');
@@ -3699,7 +3723,6 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
             checkoutData.append('id', bookingId);
             checkoutData.append('amount', amount.toFixed(2));
             checkoutData.append('csrf_token', opPayMongoCsrf);
-            if (completeAfterPayment) checkoutData.append('complete_after_payment', '1');
             const response = await fetch(opPayMongoEndpoint, {
               method: 'POST', body: checkoutData, headers: { Accept: 'application/json' }
             });
@@ -3710,12 +3733,12 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
               throw new Error('PayMongo returned an invalid checkout URL.');
             }
             sessionStorage.setItem('itour_operator_paymongo_pending', JSON.stringify({
-              id: Number(bookingId), token: String(data.return_token || ''), startedAt: Date.now()
+              id: Number(bookingId), token: String(data.return_token || ''), fromMarkCompleted, startedAt: Date.now()
             }));
             if (data.phone_notification?.sent && /^[a-f0-9]{64}$/.test(String(data.return_token || ''))) {
               closeModal(paymentModal);
               stopOperatorPaymentPhonePolling();
-              await monitorOperatorPhoneQrPayment(String(data.return_token), Number(bookingId));
+              await monitorOperatorPhoneQrPayment(String(data.return_token), Number(bookingId), fromMarkCompleted);
               return;
             }
             const fallback = await Swal.fire({
@@ -3731,8 +3754,10 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
           closeModal(paymentModal);
           await Swal.fire({
             icon: 'success',
-            title: result.completed ? 'Booking Completed' : 'Payment Recorded',
-            text: result.completed
+            title: fromMarkCompleted && result.is_paid ? 'Payment Successful' : (result.completed ? 'Booking Completed' : 'Payment Recorded'),
+            text: fromMarkCompleted && result.is_paid
+              ? 'The balance is now fully paid. You can now mark the booking as completed.'
+              : result.completed
               ? 'The full cash balance was recorded and the booking was marked completed.'
               : (result.is_paid ? 'The booking is now fully paid.' : 'The cash payment was recorded successfully.'),
             confirmButtonColor: '#176b55'
@@ -3755,6 +3780,11 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
         const returnType = historyToken ? 'paymongo' : params.get('payment_return');
         const token = historyToken || params.get('payment_return_token') || '';
         if (!['paymongo', 'cancelled'].includes(returnType) || !/^[a-f0-9]{64}$/.test(token)) return;
+        let fromMarkCompleted = false;
+        try {
+          const pending = JSON.parse(sessionStorage.getItem('itour_operator_paymongo_pending') || 'null');
+          fromMarkCompleted = pending?.token === token && pending?.fromMarkCompleted === true;
+        } catch (_) {}
         sessionStorage.removeItem('itour_operator_paymongo_pending');
         const cleanReturnUrl = () => {
           const url = new URL(window.location.href);
@@ -3784,8 +3814,10 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
               cleanReturnUrl();
               await Swal.fire({
                 icon: 'success',
-                title: 'QR Payment Verified',
-                text: `${billingMoney(result.amount)} was applied to Booking ${result.booking_reference || result.booking_id}.`,
+                title: fromMarkCompleted ? 'Payment Successful' : 'QR Payment Verified',
+                text: fromMarkCompleted
+                  ? 'The balance is now fully paid. You can now mark the booking as completed.'
+                  : `${billingMoney(result.amount)} was applied to Booking ${result.booking_reference || result.booking_id}.`,
                 confirmButtonColor: '#176b55'
               });
               window.location.reload();
@@ -3813,7 +3845,6 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
         const hasReturn = new URLSearchParams(window.location.search).has('payment_return');
         const pendingRaw = sessionStorage.getItem('itour_operator_paymongo_pending');
         if (!returnedByHistory || hasReturn || !pendingRaw) return;
-        sessionStorage.removeItem('itour_operator_paymongo_pending');
         try {
           const pending = JSON.parse(pendingRaw);
           if (!pending?.id) return;
@@ -3827,7 +3858,7 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
         event.preventDefault();
         const form = event.currentTarget;
         const submitButton = form.querySelector('button[type="submit"]');
-        const originalLabel = submitButton?.textContent || 'Save Expense';
+        const originalLabel = submitButton?.textContent || 'Save Add-ons';
         if (submitButton) {
           submitButton.disabled = true;
           submitButton.textContent = 'Saving…';
@@ -3838,18 +3869,18 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
           if (window.Swal) {
             await Swal.fire({
               icon: 'success',
-              title: 'Expense Added',
+              title: 'Add-on Added',
               text: 'The additional charge was added to the booking billing details.',
               confirmButtonText: 'Done',
               confirmButtonColor: '#176b55'
             });
           } else {
-            window.alert('Expense added successfully.');
+            window.alert('Add-on added successfully.');
           }
           window.location.reload();
         } catch (error) {
           if (window.Swal) {
-            await Swal.fire({ icon: 'error', title: 'Expense Not Added', text: error.message, confirmButtonColor: '#176b55' });
+            await Swal.fire({ icon: 'error', title: 'Add-on Not Added', text: error.message, confirmButtonColor: '#176b55' });
           } else {
             window.alert(error.message);
           }
@@ -3862,5 +3893,6 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
     })();
   </script>
   <script src="js/operator_header.js?v=4"></script>
+<script src="js/booking-payment-summary.js?v=3"></script>
 </body>
 </html>

@@ -52,25 +52,31 @@ $touristEngagementCsrf = AppCsrfToken('tourist', 'engagement');
 // ---------- helper: get profile image ----------
 function getProfileImage($user) {
     if (!is_array($user)) return '../img/profileicon.png';
-    $profile = trim((string)($user['profile_picture'] ?? ''));
-
-    if (!empty($profile)) {
-        if (preg_match('#^https?://#i', $profile)) {
-            if (stripos($profile, 'profiles.google.com') !== false && preg_match('#profiles\\.google\\.com/(?:s2/photos/profile/)?([^/?#]+)(?:/picture)?#i', $profile, $m)) {
-                $profile = 'https://profiles.google.com/' . rawurlencode($m[1]) . '/picture?sz=256';
-            } elseif (stripos($profile, 'googleusercontent.com') !== false) {
-                $profile = preg_replace('/([?&])sz=\\d+/i', '$1sz=256', $profile);
-                $profile = preg_replace('/=s\\d+-c(?=$|[?&#])/i', '=s256-c', $profile);
-                $profile = preg_replace('/=s\\d+(?=$|[?&#])/i', '=s256', $profile);
-            }
-        }
+    $candidates = [$user['profile_picture'] ?? '', $_SESSION['tourist_profile_pic'] ?? ''];
+    foreach ($candidates as $value) {
+        $profile = html_entity_decode(trim((string)$value), ENT_QUOTES, 'UTF-8');
+        $profile = str_replace('\\/', '/', $profile);
+        $profile = trim($profile, "\"'");
+        if (str_starts_with($profile, '//')) $profile = 'https:' . $profile;
+        // Preserve the URL supplied by Google; photo URLs need not share a sizing format.
         if (preg_match('#^https?://#i', $profile)) return $profile;
-        return '../' . ltrim($profile, '/');
+        if ($profile === '') continue;
+        $profile = str_replace('\\', '/', $profile);
+        $profile = preg_replace('#^(?:\./|\.\./)+#', '', $profile);
+        $relative = ltrim($profile, '/');
+        if (is_file(dirname(__DIR__) . '/' . $relative)) return '../' . $relative;
     }
-
     return '../img/profileicon.png';
 }
 $display_profile_pic = getProfileImage($user);
+$profileStructuredAddress = array_fill_keys(['country','region','province','city','barangay','postal_code','street'], '');
+$profileAddressParts = array_map('trim', explode(',', (string)($user['address'] ?? '')));
+if (count($profileAddressParts) >= 7) {
+    foreach (['country','postal_code','region','province','city','barangay'] as $part) {
+        $profileStructuredAddress[$part] = array_pop($profileAddressParts);
+    }
+    $profileStructuredAddress['street'] = implode(', ', $profileAddressParts);
+}
 $profileCompletionChecks = [
     trim((string)($user['full_name'] ?? '')) !== '',
     trim((string)($user['email'] ?? '')) !== '',
@@ -201,7 +207,7 @@ function profileBillingRecord(PDO $pdo, int $touristId, string $type, int $booki
     $stmt->execute([$bookingId, $touristId]);
     $booking = $stmt->fetch(PDO::FETCH_ASSOC);
     if (!$booking) throw new RuntimeException('Tour booking not found.');
-    $expenseStmt = $pdo->prepare("SELECT expense_type, amount, note FROM booking_expenses WHERE booking_id=? ORDER BY id ASC");
+    $expenseStmt = $pdo->prepare("SELECT * FROM booking_expenses WHERE booking_id=? ORDER BY id ASC");
     $expenseStmt->execute([(string)$bookingId]);
     $completed = strtolower((string)$booking['is_complete']) === 'completed';
     return ['type' => 'tour', 'booking' => $booking, 'expenses' => $expenseStmt->fetchAll(PDO::FETCH_ASSOC) ?: [], 'completed' => $completed];
@@ -302,140 +308,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['billing_action'] ?? '') ==
 
 function profileTouristManifestRows(array $input): array
 {
-    $manifestKeys = ['full_name', 'gender', 'age', 'phone_number', 'country', 'region', 'province', 'city', 'barangay', 'postal_code', 'street'];
-    foreach ($manifestKeys as $key) {
-        if (!is_array($input[$key] ?? null)) throw new InvalidArgumentException('Tourist details must be submitted as aligned lists.');
-    }
-    $names = $input['full_name'];
-    if (count($names) > 100) throw new InvalidArgumentException('A manifest may contain at most 100 tourists.');
-    foreach ($manifestKeys as $key) {
-        if (count($input[$key]) !== count($names)) throw new InvalidArgumentException('Tourist detail lists must have matching row counts.');
-    }
-    $rows = [];
-    foreach ($names as $index => $rawName) {
-        $name = ItourValidationText($rawName, 'Tourist name', 180);
-        if ($name === '') {
-            continue;
-        }
-
-        $gender = strtolower(trim((string)($input['gender'][$index] ?? '')));
-        $ageValue = filter_var($input['age'][$index] ?? null, FILTER_VALIDATE_INT);
-        $phone = ItourValidationText($input['phone_number'][$index] ?? '', 'Tourist phone', 50);
-        $country = ItourValidationText($input['country'][$index] ?? '', 'Country', 100);
-        $region = ItourValidationText($input['region'][$index] ?? '', 'Region', 120);
-        $province = ItourValidationText($input['province'][$index] ?? '', 'Province', 120);
-        $city = ItourValidationText($input['city'][$index] ?? '', 'City', 120);
-        $barangay = ItourValidationText($input['barangay'][$index] ?? '', 'Barangay', 120);
-        $postalCode = ItourValidationText($input['postal_code'][$index] ?? '', 'Postal code', 20);
-        $street = ItourValidationText($input['street'][$index] ?? '', 'Street', 180);
-
-        if (!in_array($gender, ['male', 'female'], true)) {
-            throw new InvalidArgumentException("Select a valid gender for tourist " . ($index + 1) . '.');
-        }
-        if ($ageValue === false || $ageValue < 0 || $ageValue > 120) {
-            throw new InvalidArgumentException("Enter a valid age from 0 to 120 for tourist " . ($index + 1) . '.');
-        }
-        if ($phone === '') {
-            throw new InvalidArgumentException("Enter a contact number for tourist " . ($index + 1) . '.');
-        }
-        if (!preg_match('/^[0-9+().\-\s]{7,50}$/D', $phone)) {
-            throw new InvalidArgumentException("Enter a valid contact number for tourist " . ($index + 1) . '.');
-        }
-        if ($country === '' || $region === '' || $province === '' || $city === '' || $barangay === '' || $postalCode === '' || $street === '') {
-            throw new InvalidArgumentException("Complete the address for tourist " . ($index + 1) . '.');
-        }
-
-        $address = implode(', ', [$street, $barangay, $city, $province, $region, $postalCode, $country]);
-        $rows[] = [
-            'full_name' => $name,
-            'gender' => $gender,
-            'age' => $ageValue,
-            'address' => ItourValidationText($address, 'Tourist address', 500, true),
-            'country' => $country,
-            'region' => $region,
-            'province' => $province,
-            'city' => $city,
-            'barangay' => $barangay,
-            'postal_code' => $postalCode,
-            'street' => $street,
-            'residence' => strtolower($country) === 'philippines' ? 'philippines' : 'foreign',
-            'phone_number' => $phone,
-        ];
-    }
-
-    if (!$rows) {
-        throw new InvalidArgumentException('Add at least one tourist.');
-    }
-    return $rows;
+    return bookingTouristManifestRows($input);
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['booking_id'], $_POST['full_name'])) {
-    header('Content-Type: application/json'); // tell browser it's JSON
-
+    header('Content-Type: application/json');
     try {
         if (!AppVerifyCsrf('tourist', 'manifest', $_POST['csrf_token'] ?? null)) {
             http_response_code(403);
-            throw new Exception('Invalid security token. Refresh the page and try again.');
+            throw new RuntimeException('Invalid security token. Refresh the page and try again.');
         }
         $booking_id = ItourValidationInt($_POST['booking_id'], 'Booking ID', 1, PHP_INT_MAX);
-
-        $bookingCheck = $pdo->prepare("SELECT COALESCE(NULLIF(pax, 0), num_adults + num_children) AS allowed_pax, booking_type FROM bookings WHERE booking_id = ? AND tourist_id = ? LIMIT 1");
-        $bookingCheck->execute([$booking_id, $tourist_id]);
-        $manifestBooking = $bookingCheck->fetch(PDO::FETCH_ASSOC) ?: [];
-        $allowedPax = (int)($manifestBooking['allowed_pax'] ?? 0);
-        if ($allowedPax <= 0) throw new Exception('Booking not found or has no passenger capacity.');
-
-        $stmtCheck = $pdo->prepare("SELECT COUNT(*) FROM booking_tourists WHERE booking_id = ?");
-        $stmtCheck->execute([$booking_id]);
-        if ($stmtCheck->fetchColumn() > 0) throw new Exception('Tourists already submitted for this booking.');
-
+        $editing = ($_POST['manifest_mode'] ?? '') === 'edit';
         $touristRows = profileTouristManifestRows($_POST);
-        if (count($touristRows) !== $allowedPax) throw new Exception("Complete all {$allowedPax} tourist entries before submitting.");
-            $touristRows = bookingTouristAssignBoats($touristRows, (array)($_POST['boat_number'] ?? []), (string)$manifestBooking['booking_type'], $allowedPax);
-        $pdo->beginTransaction();
-        $stmt = $pdo->prepare("
-            INSERT INTO booking_tourists
-            (booking_id, full_name, gender, age, address, country, region, province, city, barangay, postal_code, street, residence, phone_number, boat_number)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ");
-
-        foreach ($touristRows as $touristRow) {
-            $stmt->execute([
-                $booking_id,
-                $touristRow['full_name'],
-                $touristRow['gender'],
-                $touristRow['age'],
-                $touristRow['address'],
-                $touristRow['country'],
-                $touristRow['region'],
-                $touristRow['province'],
-                $touristRow['city'],
-                $touristRow['barangay'],
-                $touristRow['postal_code'],
-                $touristRow['street'],
-                $touristRow['residence'],
-                $touristRow['phone_number'],
-                    $touristRow['boat_number'],
-            ]);
-        }
-
-        $pdo->commit();
-
-        echo json_encode([
-            'success' => true,
-            'message' => 'Tourists submitted successfully.'
-        ]);
-        exit;
-
-    } catch (Exception $e) {
-        if ($pdo->inTransaction()) $pdo->rollBack();
-
-        echo json_encode([
-            'success' => false,
-            'message' => $e->getMessage()
-        ]);
-        exit;
+        bookingTouristSaveManifest($pdo, $booking_id, $tourist_id, $touristRows, (array)($_POST['boat_number'] ?? []), $editing);
+        logActivity($pdo, 'Tourist', $tourist_id,
+            (string)($user['full_name'] ?? $_SESSION['full_name'] ?? 'Tourist'),
+            $editing ? 'Tourist Data Updated' : 'Tourist Data Submitted',
+            ($editing ? 'Updated' : 'Submitted') . ' traveler details for booking #' . $booking_id . '.', 'Bookings', $booking_id);
+        echo json_encode(['success' => true, 'updated' => $editing,
+            'message' => $editing ? 'Your tourist list changes were saved successfully.' : 'Tourists submitted successfully.']);
+    } catch (Throwable $error) {
+        echo json_encode(['success' => false, 'message' => $error->getMessage()]);
     }
+    exit;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -532,79 +428,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
 
         // =====================================================
-        // ✅ TOURIST SUBMISSION (YOUR ORIGINAL LOGIC - FIXED SAFE)
-        // =====================================================
-        if (isset($_POST['booking_id'], $_POST['full_name']) && !isset($_POST['action'])) {
-
-            if (!AppVerifyCsrf('tourist', 'manifest', $_POST['csrf_token'] ?? null)) {
-                http_response_code(403);
-                throw new Exception('Invalid security token. Refresh the page and try again.');
-            }
-
-            $booking_id = ItourValidationInt($_POST['booking_id'], 'Booking ID', 1, PHP_INT_MAX);
-
-            $bookingCheck = $pdo->prepare("SELECT COALESCE(NULLIF(pax, 0), num_adults + num_children) AS allowed_pax, booking_type FROM bookings WHERE booking_id = ? AND tourist_id = ? LIMIT 1");
-            $bookingCheck->execute([$booking_id, $tourist_id]);
-            $manifestBooking = $bookingCheck->fetch(PDO::FETCH_ASSOC) ?: [];
-        $allowedPax = (int)($manifestBooking['allowed_pax'] ?? 0);
-            if ($allowedPax <= 0) throw new Exception('Booking not found or has no passenger capacity.');
-
-            $stmtCheck = $pdo->prepare("SELECT COUNT(*) FROM booking_tourists WHERE booking_id = ?");
-            $stmtCheck->execute([$booking_id]);
-
-            if ($stmtCheck->fetchColumn() > 0) {
-                throw new Exception('Tourists already submitted for this booking.');
-            }
-
-            $touristRows = profileTouristManifestRows($_POST);
-            if (count($touristRows) !== $allowedPax) throw new Exception("Complete all {$allowedPax} tourist entries before submitting.");
-            $touristRows = bookingTouristAssignBoats($touristRows, (array)($_POST['boat_number'] ?? []), (string)$manifestBooking['booking_type'], $allowedPax);
-            $pdo->beginTransaction();
-
-            $stmt = $pdo->prepare("
-                INSERT INTO booking_tourists
-                (booking_id, full_name, gender, age, address, country, region, province, city, barangay, postal_code, street, residence, phone_number, boat_number)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ");
-
-            foreach ($touristRows as $touristRow) {
-                $stmt->execute([
-                    $booking_id,
-                    $touristRow['full_name'],
-                    $touristRow['gender'],
-                    $touristRow['age'],
-                    $touristRow['address'],
-                    $touristRow['country'],
-                    $touristRow['region'],
-                    $touristRow['province'],
-                    $touristRow['city'],
-                    $touristRow['barangay'],
-                    $touristRow['postal_code'],
-                    $touristRow['street'],
-                    $touristRow['residence'],
-                    $touristRow['phone_number'],
-                    $touristRow['boat_number'],
-                ]);
-            }
-
-            $pdo->commit();
-            logActivity(
-                $pdo, 'Tourist', $tourist_id,
-                (string)($user['full_name'] ?? $_SESSION['full_name'] ?? 'Tourist'),
-                'Tourist Data Submitted',
-                'Submitted traveler details for booking #' . $booking_id . '.',
-                'Bookings', $booking_id
-            );
-
-            echo json_encode([
-                'success' => true,
-                'message' => 'Tourists submitted successfully.'
-            ]);
-            exit;
-        }
-
-        // =====================================================
-        // ✅ UPDATE PROFILE (SMART VERSION)
+        // Update profile details.
         // =====================================================
         if (isset($_POST['action']) && $_POST['action'] === 'update_profile') {
 
@@ -932,6 +756,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['fetch_tourists'])) {
     header('Content-Type: application/json');
 
     $booking_id = (int)($_POST['booking_id'] ?? 0);
+    $bookingCheck = $pdo->prepare("SELECT b.*, EXISTS (SELECT 1 FROM booking_cancellation_requests cr WHERE cr.booking_domain = 'tour' AND cr.booking_id = b.booking_id AND cr.request_status IN ('pending','approved','decision_required','completed')) AS manifest_cancellation_active FROM bookings b WHERE b.booking_id = ? AND b.tourist_id = ? LIMIT 1");
+    $bookingCheck->execute([$booking_id, $tourist_id]);
+    $manifestBooking = $bookingCheck->fetch(PDO::FETCH_ASSOC);
+    if (!$manifestBooking) {
+        http_response_code(404);
+        echo json_encode(['success' => false, 'message' => 'Booking not found.']);
+        exit;
+    }
     $stmt = $pdo->prepare("
         SELECT bt.*
         FROM booking_tourists bt
@@ -943,6 +775,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['fetch_tourists'])) {
 
     echo json_encode([
         'success' => true,
+        'can_edit' => bookingTouristCanEdit($manifestBooking) && !(bool)$manifestBooking['manifest_cancellation_active'],
+        'edit_deadline_label' => bookingTouristEditDeadline($manifestBooking)?->format('F j, Y \a\t g:i A') . ' Manila time',
         'tourists' => $stmt->fetchAll(PDO::FETCH_ASSOC)
     ]);
     exit;
@@ -1391,112 +1225,6 @@ body.booking-drawer-open{overflow:hidden}
 }
 
 /* Modal overlay */
-.tourist-modal-user {
-  position: fixed;
-  inset: 0; /* top, right, bottom, left = 0 */
-  background: rgba(0,0,0,0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  padding: 20px; /* space around modal for small screens */
-  overflow: auto; /* allow scrolling if modal is taller than viewport */
-}
-
-/* Modal content */
-.tourist-modal-content-user {
-  background: #fff;
-  width: 95%;
-  max-width: 800px;
-  max-height: 90vh; /* limit modal height */
-  overflow-y: auto; /* vertical scroll if content exceeds height */
-  border-radius: 10px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  box-sizing: border-box;
-}
-
-/* Optional: keep footer visible if needed */
-.tourist-modal-footer-user {
-  margin-top: 16px;
-  text-align: right;
-  flex-shrink: 0;
-}
-
-
-.tourist-fields-user {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-  margin-bottom: 8px;
-}
-
-.tourist-fields-user input,
-.tourist-fields-user select {
-  padding: 8px;
-  border-radius: 6px;
-  border: 1px solid #ddd;
-}
-
-.tourist-modal-content-user.extended {
-  width: 95%;
-  max-width: 800px;
-}
-
-.tourist-modal-header-user {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 14px;
-}
-
-.tourist-modal-close-user {
-  background: none;
-  border: none;
-  font-size: 22px;
-  cursor: pointer;
-  color: #777;
-}
-
-.tourist-row-user {
-  display: grid;
-  grid-template-columns: 2fr 1fr 1.2fr 1.5fr auto;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.tourist-row-user input,
-.tourist-row-user select {
-  padding: 8px;
-  border-radius: 6px;
-  border: 1px solid #ddd;
-}
-
-.remove-tourist-user {
-  background: #ffe5e5;
-  color: #a42b2b;
-  border: none;
-  border-radius: 6px;
-  padding: 6px 10px;
-  cursor: pointer;
-  font-weight: bold;
-}
-
-.remove-tourist-user:hover {
-  background: #ffcccc;
-}
-
-.add-more-user {
-  margin-top: 10px;
-}
-
-.tourist-modal-footer-user {
-  margin-top: 16px;
-  text-align: right;
-}
-
 .view-tourist-btn-user {
   background: #9ca3af !important; /* gray */
   cursor: pointer;
@@ -2120,41 +1848,6 @@ textarea:focus {
   }
 }
 
-#touristFormUser {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-}
-
-#touristRowsUser {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-/* Passenger manifest form */
-.tourist-modal-user{z-index:11000;padding:24px;background:rgba(7,29,24,.68);backdrop-filter:blur(4px)}
-.tourist-modal-content-user.extended{width:min(1040px,100%);max-width:1040px;max-height:calc(100vh - 48px);padding:0;overflow:hidden;border:1px solid #d7e5e0;border-radius:18px;box-shadow:0 28px 80px rgba(7,34,27,.3)}
-.tourist-modal-header-user{margin:0;padding:22px 24px;border-bottom:1px solid #dce8e3;background:linear-gradient(135deg,#f9fcfb,#eaf5f1)}
-.tourist-modal-header-user>div{min-width:0}.tourist-modal-kicker{display:block;margin-bottom:4px;color:#26745f;font-size:.62rem;font-weight:850;letter-spacing:.11em;text-transform:uppercase}.tourist-modal-header-user h3{margin:0;color:#173c32;font-size:1.25rem}.tourist-modal-header-user p{margin:5px 0 0;color:#687e76;font-size:.75rem}.tourist-modal-close-user{display:grid;width:34px;height:34px;flex:none;place-items:center;border-radius:9px;color:#537067}.tourist-modal-close-user:hover{background:#dcece6;color:#174f40}
-#touristFormUser{min-height:0;overflow:hidden;gap:0;background:#f7faf9}.tourist-form-summary{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:13px 24px;border-bottom:1px solid #e0eae6;background:#fff}.tourist-form-summary>div{display:flex;align-items:baseline;gap:8px}.tourist-form-summary strong{color:#17634f;font-size:1.15rem}.tourist-form-summary span{color:#536b63;font-size:.7rem;font-weight:750}.tourist-form-summary p{margin:0;color:#788b85;font-size:.66rem}
-#touristRowsUser{max-height:52vh;padding:16px 24px;overflow-y:auto;gap:12px;scrollbar-width:thin;scrollbar-color:#91b9ac #edf3f1}
-.tourist-row-user{position:relative;display:block;margin:0;padding:16px 48px 16px 16px;border:1px solid #dbe7e2;border-radius:13px;background:#fff;box-shadow:0 3px 10px rgba(21,67,53,.045)}
-.tourist-boat-group{display:grid;gap:12px;padding:16px;background:#edf7f3;border:1px solid #bfded1;border-radius:14px}
-.tourist-boat-group h4{display:flex;justify-content:space-between;align-items:center;margin:0;color:#175a45;font-size:16px;gap:12px}
-.tourist-boat-group h4 span{font-size:12px;padding:5px 10px;border-radius:20px;background:#d5eee2}
-.tourist-boat-group>p{margin:0;color:#60796f;font-size:12px}
-.tourist-boat-group>.add-more-user{justify-self:start}
-.tourist-boat-group>.tourist-boat-capacity-error{margin:0;color:#b42335;font-size:12px;font-weight:600;line-height:1.5}
-.tourist-boat-capacity-error[hidden]{display:none}
-.tourist-boat-choice{display:flex;align-items:center;gap:10px;margin:0 0 12px;font-size:12px;font-weight:700;color:#235e4b}
-.tourist-boat-choice select{width:auto;min-width:100px}
-.tourist-row-heading{display:flex;align-items:center;gap:9px;margin-bottom:12px}.tourist-row-number{display:grid;width:25px;height:25px;place-items:center;border-radius:7px;color:#fff;background:#26745f;font-size:.68rem;font-weight:850}.tourist-row-heading strong{color:#294a40;font-size:.77rem}.tourist-row-grid{display:grid;grid-template-columns:minmax(180px,1.5fr) minmax(135px,.8fr) minmax(85px,.45fr) minmax(155px,.9fr);gap:10px}.tourist-field{display:block;min-width:0}.tourist-field.address{grid-column:1/-1}.tourist-field>span{display:block;margin:0 0 5px;color:#526d64;font-size:.62rem;font-weight:800}.tourist-field input,.tourist-field select,.tourist-address-trigger{width:100%;height:40px;padding:9px 11px;border:1px solid #cedcd7;border-radius:8px;outline:0;background:#fff;color:#29463d;font:inherit;font-size:.72rem;transition:border-color .16s,box-shadow .16s}.tourist-field input:focus,.tourist-field select:focus,.tourist-address-trigger:focus{border-color:#4b997f;box-shadow:0 0 0 3px rgba(61,145,117,.12)}.tourist-address-trigger{display:flex;align-items:center;justify-content:space-between;gap:12px;text-align:left;cursor:pointer}.tourist-address-trigger span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#82928d}.tourist-address-trigger.has-address span{color:#29463d}.tourist-address-trigger svg{width:17px;height:17px;flex:none;color:#27745f}.remove-tourist-user{position:absolute;top:14px;right:14px;display:grid;width:30px;height:30px;place-items:center;padding:0;border:1px solid #f0cccc;border-radius:8px;background:#fff2f2;color:#ae4141}.remove-tourist-user:hover{background:#fbe1e1}
-.tourist-modal-footer-user{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0;padding:15px 24px;border-top:1px solid #dce7e3;background:#fff}.tourist-modal-footer-user .btn{min-height:40px;padding:9px 15px;border-radius:9px;font-size:.72rem;font-weight:800}.tourist-modal-footer-user .add-more-user{margin:0;color:#1c654f;background:#edf7f3;border:1px solid #c5ded5}.tourist-submit-user{color:#fff;background:#26745f;border:1px solid #26745f;box-shadow:0 5px 13px rgba(38,116,95,.17)}.tourist-submit-user:disabled{color:#82908b!important;background:#d9dfdd!important;border-color:#d0d7d4!important;box-shadow:none!important;cursor:not-allowed!important;opacity:1!important}
-.tourist-address-overlay{position:fixed;inset:0;z-index:11100;display:none;align-items:center;justify-content:center;padding:22px;background:rgba(7,29,24,.65);backdrop-filter:blur(5px)}.tourist-address-overlay.show{display:flex}.tourist-address-modal{width:min(620px,100%);overflow:hidden;border:1px solid #d4e3dd;border-radius:17px;background:#fff;box-shadow:0 28px 85px rgba(5,31,25,.32)}.tourist-address-header{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;padding:20px 22px;border-bottom:1px solid #dce7e3;background:linear-gradient(135deg,#f9fcfb,#eaf5f0)}.tourist-address-header span{color:#26745f;font-size:.58rem;font-weight:850;letter-spacing:.1em;text-transform:uppercase}.tourist-address-header h3{margin:3px 0;color:#173c32;font-size:1.12rem}.tourist-address-header p{margin:0;color:#6c817a;font-size:.68rem}.tourist-address-header button{display:grid;width:32px;height:32px;place-items:center;border:0;border-radius:8px;background:transparent;color:#567067;font-size:22px;cursor:pointer}.tourist-address-header button:hover{background:#dbece5}.tourist-address-body{padding:19px 22px}.tourist-address-copy{padding:12px;margin-bottom:15px;border:1px solid #cde1d9;border-radius:10px;background:#eff8f4}.tourist-address-copy label{display:block;margin-bottom:6px;color:#28624f;font-size:.65rem;font-weight:800}.tourist-address-copy select{width:100%;height:39px;padding:8px 10px;border:1px solid #bdd7cd;border-radius:8px;background:#fff;color:#29483e;font-size:.72rem}.tourist-address-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.tourist-address-field.full{grid-column:1/-1}.tourist-address-field span{display:block;margin-bottom:5px;color:#506a61;font-size:.64rem;font-weight:800}.tourist-address-field input,.tourist-address-field select{width:100%;height:41px;padding:9px 11px;border:1px solid #cadad4;border-radius:8px;outline:0;color:#29483f;background:#fff;font:inherit;font-size:.73rem}.tourist-address-field input:focus,.tourist-address-field select:focus{border-color:#4b997f;box-shadow:0 0 0 3px rgba(61,145,117,.12)}.tourist-address-field select:disabled{color:#8a9994;background:#f1f5f3;cursor:not-allowed}.tourist-address-error{margin:12px 0 0;padding:9px 11px;border-radius:8px;background:#fff0f1;color:#a23d47;font-size:.67rem}.tourist-address-footer{display:flex;justify-content:flex-end;gap:9px;padding:14px 22px;border-top:1px solid #dde8e4;background:#fafcfb}.tourist-address-footer button{min-height:39px;padding:9px 15px;border-radius:8px;font:inherit;font-size:.7rem;font-weight:800;cursor:pointer}.tourist-address-cancel{border:1px solid #cddbd6;background:#fff;color:#526a62}.tourist-address-done{border:1px solid #26745f;background:#26745f;color:#fff}
-.tourist-address-modal{overflow:hidden!important;border-radius:18px!important}.tourist-address-header{border-radius:17px 17px 0 0}.tourist-address-footer{border-radius:0 0 17px 17px}.tourist-search-select{position:relative}.tourist-search-select>select{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}.tourist-search-input-wrap{position:relative}.tourist-search-input{padding-right:38px!important}.tourist-search-toggle{position:absolute!important;top:0;right:0;width:38px!important;height:41px!important;padding:0!important;border:0!important;background:transparent!important;color:#60756d!important;font-size:14px!important;cursor:pointer}.tourist-search-menu{position:absolute;z-index:30;top:calc(100% + 5px);right:0;left:0;display:none;max-height:210px;padding:5px;overflow-y:auto;border:1px solid #c9d9d3;border-radius:9px;background:#fff;box-shadow:0 12px 30px rgba(18,57,45,.18);scrollbar-width:thin}.tourist-search-select.open-up .tourist-search-menu{top:auto;bottom:calc(100% + 5px)}.tourist-search-select.open .tourist-search-menu{display:block}.tourist-search-option{display:block;width:100%;padding:8px 9px;border:0;border-radius:6px;background:#fff;color:#29483f;font:inherit;font-size:.72rem;text-align:left;cursor:pointer}.tourist-search-option:hover,.tourist-search-option.active{background:#e8f4ef;color:#17614d}.tourist-search-empty{padding:9px;color:#82938d;font-size:.68rem;text-align:center}.tourist-search-select.disabled .tourist-search-input{color:#8a9994;background:#f1f5f3;cursor:not-allowed}.tourist-search-select.disabled .tourist-search-toggle{cursor:not-allowed}
-.tourist-profile-pdf-overlay{position:fixed;inset:0;z-index:12100;display:none;align-items:center;justify-content:center;padding:22px;background:rgba(6,29,23,.7);backdrop-filter:blur(5px)}.tourist-profile-pdf-overlay.show{display:flex}.tourist-profile-pdf-modal{display:flex;width:min(1180px,94vw);height:min(900px,calc(100vh - 44px));flex-direction:column;overflow:hidden;border:1px solid #cfdfd9;border-radius:18px;background:#f4f8f6;box-shadow:0 28px 85px rgba(4,29,22,.38)}.tourist-profile-pdf-header{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:15px 18px;border-bottom:1px solid #d8e5e0;background:linear-gradient(135deg,#fbfdfc,#e9f4f0)}.tourist-profile-pdf-heading{display:flex;align-items:center;gap:12px;min-width:0}.tourist-profile-pdf-heading img{width:44px;height:44px;object-fit:contain}.tourist-profile-pdf-heading span{display:block;color:#26745f;font-size:.58rem;font-weight:850;letter-spacing:.11em}.tourist-profile-pdf-heading h3{margin:2px 0;color:#173e32;font-size:1.05rem}.tourist-profile-pdf-heading p{margin:0;color:#70837c;font-size:.67rem}.tourist-profile-pdf-header-actions{display:flex;align-items:center;gap:11px;margin-left:auto}.tourist-profile-pdf-meta{display:flex;flex-direction:column;align-items:flex-end;gap:2px;padding-right:3px}.tourist-profile-pdf-meta strong{color:#294b40;font-size:.68rem}.tourist-profile-pdf-meta span{color:#82918c;font-size:.56rem}.tourist-profile-pdf-header-actions>a{display:inline-flex;min-height:36px;align-items:center;padding:8px 13px;border-radius:8px;background:#26745f;color:#fff;font-size:.68rem;font-weight:850;text-decoration:none;box-shadow:0 5px 12px rgba(38,116,95,.16)}.tourist-profile-pdf-close{display:grid;width:36px;height:36px;flex:none;place-items:center;padding:0;border:1px solid #ccdcd6;border-radius:9px;background:#fff;color:#46645a;font-size:23px;cursor:pointer}.tourist-profile-pdf-close:hover{color:#145a45;background:#e4f1ec}.tourist-profile-pdf-body{position:relative;min-height:0;flex:1;padding:10px;background:#e9efed}.tourist-profile-pdf-body iframe{width:100%;height:100%;border:0;border-radius:9px;background:#3d3d3d;transition:opacity .18s ease}.tourist-profile-pdf-body.is-loading iframe{opacity:0}.tourist-profile-pdf-loading{position:absolute;inset:10px;z-index:2;display:none;place-items:center;border-radius:9px;background:#f7faf9;color:#315e51;text-align:center}.tourist-profile-pdf-body.is-loading .tourist-profile-pdf-loading{display:grid}.tourist-profile-pdf-loading-content{display:grid;justify-items:center;gap:13px}.tourist-profile-pdf-spinner{width:46px;height:46px;border:4px solid #d5e7e0;border-top-color:#26745f;border-radius:50%;animation:touristPdfSpin .8s linear infinite}.tourist-profile-pdf-loading strong{font-size:.84rem}.tourist-profile-pdf-loading span{color:#71867f;font-size:.66rem}@keyframes touristPdfSpin{to{transform:rotate(360deg)}}.tourist-profile-pdf-open{overflow:hidden}
-@media(max-width:760px){.tourist-modal-user{padding:0;align-items:stretch}.tourist-modal-content-user.extended{max-height:100vh;border-radius:0}.tourist-form-summary{align-items:flex-start;flex-direction:column;gap:4px}.tourist-row-grid{grid-template-columns:1fr 1fr}.tourist-field.name,.tourist-field.phone,.tourist-field.address{grid-column:1/-1}#touristRowsUser{max-height:none}.tourist-modal-footer-user{position:sticky;bottom:0}.tourist-address-overlay{padding:0;align-items:flex-end}.tourist-address-modal{max-height:100vh;border-radius:17px 17px 0 0}.tourist-address-grid{grid-template-columns:1fr}.tourist-address-field.full{grid-column:auto}.tourist-profile-pdf-overlay{padding:0}.tourist-profile-pdf-modal{width:100%;height:100vh;border:0;border-radius:0}.tourist-profile-pdf-header{padding:11px 12px}.tourist-profile-pdf-heading img{width:38px;height:38px}.tourist-profile-pdf-heading p,.tourist-profile-pdf-meta{display:none}.tourist-profile-pdf-header-actions{gap:7px}.tourist-profile-pdf-header-actions>a{min-height:34px;padding:7px 10px}.tourist-profile-pdf-close{width:34px;height:34px}.tourist-profile-pdf-body{padding:6px}}
 
 .add-more-user {
   width: fit-content;
@@ -3920,7 +3613,85 @@ html[data-profile-tab="complaints"] .mobile-profile-nav a[data-section="complain
 @keyframes profileDecisionFade{from{opacity:0}to{opacity:1}}@keyframes profileDecisionRise{from{opacity:0;transform:translateY(10px) scale(.987)}to{opacity:1;transform:none}}@keyframes profileDecisionStep{from{opacity:0;transform:translateX(7px)}to{opacity:1;transform:none}}@keyframes profileDecisionSpin{to{transform:rotate(360deg)}}
 @media(max-width:820px){.flatpickr-calendar.profile-reschedule-calendar.tour-range-calendar{width:307px!important;min-width:0;max-width:calc(100vw - 20px)!important}.flatpickr-calendar.profile-reschedule-calendar.tour-range-calendar .flatpickr-innerContainer,.flatpickr-calendar.profile-reschedule-calendar.tour-range-calendar .flatpickr-rContainer,.flatpickr-calendar.profile-reschedule-calendar.tour-range-calendar .flatpickr-days,.flatpickr-calendar.profile-reschedule-calendar.tour-range-calendar .dayContainer,.flatpickr-calendar.profile-reschedule-calendar.tour-range-calendar .flatpickr-weekdaycontainer{width:307px!important;min-width:307px;max-width:307px}}
 @media(max-width:700px){.booking-decision-inline-alert{align-items:flex-start;flex-wrap:wrap}.booking-inline-respond{margin-left:41px}.profile-decision-overlay{align-items:flex-end;padding:0}.profile-decision-modal{width:100%;max-height:96vh;border-radius:17px 17px 0 0}.profile-decision-header{padding:16px}.profile-decision-progress{padding:11px 16px}.profile-decision-body{padding:15px}.profile-decision-context{grid-template-columns:1fr}.profile-decision-options,.profile-decision-locked-grid{grid-template-columns:1fr}.profile-decision-options>label{min-height:0}.profile-decision-footer{padding:12px 15px;flex-wrap:wrap}.profile-decision-footer>span{display:none}.profile-decision-btn{flex:1}.profile-decision-calendar-meta{align-items:flex-start;flex-direction:column}}
+.bookings-section .tourist-booking-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 112px;
+  margin: 0 auto;
+}
+.bookings-section .tourist-booking-actions .btn-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  box-sizing: border-box;
+  width: 112px;
+  min-height: 34px;
+  margin: 0;
+  padding: 7px 10px;
+  gap: 6px;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+.bookings-section .tourist-booking-actions .btn-action svg {
+  flex: 0 0 14px;
+  width: 14px;
+  height: 14px;
+}
+.tourist-edit-closed { color: #71817b; font-size: 10px; text-align: center; }
+@media (max-width: 760px) {
+  .bookings-section .tourist-booking-actions { margin: 0; }
+}
+.profile-booking-dropdown { display: inline-flex; justify-content: center; }
+.profile-booking-toggle {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  min-height: 34px; padding: 8px 12px; border: 1px solid #1f6956; border-radius: 9px;
+  background: linear-gradient(135deg, #2b7a66, #216652); color: #fff;
+  font: inherit; font-size: 12px; font-weight: 800; line-height: 1; cursor: pointer;
+  box-shadow: 0 4px 10px rgba(25,89,69,.16); white-space: nowrap;
+}
+.profile-booking-toggle svg { width: 13px; height: 13px; transition: transform .15s; }
+.profile-booking-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.profile-booking-toggle:hover { background: #194f40; }
+.profile-booking-menu {
+  position: fixed; z-index: 11000; display: flex; flex-direction: column;
+  box-sizing: border-box; width: 230px; padding: 8px; gap: 5px; overflow-y: auto;
+  border: 1px solid #d8e6e1; border-radius: 12px; background: #fff;
+  box-shadow: 0 18px 42px rgba(14,54,42,.2), 0 3px 10px rgba(14,54,42,.08);
+  text-align: left; white-space: normal;
+}
+.profile-booking-menu[hidden] { display: none; }
+.profile-booking-menu-heading {
+  display: block; padding: 4px 7px 8px; border-bottom: 1px solid #e8efec;
+  color: #82918c; font-size: 8px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+}
+.bookings-section .formal-table .profile-booking-menu button.profile-booking-option {
+  display: flex; align-items: center; justify-content: flex-start; gap: 8px;
+  box-sizing: border-box; width: 100%; min-height: 35px; height: auto; margin: 0; padding: 9px 10px;
+  border: 0; border-radius: 8px; background: transparent; color: #183b47;
+  font: inherit; font-size: 11px; font-weight: 750; line-height: 1.4;
+  text-align: left; white-space: normal; box-shadow: none; transform: none; cursor: pointer;
+}
+.bookings-section .formal-table .profile-booking-menu button.profile-booking-option:hover { background: #edf6f2; }
+.bookings-section .formal-table .profile-booking-menu button.cancel-booking-btn { color: #b51f38; }
+.bookings-section .formal-table .profile-booking-menu button.cancel-booking-btn:hover { background: #fff0f2; }
+.profile-booking-menu button svg { flex: 0 0 14px; width: 14px; height: 14px; stroke: currentColor; }
+.profile-booking-toggle:focus-visible, .profile-booking-menu button:focus-visible { outline: 3px solid #a0cdbd; outline-offset: 2px; }
+.tourist-profile-pdf-body { overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.tourist-pdf-pages { width: 100%; max-width: 1100px; margin: 0 auto; }
+.tourist-pdf-page { margin: 0 0 14px; }
+.tourist-pdf-page canvas { display: block; width: 100%; height: auto; background: #fff; box-shadow: 0 3px 14px rgba(16,52,41,.12); }
+.tourist-pdf-page figcaption { padding: 8px; color: #526e62; font-size: 12px; text-align: center; }
+.tourist-pdf-error { margin: 15px auto; padding: 20px; max-width: 500px; border: 1px solid #cfdfd7; border-radius: 12px; color: #31594d; background: #fff; text-align: center; }
+.tourist-pdf-error[hidden] { display: none; }
+.tourist-pdf-error p { font-size: 13px; line-height: 1.5; }
+.tourist-pdf-error button, .tourist-pdf-error a { display: inline-block; margin: 4px; padding: 10px 14px; border: 1px solid #26745f; border-radius: 8px; color: #fff; background: #26745f; font: inherit; font-size: 12px; text-decoration: none; cursor: pointer; }
+@media (max-width: 760px) { .tourist-profile-pdf-modal { height: 100dvh; } }
 </style>
+<link rel="stylesheet" href="../styles/tourist-manifest-form.css?v=1">
 </head>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
@@ -4015,7 +3786,7 @@ document.addEventListener("DOMContentLoaded", function () {
     </div>
     <div class="profile-area">
       <div class="sidebar-avatar-wrap">
-        <img src="<?= htmlspecialchars($display_profile_pic, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)$user['full_name'], ENT_QUOTES, 'UTF-8') ?>" class="profile-img" onerror="this.onerror=null;this.src='../img/profileicon.png';">
+        <img src="<?= htmlspecialchars($display_profile_pic, ENT_QUOTES, 'UTF-8') ?>" referrerpolicy="no-referrer" alt="<?= htmlspecialchars((string)$user['full_name'], ENT_QUOTES, 'UTF-8') ?>" class="profile-img" onerror="this.onerror=null;this.src='../img/profileicon.png';">
         <span aria-label="Account active"></span>
       </div>
       <small class="sidebar-account-label">Tourist account</small>
@@ -4075,7 +3846,7 @@ document.addEventListener("DOMContentLoaded", function () {
           <img class="mobile-profile-brand-text" src="../img/textlogo2.png" alt="iTour Mercedes">
         </div>
         <button class="mobile-profile-account" type="button" aria-label="Open profile" title="Open profile" onclick="document.querySelector('.mobile-profile-nav-scroll a[data-section=\'profile\']')?.click();">
-          <img src="<?= htmlspecialchars($display_profile_pic, ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars((string)$user['full_name'], ENT_QUOTES, 'UTF-8') ?>" onerror="this.onerror=null;this.src='../img/profileicon.png';">
+          <img src="<?= htmlspecialchars($display_profile_pic, ENT_QUOTES, 'UTF-8') ?>" referrerpolicy="no-referrer" alt="<?= htmlspecialchars((string)$user['full_name'], ENT_QUOTES, 'UTF-8') ?>" onerror="this.onerror=null;this.src='../img/profileicon.png';">
         </button>
       </div>
       <div class="mobile-profile-nav-scroll">
@@ -4107,7 +3878,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
   <!-- PROFILE ROW -->
   <div class="profile-row profile-summary-card">
-    <img src="<?= htmlspecialchars($display_profile_pic, ENT_QUOTES, 'UTF-8') ?>" 
+    <img src="<?= htmlspecialchars($display_profile_pic, ENT_QUOTES, 'UTF-8') ?>" referrerpolicy="no-referrer"
          alt="profile" 
          class="profile-avatar"
          onerror="this.onerror=null;this.src='../img/profileicon.png';">
@@ -4119,11 +3890,11 @@ document.addEventListener("DOMContentLoaded", function () {
       <div class="profile-meta">
         <span>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 10c0 7-9 12-9 12S3 17 3 10a9 9 0 1 1 18 0Z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-          <span><?= htmlspecialchars($user['address'] ?? 'No address yet') ?></span>
+          <span><?= htmlspecialchars(trim((string)($user['address'] ?? '')) ?: 'Address not provided', ENT_QUOTES, 'UTF-8') ?></span>
         </span>
         <span>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.12.9.33 1.78.62 2.63a2 2 0 0 1-.45 2.11L8 9.73a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.85.29 1.73.5 2.63.62A2 2 0 0 1 22 16.92Z"></path></svg>
-          <span><?= htmlspecialchars($user['phone_number'] ?? 'No phone number') ?></span>
+          <span><?= htmlspecialchars(trim((string)($user['phone_number'] ?? '')) ?: 'Phone number not provided', ENT_QUOTES, 'UTF-8') ?></span>
         </span>
       </div>
 
@@ -4166,7 +3937,7 @@ document.addEventListener("DOMContentLoaded", function () {
             <div>
               <label class="avatar-field-label" for="fileInput">Profile photo</label>
               <div id="dropzone" class="dropzone" role="button" tabindex="0" aria-label="Upload a new profile picture">
-                <img id="previewImage" class="preview-img" src="<?= htmlspecialchars($display_profile_pic, ENT_QUOTES, 'UTF-8') ?>" alt="Profile photo preview">
+                <img id="previewImage" class="preview-img" src="<?= htmlspecialchars($display_profile_pic, ENT_QUOTES, 'UTF-8') ?>" referrerpolicy="no-referrer" alt="Profile photo preview" onerror="this.onerror=null;this.src='../img/profileicon.png';">
                 <div class="dz-content">
                   <p class="dz-text">Choose a new photo</p>
                   <span class="dz-sub">Click or drag an image here</span>
@@ -4187,11 +3958,17 @@ document.addEventListener("DOMContentLoaded", function () {
               </div>
               <div class="field-group">
                 <label class="field-label" for="profilePhone">Phone number</label>
-                <input id="profilePhone" type="text" name="phone" value="<?= htmlspecialchars($user['phone_number'] ?? '') ?>" placeholder="e.g. +63 912 345 6789" class="input">
+                <input id="profilePhone" type="tel" name="phone" value="<?= htmlspecialchars($user['phone_number'] ?? '') ?>" placeholder="e.g. 09123456789" class="input">
               </div>
               <div class="field-group field-full">
-                <label class="field-label" for="profileAddress">Home address</label>
-                <input id="profileAddress" type="text" name="address" value="<?= htmlspecialchars($user['address'] ?? '') ?>" placeholder="Street, municipality, province" class="input">
+                <label class="field-label" for="chooseProfileAddress">Home address</label>
+                <div id="profileAddressFields">
+                  <input id="profileAddress" type="hidden" name="address" value="<?= htmlspecialchars($user['address'] ?? '', ENT_QUOTES, 'UTF-8') ?>">
+                  <button id="chooseProfileAddress" type="button" class="tourist-address-trigger <?= trim((string)($user['address'] ?? '')) !== '' ? 'has-address' : '' ?>" aria-haspopup="dialog"><span class="address-display"><?= htmlspecialchars(trim((string)($user['address'] ?? '')) ?: 'Tap to choose your complete address', ENT_QUOTES, 'UTF-8') ?></span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s7-5.2 7-12a7 7 0 1 0-14 0c0 6.8 7 12 7 12Z"></path><circle cx="12" cy="9" r="2.5"></circle></svg></button>
+                  <?php foreach ($profileStructuredAddress as $part => $value): ?>
+                    <input type="hidden" data-address-part="<?= $part ?>" value="<?= htmlspecialchars($value, ENT_QUOTES, 'UTF-8') ?>">
+                  <?php endforeach; ?>
+                </div>
               </div>
             </div>
           </div>
@@ -4573,7 +4350,7 @@ document.addEventListener("DOMContentLoaded", function () {
             <th>Location / Package</th>
             <th>Type</th>
             <th>Guests</th>
-            <th>Details</th>
+
             <th>Tourists</th>
             <th>Payment</th>
             <th>Status</th>
@@ -4627,9 +4404,45 @@ document.addEventListener("DOMContentLoaded", function () {
                 <span class="highlight">Pax: <?= $pax ?></span>
               </div>
             </td>
-<td>
-  <button
-    class="btn-details-user booking-btn-user"
+
+            <?php if ($b['status'] === 'accepted' && $b['is_complete'] === 'uncomplete'): ?>
+            <td>
+              <div class="tourist-booking-actions">
+              <?php if (hasTourists($pdo, $b['booking_id'])): ?>
+                <?php if (bookingTouristCanEdit($b) && empty($activeCancellationKeys['tour:' . (int)$b['booking_id']])): ?>
+                <button type="button" class="btn-action add-tourist-btn-user edit-tourist-btn-user" data-manifest-mode="edit" data-booking-id="<?= (int)$b['booking_id'] ?>" data-pax="<?= (int)$pax ?>" data-booking-type="<?= htmlspecialchars(strtolower((string)$b['booking_type']), ENT_QUOTES, 'UTF-8') ?>" title="Editing closes <?= htmlspecialchars(bookingTouristEditDeadline($b)->format('F j, Y \a\t g:i A'), ENT_QUOTES, 'UTF-8') ?> Manila time">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 3 5 5-12 12-6 1 1-6Z"></path><path d="m14 5 5 5"></path></svg>
+                  Edit Tourist
+                </button>
+                <?php else: ?>
+                <small class="tourist-edit-closed">Editing closed</small>
+                <?php endif; ?>
+                <button type="button" class="btn-action btn-secondary view-tourist-btn-user" onclick="openTouristProfilePdf(<?= (int)$b['booking_id'] ?>)">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                  PDF
+                </button>
+              <?php else: ?>
+                <button class="btn-action add-tourist-btn-user" data-booking-id="<?= (int)$b['booking_id'] ?>" data-pax="<?= (int)$pax ?>" data-booking-type="<?= htmlspecialchars(strtolower((string)$b['booking_type']), ENT_QUOTES, 'UTF-8') ?>">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                  Add Tourist
+                </button>
+              <?php endif; ?>
+              </div>
+            </td>
+            <?php else: ?>
+            <td><span class="text-muted">-</span></td>
+            <?php endif; ?>
+            <td>
+              <span class="profile-bill-status <?= strtolower($paymentStatus) ?>"><?= $paymentStatus ?></span>
+            </td>
+            <td><span class="status-pill <?= $awaitingProviderDecision ? 'decision-required' : 'accepted' ?>"><?= $awaitingProviderDecision ? 'Decision Required' : (!empty($rescheduledBookingKeys['tour:' . (int)$b['booking_id']]) ? 'Rescheduled' : 'Accepted') ?></span></td>
+            <td>
+              <div class="profile-booking-dropdown">
+                <button type="button" class="profile-booking-toggle" aria-haspopup="menu" aria-expanded="false">Actions <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+                <div class="profile-booking-menu" role="menu" aria-label="Booking actions" hidden>
+                  <span class="profile-booking-menu-heading" role="presentation">Booking actions</span>
+                  <button
+    class="btn-details-user booking-btn-user profile-booking-option"
     data-booking='<?= htmlspecialchars(json_encode($b, JSON_HEX_APOS | JSON_HEX_QUOT), ENT_QUOTES, "UTF-8") ?>'
     style="display:inline-flex;align-items:center;gap:6px;"
   >
@@ -4647,43 +4460,24 @@ document.addEventListener("DOMContentLoaded", function () {
 
     View Details
   </button>
-</td>
-            <?php if ($b['status'] === 'accepted' && $b['is_complete'] === 'uncomplete'): ?>
-            <td>
-              <?php if (hasTourists($pdo, $b['booking_id'])): ?>
-                <button type="button" class="btn-action btn-secondary view-tourist-btn-user" onclick="openTouristProfilePdf(<?= (int)$b['booking_id'] ?>)">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-                  PDF
-                </button>
-              <?php else: ?>
-                <button class="btn-action add-tourist-btn-user" data-booking-id="<?= (int)$b['booking_id'] ?>" data-pax="<?= (int)$pax ?>" data-booking-type="<?= htmlspecialchars(strtolower((string)$b['booking_type']), ENT_QUOTES, 'UTF-8') ?>">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-                  Add Tourist
-                </button>
-              <?php endif; ?>
-            </td>
-            <?php else: ?>
-            <td><span class="text-muted">-</span></td>
-            <?php endif; ?>
-            <td>
-              <span class="profile-bill-status <?= strtolower($paymentStatus) ?>"><?= $paymentStatus ?></span>
-            </td>
-            <td><span class="status-pill <?= $awaitingProviderDecision ? 'decision-required' : 'accepted' ?>"><?= $awaitingProviderDecision ? 'Decision Required' : (!empty($rescheduledBookingKeys['tour:' . (int)$b['booking_id']]) ? 'Rescheduled' : 'Accepted') ?></span></td>
-            <td>
+
               <?php if ($awaitingProviderDecision): ?>
               <div class="booking-decision-row-actions">
-                <button type="button" class="respond-provider-cancellation booking-respond-btn" data-provider-action="choice" data-request='<?= $decisionPayloadJson ?>'>Review Options</button>
+                <button type="button" class="respond-provider-cancellation booking-respond-btn profile-booking-option" data-provider-action="choice" data-request='<?= $decisionPayloadJson ?>'>Review Options</button>
               </div>
               <?php else: ?>
-              <button type="button" class="cancel-booking-btn" data-booking-domain="tour" data-booking-id="<?= (int)$b['booking_id'] ?>" data-booking-reference="<?= htmlspecialchars((string)($b['booking_reference'] ?? ('BOOKING-' . $b['booking_id'])), ENT_QUOTES, 'UTF-8') ?>" data-service-date="<?= htmlspecialchars((string)$b['booking_date'], ENT_QUOTES, 'UTF-8') ?>" data-refund-policy="<?= htmlspecialchars(bookingCancellationPolicyLabel($cancellationPolicy['refund_policy']), ENT_QUOTES, 'UTF-8') ?>" data-refund-policy-code="<?= htmlspecialchars((string)$cancellationPolicy['refund_policy'], ENT_QUOTES, 'UTF-8') ?>" data-refund-amount="<?= htmlspecialchars(number_format((float)$cancellationPolicy['refundable_amount'], 2, '.', ''), ENT_QUOTES, 'UTF-8') ?>">
+              <button type="button" class="cancel-booking-btn profile-booking-option" data-booking-domain="tour" data-booking-id="<?= (int)$b['booking_id'] ?>" data-booking-reference="<?= htmlspecialchars((string)($b['booking_reference'] ?? ('BOOKING-' . $b['booking_id'])), ENT_QUOTES, 'UTF-8') ?>" data-service-date="<?= htmlspecialchars((string)$b['booking_date'], ENT_QUOTES, 'UTF-8') ?>" data-refund-policy="<?= htmlspecialchars(bookingCancellationPolicyLabel($cancellationPolicy['refund_policy']), ENT_QUOTES, 'UTF-8') ?>" data-refund-policy-code="<?= htmlspecialchars((string)$cancellationPolicy['refund_policy'], ENT_QUOTES, 'UTF-8') ?>" data-refund-amount="<?= htmlspecialchars(number_format((float)$cancellationPolicy['refundable_amount'], 2, '.', ''), ENT_QUOTES, 'UTF-8') ?>">
                 Cancel
               </button>
               <?php endif; ?>
+
+                </div>
+              </div>
             </td>
           </tr>
           <?php if ($awaitingProviderDecision): ?>
           <tr class="booking-decision-alert-row">
-            <td colspan="9">
+            <td colspan="8">
               <div class="booking-decision-inline-alert">
                 <span class="booking-decision-alert-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6M12 17h.01"></path></svg></span>
                 <div><strong>This booking cannot proceed on its original date.</strong><p><b>Provider reason:</b> <?= htmlspecialchars((string)$decisionRequest['cancellation_reason']) ?> <span>•</span> <b>Respond by:</b> <?= htmlspecialchars(date('M j, Y g:i A', strtotime((string)$decisionRequest['decision_deadline']))) ?></p></div>
@@ -4717,7 +4511,7 @@ document.addEventListener("DOMContentLoaded", function () {
             <th>Location / Package</th>
             <th>Type</th>
             <th>Guests</th>
-            <th>Details</th>
+
             <th class="table-col-payment">Payment Status</th>
             <th>Status</th>
             <th>Action</th>
@@ -4754,9 +4548,18 @@ document.addEventListener("DOMContentLoaded", function () {
                 <span class="highlight-warning">Pax: <?= $pax ?></span>
               </div>
             </td>
-<td>
-  <button
-    class="btn-details-user booking-btn-user"
+
+            <td class="table-col-payment">
+              <span class="profile-bill-status <?= strtolower($paymentStatus) ?>"><?= $paymentStatus ?></span>
+            </td>
+            <td><span class="status-pill pending">Pending</span></td>
+            <td>
+              <div class="profile-booking-dropdown">
+                <button type="button" class="profile-booking-toggle" aria-haspopup="menu" aria-expanded="false">Actions <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+                <div class="profile-booking-menu" role="menu" aria-label="Booking actions" hidden>
+                  <span class="profile-booking-menu-heading" role="presentation">Booking actions</span>
+                  <button
+    class="btn-details-user booking-btn-user profile-booking-option"
     data-booking='<?= htmlspecialchars(json_encode($b, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG), ENT_QUOTES, "UTF-8") ?>'
     style="display:inline-flex;align-items:center;gap:6px;"
   >
@@ -4774,15 +4577,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
     View Details
   </button>
-</td>
-            <td class="table-col-payment">
-              <span class="profile-bill-status <?= strtolower($paymentStatus) ?>"><?= $paymentStatus ?></span>
-            </td>
-            <td><span class="status-pill pending">Pending</span></td>
-            <td>
-              <button type="button" class="cancel-booking-btn" data-booking-domain="tour" data-booking-id="<?= (int)$b['booking_id'] ?>" data-booking-reference="<?= htmlspecialchars((string)($b['booking_reference'] ?? ('BOOKING-' . $b['booking_id'])), ENT_QUOTES, 'UTF-8') ?>" data-service-date="<?= htmlspecialchars((string)$b['booking_date'], ENT_QUOTES, 'UTF-8') ?>" data-refund-policy="<?= htmlspecialchars(bookingCancellationPolicyLabel($cancellationPolicy['refund_policy']), ENT_QUOTES, 'UTF-8') ?>" data-refund-policy-code="<?= htmlspecialchars((string)$cancellationPolicy['refund_policy'], ENT_QUOTES, 'UTF-8') ?>" data-refund-amount="<?= htmlspecialchars(number_format((float)$cancellationPolicy['refundable_amount'], 2, '.', ''), ENT_QUOTES, 'UTF-8') ?>">
+
+              <button type="button" class="cancel-booking-btn profile-booking-option" data-booking-domain="tour" data-booking-id="<?= (int)$b['booking_id'] ?>" data-booking-reference="<?= htmlspecialchars((string)($b['booking_reference'] ?? ('BOOKING-' . $b['booking_id'])), ENT_QUOTES, 'UTF-8') ?>" data-service-date="<?= htmlspecialchars((string)$b['booking_date'], ENT_QUOTES, 'UTF-8') ?>" data-refund-policy="<?= htmlspecialchars(bookingCancellationPolicyLabel($cancellationPolicy['refund_policy']), ENT_QUOTES, 'UTF-8') ?>" data-refund-policy-code="<?= htmlspecialchars((string)$cancellationPolicy['refund_policy'], ENT_QUOTES, 'UTF-8') ?>" data-refund-amount="<?= htmlspecialchars(number_format((float)$cancellationPolicy['refundable_amount'], 2, '.', ''), ENT_QUOTES, 'UTF-8') ?>">
                 Cancel
               </button>
+
+                </div>
+              </div>
             </td>
           </tr>
           <?php endforeach; ?>
@@ -4811,7 +4612,7 @@ document.addEventListener("DOMContentLoaded", function () {
             <th>Hotel / Resort</th>
             <th>Room</th>
             <th>Guests</th>
-            <th>Details</th>
+
             <th>Tourists</th>
             <th>Payment</th>
             <th>Status</th>
@@ -4845,20 +4646,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 <span class="highlight">Total: <?= $guests ?></span>
               </div>
             </td>
-            <td>
-              <button
-                type="button"
-                class="btn-details-user booking-btn-user"
-                data-booking='<?= htmlspecialchars(json_encode($h, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG), ENT_QUOTES, "UTF-8") ?>'
-                style="display:inline-flex;align-items:center;gap:6px;"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                  <circle cx="12" cy="12" r="3"/>
-                </svg>
-                View Details
-              </button>
-            </td>
+
 
             <?php 
               $hotelBookingId = (int)($h['hotel_booking_id'] ?? 0);
@@ -4890,9 +4678,29 @@ document.addEventListener("DOMContentLoaded", function () {
             </td>
             <td><span class="status-pill <?= htmlspecialchars($h['booking_status'] ?? 'pending') ?>"><?= ucfirst($h['booking_status'] ?? 'Pending') ?></span></td>
             <td>
-              <button type="button" class="cancel-booking-btn" data-booking-domain="hotel" data-booking-id="<?= (int)$hotelBookingId ?>" data-booking-reference="<?= htmlspecialchars((string)($h['booking_reference'] ?? ('HOTEL-' . $hotelBookingId)), ENT_QUOTES, 'UTF-8') ?>" data-service-date="<?= htmlspecialchars((string)$h['checkin_date'], ENT_QUOTES, 'UTF-8') ?>" data-refund-policy="<?= htmlspecialchars(bookingCancellationPolicyLabel($cancellationPolicy['refund_policy']), ENT_QUOTES, 'UTF-8') ?>" data-refund-policy-code="<?= htmlspecialchars((string)$cancellationPolicy['refund_policy'], ENT_QUOTES, 'UTF-8') ?>" data-refund-amount="<?= htmlspecialchars(number_format((float)$cancellationPolicy['refundable_amount'], 2, '.', ''), ENT_QUOTES, 'UTF-8') ?>">
+              <div class="profile-booking-dropdown">
+                <button type="button" class="profile-booking-toggle" aria-haspopup="menu" aria-expanded="false">Actions <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
+                <div class="profile-booking-menu" role="menu" aria-label="Booking actions" hidden>
+                  <span class="profile-booking-menu-heading" role="presentation">Booking actions</span>
+                  <button
+                type="button"
+                class="btn-details-user booking-btn-user profile-booking-option"
+                data-booking='<?= htmlspecialchars(json_encode($h, JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_TAG), ENT_QUOTES, "UTF-8") ?>'
+                style="display:inline-flex;align-items:center;gap:6px;"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                  <circle cx="12" cy="12" r="3"/>
+                </svg>
+                View Details
+              </button>
+
+              <button type="button" class="cancel-booking-btn profile-booking-option" data-booking-domain="hotel" data-booking-id="<?= (int)$hotelBookingId ?>" data-booking-reference="<?= htmlspecialchars((string)($h['booking_reference'] ?? ('HOTEL-' . $hotelBookingId)), ENT_QUOTES, 'UTF-8') ?>" data-service-date="<?= htmlspecialchars((string)$h['checkin_date'], ENT_QUOTES, 'UTF-8') ?>" data-refund-policy="<?= htmlspecialchars(bookingCancellationPolicyLabel($cancellationPolicy['refund_policy']), ENT_QUOTES, 'UTF-8') ?>" data-refund-policy-code="<?= htmlspecialchars((string)$cancellationPolicy['refund_policy'], ENT_QUOTES, 'UTF-8') ?>" data-refund-amount="<?= htmlspecialchars(number_format((float)$cancellationPolicy['refundable_amount'], 2, '.', ''), ENT_QUOTES, 'UTF-8') ?>">
                 Cancel
               </button>
+
+                </div>
+              </div>
             </td>
           </tr>
           <?php endforeach; ?>
@@ -5819,77 +5627,7 @@ document.addEventListener("DOMContentLoaded", function () {
   </div>
 </div>
 
-<div id="touristModalUser" class="tourist-modal-user" style="display:none;">
-  <div class="tourist-modal-content-user extended">
-
-    <div class="tourist-modal-header-user">
-      <div>
-        <span class="tourist-modal-kicker">Passenger manifest</span>
-        <h3>Add Tourist Information</h3>
-        <p>Complete the required details for every passenger in this booking.</p>
-      </div>
-      <button type="button" class="tourist-modal-close-user" aria-label="Close tourist form">&times;</button>
-    </div>
-
-    <form id="touristFormUser" method="POST">
-      <input type="hidden" name="booking_id" id="touristBookingId">
-      <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($manifestCsrf, ENT_QUOTES, 'UTF-8') ?>">
-
-      <div class="tourist-form-summary">
-        <div><strong id="touristFormCount" aria-live="polite">0/0</strong><span>Tourists added</span></div>
-        <p>Tap an address field to enter a structured address or reuse one already entered.</p>
-      </div>
-
-      <div id="touristRowsUser">
-        <!-- Tourist rows injected here -->
-      </div>
-
-      <div class="tourist-modal-footer-user">
-        <button type="button" class="btn add-more-user" id="addMoreTouristUser">+ Add another tourist</button>
-        <button type="submit" class="btn tourist-submit-user" disabled>Submit Tourist List</button>
-      </div>
-    </form>
-
-  </div>
-</div>
-
-<div id="touristAddressModal" class="tourist-address-overlay" aria-hidden="true">
-  <section class="tourist-address-modal" role="dialog" aria-modal="true" aria-labelledby="touristAddressTitle">
-    <header class="tourist-address-header">
-      <div>
-        <span>Structured address</span>
-        <h3 id="touristAddressTitle">Passenger Address</h3>
-        <p>Select each location in order to build a complete address.</p>
-      </div>
-      <button type="button" id="closeTouristAddress" aria-label="Close address form">&times;</button>
-    </header>
-
-    <div class="tourist-address-body">
-      <div class="tourist-address-copy" id="touristAddressCopyWrap" hidden>
-        <label for="touristAddressCopy">Use an address already entered</label>
-        <select id="touristAddressCopy">
-          <option value="">Choose an address to copy...</option>
-        </select>
-      </div>
-
-      <div class="tourist-address-grid">
-        <label class="tourist-address-field full"><span>Country</span><select id="touristAddressCountry"><option value="">Loading countries...</option></select></label>
-        <label class="tourist-address-field"><span>Region / State</span><select id="touristAddressRegion" disabled><option value="">Select a country first</option></select></label>
-        <label class="tourist-address-field"><span>Province</span><select id="touristAddressProvince" disabled><option value="">Select a region first</option></select></label>
-        <label class="tourist-address-field"><span>City / Municipality</span><select id="touristAddressCity" disabled><option value="">Select a province first</option></select></label>
-        <label class="tourist-address-field"><span>Barangay</span><select id="touristAddressBarangay" disabled><option value="">Select a city first</option></select></label>
-        <label class="tourist-address-field"><span>Postal Code</span><input type="text" id="touristAddressPostalCode" maxlength="20" placeholder="Filled automatically" readonly></label>
-        <label class="tourist-address-field"><span>Street / House No.</span><input type="text" id="touristAddressStreet" maxlength="180" placeholder="Street, building, or house number"></label>
-      </div>
-      <p class="tourist-address-error" id="touristAddressError" role="alert" hidden></p>
-    </div>
-
-    <footer class="tourist-address-footer">
-      <button type="button" class="tourist-address-cancel" id="cancelTouristAddress">Cancel</button>
-      <button type="button" class="tourist-address-done" id="saveTouristAddress">Done</button>
-    </footer>
-  </section>
-</div>
+<?php require __DIR__ . '/tourist_manifest_form.php'; ?>
 
 <div id="touristProfilePdfModal" class="tourist-profile-pdf-overlay" aria-hidden="true">
   <section class="tourist-profile-pdf-modal" role="dialog" aria-modal="true" aria-labelledby="touristProfilePdfTitle">
@@ -5900,7 +5638,7 @@ document.addEventListener("DOMContentLoaded", function () {
       </div>
       <div class="tourist-profile-pdf-header-actions">
         <div class="tourist-profile-pdf-meta"><strong>iTour passenger record</strong><span>System-generated booking document</span></div>
-        <a id="touristProfilePdfDownload" href="#" download>Download PDF</a>
+        <a id="touristProfilePdfDownload" href="#" target="_blank" rel="noopener" download>Download PDF</a>
         <button type="button" class="tourist-profile-pdf-close" onclick="closeTouristProfilePdf()" aria-label="Close PDF viewer">&times;</button>
       </div>
     </header>
@@ -5912,7 +5650,13 @@ document.addEventListener("DOMContentLoaded", function () {
           <span>Please wait while your document is prepared.</span>
         </div>
       </div>
-      <iframe id="touristProfilePdfFrame" src="about:blank" title="Passenger information PDF"></iframe>
+      <div id="touristProfilePdfPages" class="tourist-pdf-pages" aria-label="Passenger information document"></div>
+      <div id="touristProfilePdfError" class="tourist-pdf-error" role="alert" hidden>
+        <strong>The PDF preview could not be loaded.</strong>
+        <p>Try again, or open the PDF directly to view or download your document.</p>
+        <button type="button" id="touristProfilePdfRetry">Try Again</button>
+        <a id="touristProfilePdfOpen" href="#" target="_blank" rel="noopener">Open PDF</a>
+      </div>
     </div>
   </section>
 </div>
@@ -6252,9 +5996,10 @@ function saveCrop() {
   }, "image/png");
 }
 
-let maxPax = 0;
-let currentTouristCount = 0;
-let touristBookingIsBoat = false;
+
+
+
+
 
 const modal = document.getElementById('af-feedback-modal');
 const closeBtn = document.getElementById('af-feedback-close');
@@ -7200,7 +6945,9 @@ document.querySelectorAll('.booking-btn-user[data-booking]:not(.cancellation-det
     billingButton.className = 'billing-btn-user';
     billingButton.dataset.billingType = type;
     billingButton.dataset.billingId = String(id);
-    billingButton.textContent = 'Billing';
+    const inActionsMenu = Boolean(detailsButton.closest('.profile-booking-menu'));
+    billingButton.textContent = inActionsMenu ? 'View Billing' : 'Billing';
+    if (inActionsMenu) billingButton.classList.add('profile-booking-option');
     detailsButton.insertAdjacentElement('afterend', billingButton);
   } catch (error) {}
 });
@@ -7245,9 +6992,9 @@ async function openProfileBilling(type, id) {
     profileBillingState.completed = Boolean(record.completed);
     profileBillingState.balance = bill.balance;
     const expenseRows = bill.expenses.length ? bill.expenses.map(expense => {
-      const name = bill.isHotel ? (expense.expense_name || expense.expense_type) : expense.expense_type;
+      const name = expense.expense_name || expense.expense_type;
       const amount = bill.isHotel ? expense.total_amount : expense.amount;
-      const detail = bill.isHotel ? `${expense.expense_type || 'Expense'} · ${expense.quantity || 1} × ${profileMoney(expense.unit_price)}` : (expense.note || 'Additional charge');
+      const detail = bill.isHotel ? `${expense.expense_type || 'Expense'} · ${expense.quantity || 1} × ${profileMoney(expense.unit_price)}` : [expense.quantity && expense.unit_price != null ? `${expense.quantity} × ${profileMoney(expense.unit_price)}` : '', expense.note].filter(Boolean).join(' · ') || 'Additional charge';
       return `<div class="profile-bill-line"><span>${profileSafe(name)}<small>${profileSafe(detail)}</small></span><strong>${profileMoney(amount)}</strong></div>`;
     }).join('') : '<div class="profile-bill-line"><span>No additional charges</span><strong>₱0.00</strong></div>';
     document.getElementById('profileBillingSubtitle').textContent = `${bill.guest} · ${bill.service}`;
@@ -7268,7 +7015,7 @@ function openProfileReceipt() {
   if (!profileBillingState.data) return;
   const bill = profileBillingNormalized(profileBillingState.data);
   const paper = document.getElementById('profileReceiptPaper');
-  const expenseRows = bill.expenses.length ? bill.expenses.map(expense => `<tr><td>${profileSafe(bill.isHotel ? (expense.expense_name || expense.expense_type) : expense.expense_type)}</td><td>${profileMoney(bill.isHotel ? expense.total_amount : expense.amount)}</td></tr>`).join('') : '<tr><td>No additional charges</td><td>₱0.00</td></tr>';
+  const expenseRows = bill.expenses.length ? bill.expenses.map(expense => `<tr><td>${profileSafe(expense.expense_name || expense.expense_type)}</td><td>${profileMoney(bill.isHotel ? expense.total_amount : expense.amount)}</td></tr>`).join('') : '<tr><td>No additional charges</td><td>₱0.00</td></tr>';
   paper.innerHTML = `
     <div class="receipt-brand"><div><h2>iTour Mercedes</h2><p>OFFICIAL BOOKING RECEIPT</p></div><div class="receipt-number"><small>RECEIPT REFERENCE</small><strong>${profileSafe(bill.reference)}</strong>${profileBillingState.completed ? '<span class="receipt-paid-stamp">COMPLETED</span>' : ''}</div></div>
     <div class="receipt-meta"><div><small>BILLED TO</small><strong>${profileSafe(bill.guest)}</strong></div><div><small>SERVICE</small><strong>${profileSafe(bill.service)}</strong></div><div><small>BOOKING TYPE</small><strong>${bill.isHotel ? 'Hotel reservation' : 'Tour reservation'}</strong></div><div><small>RECEIPT STATUS</small><strong>${profileBillingState.completed ? 'Final receipt' : 'Preview only'}</strong></div></div>
@@ -7607,35 +7354,21 @@ function openTouristProfilePdf(bookingId, refreshAfterClose = false) {
   const id = Number(bookingId || 0);
   if (!id) return;
   const modal = document.getElementById('touristProfilePdfModal');
-  const frame = document.getElementById('touristProfilePdfFrame');
-  const body = frame?.closest('.tourist-profile-pdf-body');
   const download = document.getElementById('touristProfilePdfDownload');
   const url = `tourist_submission_pdf.php?booking_id=${encodeURIComponent(id)}`;
   refreshProfileAfterPdfClose = Boolean(refreshAfterClose);
-  body?.classList.add('is-loading');
-  frame.src = url;
-  download.href = url;
+  download.href = `${url}&download=1`;
   modal.classList.add('show');
   modal.setAttribute('aria-hidden', 'false');
   document.body.classList.add('tourist-profile-pdf-open');
+  window.TouristPdfPreview.open(url);
 }
-
-document.getElementById('touristProfilePdfFrame')?.addEventListener('load', event => {
-  const frame = event.currentTarget;
-  if (frame.getAttribute('src') !== 'about:blank') {
-    frame.closest('.tourist-profile-pdf-body')?.classList.remove('is-loading');
-  }
-});
 
 function closeTouristProfilePdf() {
   const modal = document.getElementById('touristProfilePdfModal');
-  const frame = document.getElementById('touristProfilePdfFrame');
   modal?.classList.remove('show');
   modal?.setAttribute('aria-hidden', 'true');
-  if (frame) {
-    frame.closest('.tourist-profile-pdf-body')?.classList.remove('is-loading');
-    frame.src = 'about:blank';
-  }
+  window.TouristPdfPreview.close();
   document.body.classList.remove('tourist-profile-pdf-open');
   if (refreshProfileAfterPdfClose) {
     refreshProfileAfterPdfClose = false;
@@ -7652,740 +7385,9 @@ document.addEventListener('keydown', event => {
   }
 });
 
-const touristModalUser = document.getElementById('touristModalUser');
-const touristRowsUser = document.getElementById('touristRowsUser');
-const bookingIdInput = document.getElementById('touristBookingId');
-const touristAddressModal = document.getElementById('touristAddressModal');
-let activeTouristAddressRow = null;
-
-const touristHtmlValue = value => String(value ?? '')
-  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-
-function touristAddressFromRow(row) {
-  const read = part => row.querySelector(`[data-address-part="${part}"]`)?.value.trim() || '';
-  return {country:read('country'),region:read('region'),province:read('province'),city:read('city'),barangay:read('barangay'),postal_code:read('postal_code'),street:read('street')};
-}
-
-function touristAddressLine(address) {
-  return [address.street,address.barangay,address.city,address.province,address.region,address.postal_code,address.country]
-    .map(value => String(value || '').trim()).filter(Boolean).join(', ');
-}
-
-function setTouristRowAddress(row, address) {
-  Object.entries(address).forEach(([part, value]) => {
-    const input = row.querySelector(`[data-address-part="${part}"]`);
-    if (input) input.value = value || '';
-  });
-  const line = touristAddressLine(address);
-  row.querySelector('input[name="address[]"]').value = line;
-  row.querySelector('.address-display').textContent = line || 'Tap to enter the complete address';
-  row.querySelector('.tourist-address-trigger').classList.toggle('has-address', Boolean(line));
-}
-
-function renumberTouristRows() {
-  const previousScrollTop = touristRowsUser.scrollTop;
-  const rows = Array.from(touristRowsUser.querySelectorAll('.tourist-row-user'));
-  touristRowsUser.querySelectorAll('.tourist-boat-group').forEach(group => group.remove());
-  if (touristBookingIsBoat) {
-    for (let boat = 1; boat <= Math.ceil(maxPax / 8); boat++) {
-      const members = rows.filter(row => Number(row.querySelector('[name="boat_number[]"]').value) === boat);
-      const group = document.createElement('section');
-      group.className = 'tourist-boat-group';
-      group.innerHTML = `<h4>Boat ${boat} <span>${members.length}/8 tourists</span></h4><p>Enter the details of the tourists travelling on this boat.</p>`;
-      members.forEach(row => group.appendChild(row));
-      const add = document.createElement('button');
-      add.type = 'button';
-      add.className = 'btn add-more-user';
-      add.textContent = `+ Add tourist to Boat ${boat}`;
-      const capacityError = document.createElement('p');
-      capacityError.className = 'tourist-boat-capacity-error';
-      capacityError.id = `touristBoatCapacityError${boat}`;
-      capacityError.hidden = true;
-      capacityError.setAttribute('role', 'alert');
-      add.setAttribute('aria-describedby', capacityError.id);
-      add.addEventListener('click', () => {
-        if (members.length >= 8 || rows.length >= maxPax) {
-          capacityError.textContent = members.length >= 8
-            ? `Maximum capacity for Boat ${boat} has been reached (8 tourists).`
-            : `All ${maxPax} tourists for this booking have already been added.`;
-          capacityError.hidden = false;
-          return;
-        }
-        const addedRow = createTouristRowUser({boat_number:boat});
-        group.appendChild(addedRow);
-        renumberTouristRows();
-        showAddedTouristRow(addedRow);
-      });
-      group.appendChild(add);
-      group.appendChild(capacityError);
-      touristRowsUser.appendChild(group);
-    }
-  }
-  Array.from(touristRowsUser.querySelectorAll('.tourist-row-user')).forEach((row, index) => {
-    row.querySelector('.tourist-row-number').textContent = index + 1;
-    row.querySelector('.tourist-row-heading strong').textContent = `Tourist ${index + 1}`;
-  });
-  currentTouristCount = rows.length;
-  document.getElementById('touristFormCount').textContent = `${currentTouristCount}/${maxPax}`;
-  updateAddButtonState();
-  touristRowsUser.scrollTop = previousScrollTop;
-}
-
-function showAddedTouristRow(row) {
-  requestAnimationFrame(() => {
-    row.querySelector('input[name="full_name[]"]')?.focus({preventScroll:true});
-    row.scrollIntoView({block:'nearest', behavior:'smooth'});
-  });
-}
-
-touristRowsUser.addEventListener('change', event => {
-  if (!event.target.matches('[name="boat_number[]"]')) return;
-  const select = event.target;
-  const count = Array.from(touristRowsUser.querySelectorAll('[name="boat_number[]"]')).filter(input => input.value === select.value).length;
-  if (count > 8) {
-    alert(`Boat ${select.value} can carry a maximum of 8 tourists. Choose another boat.`);
-    select.value = select.dataset.previousBoat;
-    return;
-  }
-  select.dataset.previousBoat = select.value;
-  renumberTouristRows();
-});
-
-/* ---------- HELPER: create ONE tourist row ---------- */
-function createTouristRowUser(tourist = {}) {
-  const row = document.createElement('div');
-  row.className = 'tourist-row-user';
-  const country = tourist.country || (String(tourist.residence || '').toLowerCase() === 'philippines' ? 'Philippines' : '');
-  const address = {country,region:tourist.region || '',province:tourist.province || '',city:tourist.city || '',barangay:tourist.barangay || '',postal_code:tourist.postal_code || '',street:tourist.street || ''};
-  const structuredAddressLine = touristAddressLine(address);
-  const addressLine = structuredAddressLine || tourist.address || '';
-  row.innerHTML = `
-    <div class="tourist-row-heading"><span class="tourist-row-number">1</span><strong>Tourist 1</strong></div>
-    ${touristBookingIsBoat ? `<label class="tourist-boat-choice">Assigned boat <select name="boat_number[]" aria-label="Assigned boat for this tourist">${Array.from({length:Math.ceil(maxPax / 8)}, (_, i) => `<option value="${i + 1}" ${Number(tourist.boat_number) === i + 1 ? 'selected' : ''}>Boat ${i + 1}</option>`).join('')}</select></label>` : ''}
-    <div class="tourist-row-grid">
-      <label class="tourist-field name"><span>Full name</span><input type="text" name="full_name[]" maxlength="180" placeholder="Passenger's complete name" required value="${touristHtmlValue(tourist.full_name)}"></label>
-      <label class="tourist-field"><span>Gender (by birth)</span><select name="gender[]" required><option value="">Select gender</option><option value="male" ${String(tourist.gender).toLowerCase() === 'male' ? 'selected' : ''}>Male</option><option value="female" ${String(tourist.gender).toLowerCase() === 'female' ? 'selected' : ''}>Female</option></select></label>
-      <label class="tourist-field"><span>Age</span><input type="number" name="age[]" min="0" max="120" inputmode="numeric" placeholder="Age" required value="${touristHtmlValue(tourist.age)}"></label>
-      <label class="tourist-field phone"><span>Contact number</span><input type="tel" name="phone_number[]" maxlength="50" placeholder="Mobile or telephone" required value="${touristHtmlValue(tourist.phone_number)}"></label>
-      <div class="tourist-field address"><span>Complete address</span><button type="button" class="tourist-address-trigger"><span class="address-display">${touristHtmlValue(addressLine || 'Tap to enter the complete address')}</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 21s7-5.2 7-12a7 7 0 1 0-14 0c0 6.8 7 12 7 12Z"></path><circle cx="12" cy="9" r="2.5"></circle></svg></button></div>
-    </div>
-    <input type="hidden" name="address[]" value="${touristHtmlValue(addressLine)}">
-    <input type="hidden" name="country[]" data-address-part="country" value="${touristHtmlValue(address.country)}">
-    <input type="hidden" name="region[]" data-address-part="region" value="${touristHtmlValue(address.region)}">
-    <input type="hidden" name="province[]" data-address-part="province" value="${touristHtmlValue(address.province)}">
-    <input type="hidden" name="city[]" data-address-part="city" value="${touristHtmlValue(address.city)}">
-    <input type="hidden" name="barangay[]" data-address-part="barangay" value="${touristHtmlValue(address.barangay)}">
-    <input type="hidden" name="postal_code[]" data-address-part="postal_code" value="${touristHtmlValue(address.postal_code)}">
-    <input type="hidden" name="street[]" data-address-part="street" value="${touristHtmlValue(address.street)}">
-    <button type="button" class="remove-tourist-user" aria-label="Remove tourist">&times;</button>
-  `;
-  row.querySelector('.tourist-address-trigger').classList.toggle('has-address', Boolean(addressLine));
-  if (touristBookingIsBoat) {
-    const select = row.querySelector('[name="boat_number[]"]');
-    const existing = Array.from(touristRowsUser.querySelectorAll('[name="boat_number[]"]'));
-    const available = Array.from({length:Math.ceil(maxPax / 8)}, (_, i) => i + 1)
-      .find(number => existing.filter(input => Number(input.value) === number).length < 8);
-    select.value = String(Number(tourist.boat_number) || available || 1);
-    select.dataset.previousBoat = select.value;
-  }
-  return row;
-}
-
-function closeTouristAddressModal() {
-  touristAddressModal.classList.remove('show');
-  touristAddressModal.setAttribute('aria-hidden', 'true');
-  activeTouristAddressRow = null;
-}
-
-function addressModalField(part) {
-  return document.getElementById(`touristAddress${part[0].toUpperCase()}${part.slice(1)}`);
-}
-
-const touristSearchSelects = new WeakMap();
-
-function enhanceTouristSearchSelect(select) {
-  if (touristSearchSelects.has(select)) return touristSearchSelects.get(select);
-  const wrapper = document.createElement('div');
-  wrapper.className = 'tourist-search-select';
-  if (select.id === 'touristAddressCity' || select.id === 'touristAddressBarangay') {
-    wrapper.classList.add('open-up');
-  }
-  const inputWrap = document.createElement('div');
-  inputWrap.className = 'tourist-search-input-wrap';
-  const input = document.createElement('input');
-  input.type = 'text';
-  input.className = 'tourist-search-input';
-  input.autocomplete = 'off';
-  input.setAttribute('role', 'combobox');
-  input.setAttribute('aria-autocomplete', 'list');
-  input.setAttribute('aria-expanded', 'false');
-  const toggle = document.createElement('button');
-  toggle.type = 'button';
-  toggle.className = 'tourist-search-toggle';
-  toggle.innerHTML = '&#9662;';
-  toggle.setAttribute('aria-label', 'Show available locations');
-  const menu = document.createElement('div');
-  menu.className = 'tourist-search-menu';
-  menu.setAttribute('role', 'listbox');
-  select.parentNode.insertBefore(wrapper, select);
-  inputWrap.append(input, toggle);
-  wrapper.append(inputWrap, menu, select);
-  let activeIndex = -1;
-
-  const close = () => {
-    wrapper.classList.remove('open');
-    input.setAttribute('aria-expanded', 'false');
-    activeIndex = -1;
-  };
-  const availableOptions = () => Array.from(select.options).filter(option => option.value);
-  const render = (query = '') => {
-    const normalized = query.trim().toLowerCase();
-    const matches = availableOptions().filter(option => !normalized || option.textContent.toLowerCase().includes(normalized));
-    menu.innerHTML = '';
-    activeIndex = -1;
-    if (!matches.length) {
-      menu.innerHTML = '<div class="tourist-search-empty">No matching locations</div>';
-      return;
-    }
-    matches.forEach(option => {
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'tourist-search-option';
-      button.dataset.value = option.value;
-      button.textContent = option.textContent;
-      button.setAttribute('role', 'option');
-      button.addEventListener('mousedown', event => event.preventDefault());
-      button.addEventListener('click', () => {
-        select.value = option.value;
-        input.value = option.dataset.name || option.textContent;
-        close();
-        select.dispatchEvent(new Event('change', {bubbles:true}));
-      });
-      menu.appendChild(button);
-    });
-  };
-  const open = () => {
-    if (select.disabled) return;
-    render(input.value);
-    wrapper.classList.add('open');
-    input.setAttribute('aria-expanded', 'true');
-  };
-  const refresh = () => {
-    const selected = select.selectedOptions[0];
-    input.disabled = select.disabled;
-    toggle.disabled = select.disabled;
-    wrapper.classList.toggle('disabled', select.disabled);
-    input.placeholder = select.options[0]?.textContent || 'Search locations';
-    input.value = selected?.value ? (selected.dataset.name || selected.textContent) : '';
-    close();
-  };
-
-  input.addEventListener('focus', open);
-  input.addEventListener('click', open);
-  input.addEventListener('input', () => {
-    render(input.value);
-    wrapper.classList.add('open');
-    input.setAttribute('aria-expanded', 'true');
-  });
-  input.addEventListener('blur', () => {
-    setTimeout(() => {
-      const selected = select.selectedOptions[0];
-      input.value = selected?.value ? (selected.dataset.name || selected.textContent) : '';
-      close();
-    }, 100);
-  });
-  input.addEventListener('keydown', event => {
-    const options = Array.from(menu.querySelectorAll('.tourist-search-option'));
-    if (event.key === 'Escape') { close(); return; }
-    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-      event.preventDefault();
-      if (!wrapper.classList.contains('open')) open();
-      activeIndex = event.key === 'ArrowDown'
-        ? Math.min(activeIndex + 1, options.length - 1)
-        : Math.max(activeIndex - 1, 0);
-      options.forEach((option, index) => option.classList.toggle('active', index === activeIndex));
-      options[activeIndex]?.scrollIntoView({block:'nearest'});
-    } else if (event.key === 'Enter' && wrapper.classList.contains('open')) {
-      event.preventDefault();
-      (options[activeIndex >= 0 ? activeIndex : 0])?.click();
-    }
-  });
-  toggle.addEventListener('click', () => {
-    if (wrapper.classList.contains('open')) close();
-    else { input.focus(); open(); }
-  });
-
-  const api = {refresh, close};
-  touristSearchSelects.set(select, api);
-  refresh();
-  return api;
-}
-
-function syncTouristSearchSelect(select) {
-  enhanceTouristSearchSelect(select).refresh();
-}
-
-['country','region','province','city','barangay'].forEach(part => enhanceTouristSearchSelect(addressModalField(part)));
-document.addEventListener('mousedown', event => {
-  document.querySelectorAll('.tourist-search-select.open').forEach(wrapper => {
-    if (!wrapper.contains(event.target)) wrapper.classList.remove('open');
-  });
-});
-
-const touristGeoNamesCache = new Map();
-
-async function fetchTouristGeoNames(action, parentId = 0) {
-  const cacheKey = `${action}:${parentId}`;
-  if (touristGeoNamesCache.has(cacheKey)) return touristGeoNamesCache.get(cacheKey);
-  const query = new URLSearchParams({action, address_version:'2'});
-  if (parentId) query.set('parent_id', String(parentId));
-  const request = fetch(`geonames_locations.php?${query}`, {headers:{Accept:'application/json'}})
-    .then(async response => {
-      const result = await response.json();
-      if (!response.ok || !result.success) throw new Error(result.message || 'Locations could not be loaded.');
-      return Array.isArray(result.locations) ? result.locations : [];
-    });
-  touristGeoNamesCache.set(cacheKey, request);
-  try {
-    return await request;
-  } catch (error) {
-    touristGeoNamesCache.delete(cacheKey);
-    throw error;
-  }
-}
-
-function selectedTouristLocationName(select) {
-  return select.selectedOptions[0]?.dataset.name || '';
-}
-
-function resetTouristLocationSelect(select, message) {
-  select.innerHTML = `<option value="">${touristHtmlValue(message)}</option>`;
-  select.disabled = true;
-  syncTouristSearchSelect(select);
-}
-
-function fillTouristLocationSelect(select, locations, placeholder, selectedName = '') {
-  select.innerHTML = `<option value="">${touristHtmlValue(placeholder)}</option>`;
-  const seenNames = new Set();
-  locations.forEach(location => {
-    const normalizedName = String(location.name || '').trim().toLowerCase();
-    if (!normalizedName || seenNames.has(normalizedName)) return;
-    seenNames.add(normalizedName);
-    const option = document.createElement('option');
-    option.value = String(location.id);
-    option.dataset.name = location.name;
-    option.dataset.countryCode = location.country_code || '';
-    option.dataset.featureCode = location.feature_code || '';
-    option.dataset.adminCode1 = location.admin_code_1 || '';
-    option.dataset.adminCode2 = location.admin_code_2 || '';
-    option.dataset.adminCode3 = location.admin_code_3 || '';
-    option.dataset.adminCode4 = location.admin_code_4 || '';
-    option.textContent = location.name;
-    select.appendChild(option);
-  });
-  select.disabled = false;
-  if (selectedName) {
-    const wanted = selectedName.trim().toLowerCase();
-    const match = Array.from(select.options).find(option => (option.dataset.name || '').trim().toLowerCase() === wanted);
-    if (match) select.value = match.value;
-  }
-  syncTouristSearchSelect(select);
-}
-
-async function loadTouristLocationChildren(parentSelect, childSelect, placeholder, selectedName = '', featureCodes = []) {
-  const parentId = parentSelect.value;
-  if (!parentId) {
-    resetTouristLocationSelect(childSelect, placeholder);
-    return [];
-  }
-  resetTouristLocationSelect(childSelect, 'Loading locations...');
-  const allLocations = await fetchTouristGeoNames('children', parentId);
-  const filtered = featureCodes.length
-    ? allLocations.filter(location => featureCodes.includes(location.feature_code))
-    : allLocations;
-  const locations = filtered.length ? filtered : allLocations;
-  if (parentSelect.value !== parentId) return [];
-  fillTouristLocationSelect(childSelect, locations, locations.length ? placeholder : 'No subdivisions found', selectedName);
-  if (!locations.length) childSelect.disabled = true;
-  return locations;
-}
-
-async function hydrateTouristAddressDropdowns(address = {}) {
-  const country = addressModalField('country');
-  const region = addressModalField('region');
-  const province = addressModalField('province');
-  const city = addressModalField('city');
-  const barangay = addressModalField('barangay');
-  country.innerHTML = '<option value="">Loading countries...</option>';
-  country.disabled = true;
-  syncTouristSearchSelect(country);
-  resetTouristLocationSelect(region, 'Select a country first');
-  resetTouristLocationSelect(province, 'Select a region first');
-  resetTouristLocationSelect(city, 'Select a province first');
-  resetTouristLocationSelect(barangay, 'Select a city first');
-  addressModalField('postalCode').value = address.postal_code || '';
-  addressModalField('street').value = address.street || '';
-
-  try {
-    const countries = await fetchTouristGeoNames('countries');
-    fillTouristLocationSelect(country, countries, 'Select a country', address.country || '');
-    if (!country.value) return;
-    await loadTouristLocationChildren(country, region, 'Select a region or state', address.region || '', ['ADM1']);
-    if (!region.value) return;
-    await loadTouristLocationChildren(region, province, 'Select a province', address.province || '', ['ADM2']);
-    if (!province.value) return;
-    await loadTouristLocationChildren(province, city, 'Select a city or municipality', address.city || '', ['ADM3']);
-    if (!city.value) return;
-    await loadTouristLocationChildren(city, barangay, 'Select a barangay', address.barangay || '', ['ADM4', 'PPL', 'PPLX']);
-  } catch (error) {
-    country.innerHTML = '<option value="">Countries could not be loaded</option>';
-    country.disabled = true;
-    syncTouristSearchSelect(country);
-    const errorBox = document.getElementById('touristAddressError');
-    errorBox.textContent = error.message;
-    errorBox.hidden = false;
-  }
-}
-
-async function openTouristAddressModal(row) {
-  activeTouristAddressRow = row;
-  const current = touristAddressFromRow(row);
-
-  const copySelect = document.getElementById('touristAddressCopy');
-  copySelect.innerHTML = '<option value="">Choose an address to copy...</option>';
-  const unique = new Set();
-  Array.from(touristRowsUser.querySelectorAll('.tourist-row-user')).forEach((candidate, index) => {
-    if (candidate === row) return;
-    const address = touristAddressFromRow(candidate);
-    const line = touristAddressLine(address);
-    if (!line || unique.has(line.toLowerCase())) return;
-    unique.add(line.toLowerCase());
-    const option = document.createElement('option');
-    option.value = String(index);
-    option.textContent = `Tourist ${index + 1} — ${line}`;
-    option.dataset.address = JSON.stringify(address);
-    copySelect.appendChild(option);
-  });
-  document.getElementById('touristAddressCopyWrap').hidden = copySelect.options.length <= 1;
-  document.getElementById('touristAddressError').hidden = true;
-  touristAddressModal.classList.add('show');
-  touristAddressModal.setAttribute('aria-hidden', 'false');
-  await hydrateTouristAddressDropdowns(current);
-  setTimeout(() => addressModalField('country').focus(), 0);
-}
-
-touristRowsUser.addEventListener('click', event => {
-  const trigger = event.target.closest('.tourist-address-trigger');
-  if (trigger) openTouristAddressModal(trigger.closest('.tourist-row-user'));
-});
-
-document.getElementById('touristAddressCopy').addEventListener('change', async event => {
-  const option = event.target.selectedOptions[0];
-  if (!option?.dataset.address) return;
-  const address = JSON.parse(option.dataset.address);
-  await hydrateTouristAddressDropdowns(address);
-});
-
-addressModalField('country').addEventListener('change', async () => {
-  resetTouristLocationSelect(addressModalField('province'), 'Select a region first');
-  resetTouristLocationSelect(addressModalField('city'), 'Select a province first');
-  resetTouristLocationSelect(addressModalField('barangay'), 'Select a city first');
-  addressModalField('postalCode').value = '';
-  try {
-    await loadTouristLocationChildren(addressModalField('country'), addressModalField('region'), 'Select a region or state', '', ['ADM1']);
-  } catch (error) {
-    const errorBox = document.getElementById('touristAddressError'); errorBox.textContent = error.message; errorBox.hidden = false;
-  }
-});
-
-addressModalField('region').addEventListener('change', async () => {
-  resetTouristLocationSelect(addressModalField('city'), 'Select a province first');
-  resetTouristLocationSelect(addressModalField('barangay'), 'Select a city first');
-  addressModalField('postalCode').value = '';
-  try {
-    await loadTouristLocationChildren(addressModalField('region'), addressModalField('province'), 'Select a province', '', ['ADM2']);
-  } catch (error) {
-    const errorBox = document.getElementById('touristAddressError'); errorBox.textContent = error.message; errorBox.hidden = false;
-  }
-});
-
-addressModalField('province').addEventListener('change', async () => {
-  resetTouristLocationSelect(addressModalField('barangay'), 'Select a city first');
-  addressModalField('postalCode').value = '';
-  try {
-    await loadTouristLocationChildren(addressModalField('province'), addressModalField('city'), 'Select a city or municipality', '', ['ADM3']);
-  } catch (error) {
-    const errorBox = document.getElementById('touristAddressError'); errorBox.textContent = error.message; errorBox.hidden = false;
-  }
-});
-
-addressModalField('city').addEventListener('change', async () => {
-  addressModalField('postalCode').value = '';
-  try {
-    await loadTouristLocationChildren(addressModalField('city'), addressModalField('barangay'), 'Select a barangay', '', ['ADM4', 'PPL', 'PPLX']);
-  } catch (error) {
-    const errorBox = document.getElementById('touristAddressError'); errorBox.textContent = error.message; errorBox.hidden = false;
-  }
-});
-
-async function fillTouristPostalCode() {
-  const postalField = addressModalField('postalCode');
-  if (!addressModalField('barangay').value) {
-    postalField.value = '';
-    return;
-  }
-  const countryOption = addressModalField('country').selectedOptions[0];
-  const cityName = selectedTouristLocationName(addressModalField('city'));
-  const countryCode = countryOption?.dataset.countryCode || '';
-  if (!countryCode || !cityName) {
-    postalField.value = '';
-    return;
-  }
-  postalField.value = 'Loading...';
-  try {
-    const query = new URLSearchParams({action:'postal_code', country_code:countryCode, place_name:cityName.replace(/^Municipality of\s+/i, '')});
-    const response = await fetch(`geonames_locations.php?${query}`, {headers:{Accept:'application/json'}});
-    const result = await response.json();
-    if (!response.ok || !result.success) throw new Error(result.message || 'Postal code could not be loaded.');
-    if (selectedTouristLocationName(addressModalField('city')) !== cityName) return;
-    if (!result.postal_code) throw new Error('Postal code unavailable. Please enter your postal code.');
-    postalField.value = result.postal_code;
-  } catch (error) {
-    postalField.value = '';
-    postalField.readOnly = false;
-    postalField.placeholder = 'Enter postal code';
-    const errorBox = document.getElementById('touristAddressError');
-    errorBox.textContent = 'Please enter your postal code; automatic lookup is unavailable.';
-    errorBox.hidden = false;
-  }
-}
-
-addressModalField('barangay').addEventListener('change', fillTouristPostalCode);
-
-document.getElementById('saveTouristAddress').addEventListener('click', () => {
-  if (!activeTouristAddressRow) return;
-  const address = {
-    country:selectedTouristLocationName(addressModalField('country')),
-    region:selectedTouristLocationName(addressModalField('region')),
-    province:selectedTouristLocationName(addressModalField('province')),
-    city:selectedTouristLocationName(addressModalField('city')),
-    barangay:selectedTouristLocationName(addressModalField('barangay')),
-    postal_code:addressModalField('postalCode').value.trim(),
-    street:addressModalField('street').value.trim()
-  };
-  const missing = Object.entries(address).filter(([, value]) => !value).map(([part]) => part);
-  if (missing.length) {
-    const error = document.getElementById('touristAddressError');
-    error.textContent = `Complete the ${missing.join(', ')} field${missing.length > 1 ? 's' : ''}.`;
-    error.hidden = false;
-    return;
-  }
-  setTouristRowAddress(activeTouristAddressRow, address);
-  closeTouristAddressModal();
-});
-
-document.getElementById('closeTouristAddress').addEventListener('click', closeTouristAddressModal);
-document.getElementById('cancelTouristAddress').addEventListener('click', closeTouristAddressModal);
-touristAddressModal.addEventListener('mousedown', event => { if (event.target === touristAddressModal) closeTouristAddressModal(); });
-document.addEventListener('keydown', event => {
-  if (event.key === 'Escape' && touristAddressModal.classList.contains('show')) {
-    closeTouristAddressModal();
-  }
-});
-
-/* ---------- OPEN MODAL ---------- */
-document.querySelectorAll('.add-tourist-btn-user').forEach(btn => {
-  btn.addEventListener('click', async () => {
-    const bookingId = btn.dataset.bookingId;
-    maxPax = parseInt(btn.dataset.pax || 0);
-    touristBookingIsBoat = btn.dataset.bookingType === 'boat';
-
-    bookingIdInput.value = bookingId;
-
-    const formData = new FormData();
-    formData.append('fetch_tourists', '1');
-    formData.append('booking_id', bookingId);
-
-    try {
-      const res = await fetch('<?= basename(__FILE__) ?>', {
-        method: 'POST',
-        body: formData
-      });
-
-      const data = await res.json();
-
-      touristRowsUser.innerHTML = '';
-
-      currentTouristCount = (data.success && data.tourists)
-        ? data.tourists.length
-        : 0;
-
-      if (data.success && data.tourists.length > 0) {
-        data.tourists.forEach(t =>
-          touristRowsUser.appendChild(createTouristRowUser(t))
-        );
-      } else {
-        touristRowsUser.appendChild(createTouristRowUser());
-      }
-
-      renumberTouristRows();
-
-      touristModalUser.style.display = 'flex';
-
-    } catch (err) {
-      console.error(err);
-      alert('Failed to load existing tourists.');
-    }
-  });
-});
-
-/* ---------- CLOSE MODAL ---------- */
-// Email links can only open a form belonging to a booking rendered for this account.
-const touristSubmissionId = new URLSearchParams(window.location.search).get('submit_tourists');
-function openRequestedTouristSubmission() {
-  if (!touristSubmissionId || !/^[1-9]\d*$/.test(touristSubmissionId)) return;
-  const submissionButton = Array.from(document.querySelectorAll('.add-tourist-btn-user'))
-    .find(button => button.dataset.bookingId === touristSubmissionId);
-  const bookingRow = document.getElementById('booking-' + touristSubmissionId);
-  bookingRow?.scrollIntoView({block: 'center'});
-  if (submissionButton) submissionButton.click();
-  else if (bookingRow?.querySelector('.view-tourist-btn-user')) bookingRow.querySelector('.view-tourist-btn-user').click();
-  else alert('The tourist submission form is unavailable for this booking. Please use the account that made the booking and check its status in My Bookings.');
-}
-
-document.querySelector('.tourist-modal-close-user').onclick = () => {
-  touristModalUser.style.display = 'none';
-};
-
-/* ---------- ADD MORE TOURISTS ROW ---------- */
-document.getElementById('addMoreTouristUser').addEventListener('click', () => {
-  if (currentTouristCount >= maxPax) {
-    alert(`You can only add up to ${maxPax} tourists for this booking.`);
-    return;
-  }
-
-  const addedRow = createTouristRowUser();
-  touristRowsUser.appendChild(addedRow);
-  renumberTouristRows();
-  showAddedTouristRow(addedRow);
-});
-
-function updateAddButtonState() {
-  const addBtn = document.getElementById('addMoreTouristUser');
-  const submitBtn = document.querySelector('#touristFormUser .tourist-submit-user');
-
-  if (currentTouristCount >= maxPax) {
-    addBtn.disabled = true;
-    addBtn.style.opacity = 0.5;
-    addBtn.style.cursor = 'not-allowed';
-  } else {
-    addBtn.disabled = false;
-    addBtn.style.opacity = 1;
-    addBtn.style.cursor = 'pointer';
-  }
-
-  const boatCounts = touristBookingIsBoat ? Array.from({length:Math.ceil(maxPax / 8)}, (_, i) =>
-    Array.from(touristRowsUser.querySelectorAll('[name="boat_number[]"]')).filter(input => Number(input.value) === i + 1).length) : [];
-  const hasRequiredPax = maxPax > 0 && currentTouristCount === maxPax && boatCounts.every(count => count > 0 && count <= 8);
-  submitBtn.disabled = !hasRequiredPax;
-  const remainingPax = Math.max(maxPax - currentTouristCount, 0);
-  submitBtn.title = hasRequiredPax
-    ? 'Submit the completed tourist list'
-    : `Add ${remainingPax} more tourist${remainingPax === 1 ? '' : 's'} to submit`;
-}
-
-/* ---------- REMOVE TOURIST ROW ---------- */
-touristRowsUser.addEventListener('click', e => {
-  const removeButton = e.target.closest('.remove-tourist-user');
-  if (removeButton) {
-    removeButton.closest('.tourist-row-user').remove();
-    renumberTouristRows();
-  }
-});
-
-/* ---------- SUBMIT TOURISTS ---------- */
-document.getElementById('touristFormUser').addEventListener('submit', function(e) {
-  e.preventDefault();
-
-  const rows = Array.from(touristRowsUser.querySelectorAll('.tourist-row-user'));
-  if (!rows.length) {
-    alert('Add at least one tourist.');
-    return;
-  }
-  if (rows.length !== maxPax) {
-    alert(`Complete all ${maxPax} tourist entries before submitting.`);
-    return;
-  }
-  const incompleteAddressIndex = rows.findIndex(row => Object.values(touristAddressFromRow(row)).some(value => !value));
-  if (incompleteAddressIndex >= 0) {
-    alert(`Complete the address for Tourist ${incompleteAddressIndex + 1}.`);
-    openTouristAddressModal(rows[incompleteAddressIndex]);
-    return;
-  }
-  if (!this.checkValidity()) {
-    this.reportValidity();
-    return;
-  }
-
-  // Save current active tab
-  const activeTab = document.querySelector('.nav-links a.active')?.getAttribute('data-section');
-  if (activeTab) localStorage.setItem('activeTab', activeTab);
-
-  const formData = new FormData(this);
-  const submitBtn = this.querySelector('button[type="submit"]');
-  const submittedBookingId = bookingIdInput.value;
-  submitBtn.disabled = true;
-  submitBtn.textContent = 'Submitting...';
-
-  fetch('<?= basename(__FILE__) ?>', { method: 'POST', body: formData })
-    .then(res => res.json())
-    .then(async resData => {
-      if (resData.success) {
-        touristModalUser.style.display = 'none';
-        const result = await Swal.fire({
-          icon: 'success',
-          title: 'Tourist List Submitted',
-          text: resData.message || 'The passenger manifest was saved successfully.',
-          showCancelButton: true,
-          confirmButtonText: 'View PDF',
-          cancelButtonText: 'Okay',
-          confirmButtonColor: '#26745f',
-          cancelButtonColor: '#71817b',
-          reverseButtons: true,
-          allowOutsideClick: false
-        });
-        if (result.isConfirmed) {
-          openTouristProfilePdf(submittedBookingId, true);
-        } else {
-          location.reload(); // reloads, active tab will be restored
-        }
-      } else {
-        await Swal.fire({
-          icon: 'error',
-          title: 'Submission Failed',
-          text: resData.message || 'The tourist list could not be submitted.',
-          confirmButtonText: 'Okay',
-          confirmButtonColor: '#26745f'
-        });
-      }
-    })
-    .catch(async err => {
-      console.error(err);
-      await Swal.fire({
-        icon: 'error',
-        title: 'Submission Failed',
-        text: 'The tourist list could not be submitted. Please try again.',
-        confirmButtonText: 'Okay',
-        confirmButtonColor: '#26745f'
-      });
-    })
-    .finally(() => {
-      submitBtn.textContent = 'Submit Tourists';
-      updateAddButtonState();
-    });
-});
-
+</script>
+<script src="../js/tourist-manifest-form.js?v=1"></script>
+<script>
 /* ---------- RESTORE ACTIVE TAB AFTER RELOAD ---------- */
 document.addEventListener('DOMContentLoaded', () => {
   const allowedTabs = ['profile', 'bookings', 'cancel-bookings', 'favorites', 'complaints', 'history'];
@@ -8682,6 +7684,8 @@ window.FavoritesConfig = {
 })();
 </script>
 <script src="../js/mobile-scroll.js"></script>
+<script src="../js/tourist-pdf-preview.js?v=<?= (int)filemtime(__DIR__ . '/../js/tourist-pdf-preview.js') ?>"></script>
+<script src="../js/profile-booking-actions.js?v=<?= (int)filemtime(__DIR__ . '/../js/profile-booking-actions.js') ?>"></script>
 </body>
 </html>
 

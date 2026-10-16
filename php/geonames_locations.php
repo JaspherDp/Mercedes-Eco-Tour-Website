@@ -8,7 +8,11 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: private, max-age=3600');
 
 $signupScope = ($_GET['scope'] ?? '') === 'signup';
-if (empty($_SESSION['tourist_id']) && !$signupScope) {
+if (empty($_SESSION['tourist_id']) && !$signupScope && !empty($_SESSION['admin_id'])) {
+    require_once __DIR__ . '/admin_auth_helper.php';
+    AdminRequireLogin();
+}
+if (empty($_SESSION['tourist_id']) && empty($_SESSION['admin_id']) && !$signupScope) {
     http_response_code(401);
     echo json_encode(['success' => false, 'message' => 'Please sign in again.']);
     exit;

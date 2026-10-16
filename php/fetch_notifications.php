@@ -3,6 +3,7 @@
     AppSessionStart();
 require_once __DIR__ . '/db_connection.php';
 require_once __DIR__ . '/admin_auth_helper.php';
+require_once __DIR__ . '/walkin_booking_helper.php';
 header('Content-Type: application/json');
 
 AdminRequireLogin();
@@ -21,7 +22,7 @@ try {
             cr.rescheduled_service_date,
             cr.tourist_responded_at,
             COALESCE(cr.tourist_responded_at, b.created_at) AS notification_at,
-            COALESCE(NULLIF(TRIM(t.full_name), ''), CONCAT('Tourist #', b.tourist_id)) AS full_name,
+            COALESCE(NULLIF(TRIM(t.full_name), ''), NULLIF(b.walkin_guest_name,''), 'Walk-in - No Account') AS full_name,
             t.profile_picture
         FROM bookings b
         LEFT JOIN tourist t ON t.tourist_id = b.tourist_id
@@ -34,12 +35,13 @@ try {
              FROM booking_cancellation_requests cr2
              WHERE cr2.booking_domain='tour' AND cr2.booking_id=b.booking_id AND cr2.tourist_responded_at IS NOT NULL
          )
+        WHERE " . WalkinBookingVisibleSql('b') . "
         ORDER BY b.is_notif_viewed ASC, notification_at DESC, b.booking_id DESC
         LIMIT 50
     ");
 
     $notifications = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    $unread = $pdo->query("SELECT COUNT(*) FROM bookings WHERE COALESCE(is_notif_viewed, 0) = 0")->fetchColumn();
+    $unread = $pdo->query("SELECT COUNT(*) FROM bookings b WHERE COALESCE(b.is_notif_viewed, 0) = 0 AND " . WalkinBookingVisibleSql('b'))->fetchColumn();
 
     echo json_encode([
         "unread" => (int)$unread,

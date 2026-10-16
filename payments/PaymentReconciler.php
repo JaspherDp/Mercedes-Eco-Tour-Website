@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../php/activity_logger.php';
 require_once __DIR__ . '/BookingCheckoutService.php';
 require_once __DIR__ . '/PaymentHelper.php';
+require_once __DIR__ . '/WalkinGuestPayment.php';
 require_once __DIR__ . '/../php/payout_accounting.php';
 
 final class PaymentReconciler
@@ -217,10 +218,17 @@ final class PaymentReconciler
                     ]);
                 }
             } elseif (in_array($domain, ['package', 'boat', 'tourguide'], true)) {
+                $touristBindingSql = 'tourist_id = ?';
+                if ($touristId === 0) {
+                    WalkinGuestPayment::assertBinding($transaction, $metadata);
+                    // Match this specific booking only; never match another
+                    // anonymous transaction merely because it has the same ID 0.
+                    $touristBindingSql = "tourist_id IS NULL AND CAST(? AS SIGNED)=0 AND walkin_guest_name IS NOT NULL AND preferred_resource LIKE '%Walk-in booking%'";
+                }
                 $bookingStmt = $pdo->prepare(
                     "SELECT remaining_balance, payment_amount, booking_type
                      FROM bookings
-                     WHERE booking_id = ? AND tourist_id = ?
+                     WHERE booking_id = ? AND {$touristBindingSql}
                      LIMIT 1 FOR UPDATE"
                 );
                 $bookingStmt->execute([$bookingId, $touristId]);
@@ -238,7 +246,7 @@ final class PaymentReconciler
                     "UPDATE bookings
                      SET payment_amount = ?, remaining_balance = ?, is_paid = ?,
                          payment_method = ?, updated_at = NOW()
-                     WHERE booking_id = ? AND tourist_id = ?"
+                     WHERE booking_id = ? AND {$touristBindingSql}"
                 );
                 $updateBooking->execute([
                     $newPaid,
@@ -249,12 +257,20 @@ final class PaymentReconciler
                     $touristId,
                 ]);
                 if ($isAdminPayment
+                    && !empty($metadata['accept_walkin_after_payment'])
+                    && $newBalance <= 0) {
+                    $acceptWalkin = $pdo->prepare("UPDATE bookings SET status='accepted', updated_at=NOW()
+                        WHERE booking_id=? AND {$touristBindingSql} AND status='pending' AND is_complete='uncomplete'
+                          AND is_paid=1 AND remaining_balance<=0 AND preferred_resource LIKE '%Walk-in booking%'");
+                    $acceptWalkin->execute([$bookingId, $touristId]);
+                }
+                if ($isAdminPayment
                     && !empty($metadata['complete_after_payment'])
                     && $newBalance <= 0) {
                     $completeBooking = $pdo->prepare(
                         "UPDATE bookings
                          SET is_complete = 'completed', updated_at = NOW()
-                         WHERE booking_id = ? AND tourist_id = ? AND status = 'accepted'"
+                         WHERE booking_id = ? AND {$touristBindingSql} AND status = 'accepted'"
                     );
                     $completeBooking->execute([$bookingId, $touristId]);
                 }

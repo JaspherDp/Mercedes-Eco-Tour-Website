@@ -104,6 +104,6 @@ $phonePageToken = bin2hex(random_bytes(16));
     </section>
     <footer class="phone-foot">This registers notification delivery only. It cannot approve or mark a payment as paid.</footer>
   </main>
-  <script type="module" src="<?= htmlspecialchars($assetBase, ENT_QUOTES, 'UTF-8') ?>js/admin-push-notifications.js?v=5"></script>
+  <script type="module" src="<?= htmlspecialchars($assetBase, ENT_QUOTES, 'UTF-8') ?>js/admin-push-notifications.js?v=8"></script>
 </body>
 </html>

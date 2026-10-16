@@ -86,3 +86,21 @@
 @media(max-width:720px){.tourism-preview-filter{margin-left:0}.tourism-preview-actions a{width:auto;min-width:42px;padding:0 9px;font-size:9px}.tourism-preview-filter label{width:auto}.tourism-preview-filter button{height:46px}}
 /* Date fields: balanced text, icon, and focus treatment */
 .tourism-preview-filter label{height:44px;padding:4px 9px;border-radius:8px}.tourism-preview-filter label:focus-within{border-color:#1a755c;box-shadow:0 0 0 2px rgba(26,117,92,.08)}.tourism-preview-filter input[type="date"]{height:21px;line-height:21px;color-scheme:light;font-variant-numeric:tabular-nums}.tourism-preview-filter input[type="date"]::-webkit-datetime-edit{display:flex;align-items:center;height:21px;padding:0}.tourism-preview-filter input[type="date"]::-webkit-date-and-time-value{text-align:left}.tourism-preview-filter input[type="date"]::-webkit-calendar-picker-indicator{width:14px;height:14px;margin:0;padding:2px;border:0;border-radius:4px;background-color:transparent;opacity:.68;cursor:pointer}.tourism-preview-filter input[type="date"]::-webkit-calendar-picker-indicator:hover{background-color:#e5f2ed;opacity:.9}.tourism-preview-filter button{height:44px}.tourism-preview-actions a{min-height:44px}.tourism-preview-actions button{width:44px;height:44px}
+
+/* Property performance: color complements the booking count and legend. */
+.hotel-performance-legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;font-size:11px;font-weight:700}
+.hotel-performance-legend>span{padding:5px 10px;border-radius:20px}
+.hotel-performance-legend .most-booked,.report-table-wrap .hotel-performance-row.most-booked>td{background:#dff3e7;color:#174b33}
+.hotel-performance-legend .moderate,.report-table-wrap .hotel-performance-row.moderate>td{background:#fff4cc;color:#674c10}
+.hotel-performance-legend .no-bookings,.report-table-wrap .hotel-performance-row.no-bookings>td{background:#fde6e8;color:#822f3d}
+.report-table-wrap .hotel-performance-row .service-name{color:inherit}
+.report-table-wrap .hotel-performance-row.most-booked .rank{background:#22744f;color:#fff}
+.report-table-wrap .hotel-performance-row.moderate .rank{background:#f3d77b;color:#674c10}
+.report-table-wrap .hotel-performance-row.no-bookings .rank{background:#edb3bc;color:#822f3d}
+.type-badge.resort{background:#e4f2ec;color:#176b55}
+
+.hotel-period-note{margin:18px 21px 0;padding:12px 14px;background:#f5f8fb;border:1px solid #d7e2ea;border-radius:9px;color:#425c6d;font-size:12px;line-height:1.6}
+
+.hotel-performance-heading-meta{display:flex;flex-direction:column;align-items:flex-end;gap:8px;max-width:48%;text-align:right;align-self:flex-start}
+.card-heading .hotel-performance-heading-meta p{margin:0}
+@media(max-width:640px){.services-card .table-heading{flex-wrap:wrap;gap:12px}.hotel-performance-heading-meta{max-width:100%;margin-left:auto}}

@@ -1,5 +1,10 @@
 node_modules/
 vendor/
+!js/vendor/
+!js/vendor/pdfjs/
+!js/vendor/pdfjs/**
+!js/vendor/payment-summary/
+!js/vendor/payment-summary/**
 
 # Private environment and credential material
 .env

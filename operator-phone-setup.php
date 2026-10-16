@@ -55,6 +55,6 @@ $operatorName = trim((string)($operator['fullname'] ?: $operator['username'] ?: 
     </section>
     <footer class="phone-foot">Registration enables QR notifications only. Payments are still verified by PayMongo.</footer>
   </main>
-  <script type="module" src="js/admin-push-notifications.js?v=6"></script>
+  <script type="module" src="js/admin-push-notifications.js?v=8"></script>
 </body>
 </html>

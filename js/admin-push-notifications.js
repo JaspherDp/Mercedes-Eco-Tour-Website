@@ -97,6 +97,28 @@ if (enableButton && statusElement) {
   };
 
   let firebaseSetup = null;
+  let foregroundUnsubscribe = null;
+  const bindForegroundNotifications = registration => {
+    const { publicConfig, initializeApp, getMessaging, onMessage } = firebaseSetup;
+    if (foregroundUnsubscribe) foregroundUnsubscribe();
+    const messaging = getMessaging(initializeApp(publicConfig.firebase));
+    foregroundUnsubscribe = onMessage(messaging, payload => {
+      const data = payload?.data && typeof payload.data === 'object' ? payload.data : {};
+      const title = String(data.title || payload?.notification?.title || 'iTour Mercedes').slice(0, 120);
+      const body = String(data.body || payload?.notification?.body || 'A new payment QR is ready.').slice(0, 300);
+      let targetUrl = publicConfig.app_url;
+      try {
+        const candidate = new URL(String(data.url || ''), publicConfig.app_url);
+        if (candidate.origin === window.location.origin || candidate.origin === new URL(publicConfig.app_url).origin) targetUrl = candidate.href;
+      } catch (_) {}
+      registration.showNotification(title, {
+        // Display immediately without fetching website artwork first.
+        body,
+        tag: String(data.tag || 'itour-admin-payment').slice(0, 120), data: { url: targetUrl }
+      }).catch(() => setStatus('A payment QR arrived, but the browser could not display the notification. Check notification permissions and reload.', 'error'));
+    });
+    return messaging;
+  };
   enableButton.disabled = true;
   setStatus('Preparing notification support...');
 
@@ -143,6 +165,13 @@ if (enableButton && statusElement) {
       throw new Error('Firebase Messaging is not supported by this browser.');
     }
 
+    // A registered phone must receive foreground messages after a reload,
+    // without requiring another Register click or changing the saved device.
+    if (Notification.permission === 'granted') {
+      const existingRegistration = await navigator.serviceWorker.getRegistration(appRelativeUrl(publicConfig.app_url, './').href);
+      if (existingRegistration?.active) bindForegroundNotifications(existingRegistration);
+    }
+
     enableButton.disabled = false;
     setStatus('');
   })().catch(error => {
@@ -173,7 +202,7 @@ if (enableButton && statusElement) {
         throw new Error('Firebase Messaging is not supported by this browser.');
       }
 
-      const { publicConfig, initializeApp, getMessaging, getToken, onMessage } = firebaseSetup;
+      const { publicConfig, getToken } = firebaseSetup;
       const saveEndpoint = enableButton.dataset.saveEndpoint;
       const csrfToken = enableButton.dataset.csrfToken;
 
@@ -197,29 +226,7 @@ if (enableButton && statusElement) {
       });
       serviceWorkerRegistration = await waitForActiveServiceWorker(serviceWorkerRegistration);
 
-      const firebaseApp = initializeApp(publicConfig.firebase);
-      const messaging = getMessaging(firebaseApp);
-      onMessage(messaging, payload => {
-        const data = payload?.data && typeof payload.data === 'object' ? payload.data : {};
-        const title = String(data.title || 'iTour Mercedes').slice(0, 120);
-        const body = String(data.body || 'A new payment QR is ready.').slice(0, 300);
-        let targetUrl = publicConfig.app_url;
-        try {
-          const candidate = new URL(String(data.url || ''), publicConfig.app_url);
-          const configuredOrigin = new URL(publicConfig.app_url).origin;
-          if (candidate.origin === window.location.origin || candidate.origin === configuredOrigin) {
-            targetUrl = candidate.href;
-          }
-        } catch (_) {}
-
-        serviceWorkerRegistration.showNotification(title, {
-          body,
-          icon: appRelativeUrl(publicConfig.app_url, 'img/newlogo.png').href,
-          badge: appRelativeUrl(publicConfig.app_url, 'img/newlogo.png').href,
-          tag: String(data.tag || 'itour-admin-payment').slice(0, 120),
-          data: { url: targetUrl }
-        }).catch(() => {});
-      });
+      const messaging = bindForegroundNotifications(serviceWorkerRegistration);
       const deviceToken = await getToken(messaging, {
         vapidKey: publicConfig.vapid_public_key,
         serviceWorkerRegistration

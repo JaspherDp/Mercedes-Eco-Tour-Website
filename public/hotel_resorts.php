@@ -562,7 +562,7 @@ unset($hotel);
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous" />
   <link rel="stylesheet" href="styles/hotel_resorts.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/hotel_resorts.css') ?>" />
-  <link rel="stylesheet" href="styles/favorites.css" />
+  <link rel="stylesheet" href="styles/favorites.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/favorites.css') ?>" />
   <link rel="stylesheet" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>" />
   <script>document.documentElement.classList.add('itour-page-loading');</script>
   <link rel="stylesheet" href="styles/page-loader.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/page-loader.css') ?>" />
@@ -1160,7 +1160,7 @@ include 'footer.php';
   };
   const serviceFavoriteIds = <?= json_encode($favoriteIds, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 </script>
-<script src="js/favorites.js"></script>
+<script src="js/favorites.js?v=<?= (int)@filemtime(__DIR__ . '/../js/favorites.js') ?>"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
 <script>
@@ -3961,7 +3961,7 @@ function displayCarouselItems(elementId, items, type) {
 </script>
 
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-<script src="js/booking-payment-confirmation.js"></script>
+<script src="js/booking-payment-confirmation.js?v=<?= (int)@filemtime(__DIR__ . '/../js/booking-payment-confirmation.js') ?>"></script>
 <script src="js/back-to-top.js?v=<?= (int)@filemtime(__DIR__ . '/../js/back-to-top.js') ?>"></script>
 </body>
 </html>

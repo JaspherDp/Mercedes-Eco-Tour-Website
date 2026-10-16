@@ -1,0 +1,2 @@
+html2canvas 1.4.1 (MIT) - https://registry.npmjs.org/html2canvas/-/html2canvas-1.4.1.tgz
+jsPDF 2.5.1 (MIT) - https://registry.npmjs.org/jspdf/-/jspdf-2.5.1.tgz

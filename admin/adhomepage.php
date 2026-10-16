@@ -381,8 +381,8 @@ $adminDashboardTrends = [
 // ---------------------
 $pie_labels = ['Accepted','Completed','Cancelled','Declined'];
 $pie_data = [
-    fetchCount($pdo, "SELECT COUNT(*) FROM bookings b WHERE b.status='accepted' AND (b.is_complete IS NULL OR b.is_complete='uncomplete') {$bookingCreatedWhere}", $bookingCreatedParams),
-    fetchCount($pdo, "SELECT COUNT(*) FROM bookings b WHERE b.is_complete='completed' {$bookingCreatedWhere}", $bookingCreatedParams),
+    $accepted_bookings,
+    $completed_bookings,
     fetchCount($pdo, "SELECT COUNT(*) FROM bookings b WHERE b.is_complete='cancelled' {$bookingCreatedWhere}", $bookingCreatedParams),
     fetchCount($pdo, "SELECT COUNT(*) FROM bookings b WHERE b.is_complete='declined' {$bookingCreatedWhere}", $bookingCreatedParams)
 ];
@@ -390,13 +390,12 @@ $pie_data = [
 // ---------------------
 // BAR CHART DATA
 // ---------------------
-$total_bookings = fetchCount($pdo, "SELECT COUNT(*) FROM bookings b WHERE 1=1 {$bookingCreatedWhere}", $bookingCreatedParams);
-$completed_bookings = fetchCount($pdo, "SELECT COUNT(*) FROM bookings b WHERE b.is_complete='completed' {$bookingCreatedWhere}", $bookingCreatedParams);
+// The dashboard counts above use the same date filters as these charts.
 
 // ---------------------
 // ACCEPTED VS COMPLETED PIE
 // ---------------------
-$accepted_unfinished_count = fetchCount($pdo, "SELECT COUNT(*) FROM bookings b WHERE b.status='accepted' AND (b.is_complete IS NULL OR b.is_complete = 'uncomplete') {$bookingCreatedWhere}", $bookingCreatedParams);
+$accepted_unfinished_count = $accepted_bookings;
 $accepted_completed_count = fetchCount($pdo, "SELECT COUNT(*) FROM bookings b WHERE b.status='accepted' AND b.is_complete='completed' {$bookingCreatedWhere}", $bookingCreatedParams);
 
 // ---------------------

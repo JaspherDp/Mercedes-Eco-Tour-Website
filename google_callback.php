@@ -46,11 +46,7 @@ $email = $googleUser->email;
 $fullname = $googleUser->name;
 $google_id = $googleUser->id;
 $profile_pic = $googleUser->picture;
-if ($profile_pic) {
-    $profile_pic = preg_replace('/([?&])sz=\\d+/i', '$1sz=256', $profile_pic);
-    $profile_pic = preg_replace('/=s\\d+-c(?=$|[?&#])/i', '=s256-c', $profile_pic);
-    $profile_pic = preg_replace('/=s\\d+(?=$|[?&#])/i', '=s256', $profile_pic);
-}
+// Keep Google's original photo URL; the image host controls its sizing syntax.
 if (empty($profile_pic)) {
     $profile_pic = '';
 }

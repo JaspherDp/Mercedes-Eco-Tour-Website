@@ -6,21 +6,27 @@ require_once 'php/db_connection.php';
 require_once 'php/hotel_reviews_helper.php';
 ensureHotelReviewManagementColumns($pdo);
 
-function getLatestFieldValue(PDO $pdo, string $column): string
+function getLatestHomepageFields(PDO $pdo): array
 {
     $allowedColumns = [
         'description1', 'description2', 'footer_text', 'video_path',
         'slider_image1', 'slider_image2', 'slider_image3', 'slider_image4',
         'small_image1', 'small_image2'
     ];
-    if (!in_array($column, $allowedColumns, true)) {
-        return '';
+    // Each field can come from a different row. Preserve its original lookup
+    // while sending all ten lookups in one database round trip.
+    $expressions = [];
+    foreach ($allowedColumns as $column) {
+        $expressions[] = "(SELECT {$column} FROM featured_section WHERE {$column} IS NOT NULL AND {$column} != '' ORDER BY id DESC LIMIT 1) AS {$column}";
     }
-
-    $stmt = $pdo->prepare("SELECT {$column} FROM featured_section WHERE {$column} IS NOT NULL AND {$column} != '' ORDER BY id DESC LIMIT 1");
+    $stmt = $pdo->prepare('SELECT ' . implode(', ', $expressions));
     $stmt->execute();
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    return trim((string)($row[$column] ?? ''));
+    $values = [];
+    foreach ($allowedColumns as $column) {
+        $values[$column] = trim((string)($row[$column] ?? ''));
+    }
+    return $values;
 }
 
 function resolveHomepageImage(?string $rawPath, string $fallback = 'img/sampleimage.png'): string
@@ -51,16 +57,17 @@ function getDestinationProfileImage(PDO $pdo, string $slug, string $fallback): s
     }
 }
 
-$description1  = getLatestFieldValue($pdo, 'description1');
-$description2  = getLatestFieldValue($pdo, 'description2');
-$footerText    = getLatestFieldValue($pdo, 'footer_text');
-$videoPath     = getLatestFieldValue($pdo, 'video_path');
+$featuredFields = getLatestHomepageFields($pdo);
+$description1  = $featuredFields['description1'];
+$description2  = $featuredFields['description2'];
+$footerText    = $featuredFields['footer_text'];
+$videoPath     = $featuredFields['video_path'];
 $sliderImages  = [];
 for ($index = 1; $index <= 4; $index++) {
-    $sliderImages[] = getLatestFieldValue($pdo, 'slider_image' . $index) ?: 'img/sampleimage.png';
+    $sliderImages[] = $featuredFields['slider_image' . $index] ?: 'img/sampleimage.png';
 }
-$smallImage1 = getLatestFieldValue($pdo, 'small_image1') ?: 'img/Apuao Pequeña.png';
-$smallImage2 = getLatestFieldValue($pdo, 'small_image2') ?: 'img/sampleimagesec.png';
+$smallImage1 = $featuredFields['small_image1'] ?: 'img/Apuao Pequeña.png';
+$smallImage2 = $featuredFields['small_image2'] ?: 'img/sampleimagesec.png';
 $apuaoGrandeProfileImage = getDestinationProfileImage($pdo, 'apuao-grande-island', 'imagess/Apuao Grande.jpg');
 $apuaoPequenaProfileImage = getDestinationProfileImage($pdo, 'apuao-pequena-island', 'imagess/Apuao Pequena.jpg');
 
@@ -355,22 +362,22 @@ try {
 
         <div class="bt-container">
           <a href="hotel_resorts.php?tab=hotels#featuredSection" class="bt-card-link">
-            <span class="bt-icon-wrap"><img src="img/hotelshome.png" alt=""></span>
+            <span class="bt-icon-wrap"><img src="img/hotelshome.png" width="100" height="100" alt=""></span>
             <span class="bt-card-copy"><strong>Hotels &amp; resorts</strong><small>Find your home by the coast</small></span>
             <span class="bt-arrow" aria-hidden="true">→</span>
           </a>
           <a href="hotel_resorts.php?tab=tours#tourPackagesSection" class="bt-card-link">
-            <span class="bt-icon-wrap"><img src="img/packageshome.png" alt=""></span>
+            <span class="bt-icon-wrap"><img src="img/packageshome.png" width="100" height="100" alt=""></span>
             <span class="bt-card-copy"><strong>Tour packages</strong><small>Ready-made island experiences</small></span>
             <span class="bt-arrow" aria-hidden="true">→</span>
           </a>
           <a href="hotel_resorts.php?tab=guides#tourGuidesSection" class="bt-card-link">
-            <span class="bt-icon-wrap"><img src="img/tourguidehome.png" alt=""></span>
+            <span class="bt-icon-wrap"><img src="img/tourguidehome.png" width="100" height="100" alt=""></span>
             <span class="bt-card-copy"><strong>Local guides</strong><small>Explore with local expertise</small></span>
             <span class="bt-arrow" aria-hidden="true">→</span>
           </a>
           <a href="hotel_resorts.php?tab=boats#tourBoatsSection" class="bt-card-link">
-            <span class="bt-icon-wrap"><img src="img/boathome.png" alt=""></span>
+            <span class="bt-icon-wrap"><img src="img/boathome.png" width="100" height="100" alt=""></span>
             <span class="bt-card-copy"><strong>Boat rentals</strong><small>Travel safely between islands</small></span>
             <span class="bt-arrow" aria-hidden="true">→</span>
           </a>
@@ -480,23 +487,23 @@ try {
         <div class="tc-viewport" data-tour-category-viewport>
           <div class="tc-track">
             <a class="tc-card is-active" href="hotel_resorts.php?tab=tours" data-tour-category-card>
-              <span class="tc-card-media"><img src="imagess/Apuao Grande.jpg" alt="Aerial view of Apuao Grande island" loading="lazy"><span class="tc-card-number">01</span><span class="tc-card-icon" aria-hidden="true">&#9965;</span></span>
+              <span class="tc-card-media"><img width="900" height="500" src="imagess/Apuao Grande.jpg" alt="Aerial view of Apuao Grande island" loading="lazy"><span class="tc-card-number">01</span><span class="tc-card-icon" aria-hidden="true">&#9965;</span></span>
               <strong>Island hopping</strong><small>See curated tours <span aria-hidden="true">&rarr;</span></small>
             </a>
             <a class="tc-card" href="destination.php" data-tour-category-card>
-              <span class="tc-card-media"><img src="imagess/Caringo.jpg" alt="Clear coastal water and beach at Caringo Island" loading="lazy"><span class="tc-card-number">02</span><span class="tc-card-icon" aria-hidden="true">&#9728;</span></span>
+              <span class="tc-card-media"><img width="900" height="520" src="imagess/Caringo.jpg" alt="Clear coastal water and beach at Caringo Island" loading="lazy"><span class="tc-card-number">02</span><span class="tc-card-icon" aria-hidden="true">&#9728;</span></span>
               <strong>Beach escapes</strong><small>Find a quiet shore <span aria-hidden="true">&rarr;</span></small>
             </a>
             <a class="tc-card" href="destination.php" data-tour-category-card>
-              <span class="tc-card-media"><img src="imagess/Canimog.jpg" alt="Lush natural scenery on Canimog Island" loading="lazy"><span class="tc-card-number">03</span><span class="tc-card-icon" aria-hidden="true">&#10047;</span></span>
+              <span class="tc-card-media"><img width="1080" height="809" src="imagess/Canimog.jpg" alt="Lush natural scenery on Canimog Island" loading="lazy"><span class="tc-card-number">03</span><span class="tc-card-icon" aria-hidden="true">&#10047;</span></span>
               <strong>Nature discoveries</strong><small>Explore island life <span aria-hidden="true">&rarr;</span></small>
             </a>
             <a class="tc-card" href="destination.php" data-tour-category-card>
-              <span class="tc-card-media"><img src="imagess/Church.jpg" alt="Historic church and local heritage site in Mercedes" loading="lazy"><span class="tc-card-number">04</span><span class="tc-card-icon" aria-hidden="true">&#9670;</span></span>
+              <span class="tc-card-media"><img width="960" height="434" src="imagess/Church.jpg" alt="Historic church and local heritage site in Mercedes" loading="lazy"><span class="tc-card-number">04</span><span class="tc-card-icon" aria-hidden="true">&#9670;</span></span>
               <strong>Culture &amp; heritage</strong><small>Meet local stories <span aria-hidden="true">&rarr;</span></small>
             </a>
             <a class="tc-card" href="hotel_resorts.php?tab=boats" data-tour-category-card>
-              <span class="tc-card-media"><img src="imagess/Quinapaguian.jpg" alt="Blue water surrounding Quinapaguian Island" loading="lazy"><span class="tc-card-number">05</span><span class="tc-card-icon" aria-hidden="true">&#9875;</span></span>
+              <span class="tc-card-media"><img width="1200" height="675" src="imagess/Quinapaguian.jpg" alt="Blue water surrounding Quinapaguian Island" loading="lazy"><span class="tc-card-number">05</span><span class="tc-card-icon" aria-hidden="true">&#9875;</span></span>
               <strong>Boat adventures</strong><small>Choose your ride <span aria-hidden="true">&rarr;</span></small>
             </a>
           </div>

@@ -108,6 +108,13 @@ function BookingConfirmationEmailTemplate(array $data): string
         $data['wordmark_url'] ?? PaymentHelper::env('BOOKING_EMAIL_WORDMARK_URL', $defaultWordmarkUrl)
     );
     $year = date('Y');
+    $isSubmissionAlert = ($data['purpose'] ?? '') === 'tourist_submission_alert';
+    $emailTitle = $isSubmissionAlert ? 'Tourist List Required' : 'iTour Mercedes Booking Confirmation';
+    $preheader = $isSubmissionAlert ? 'Please submit the tourist list for your accepted booking before your trip.' : 'Your iTour Mercedes ' . $serviceLabel . ' is confirmed.';
+    $eyebrow = $isSubmissionAlert ? 'Tourist submission reminder' : 'Official booking confirmation';
+    $badge = $isSubmissionAlert ? 'ACTION REQUIRED' : 'CONFIRMED';
+    $heading = $isSubmissionAlert ? 'Please Submit Your Tourist List' : $serviceLabel . ' Confirmed';
+    $greetingText = $isSubmissionAlert ? 'We have not yet received a tourist list for the accepted booking below. Please submit the details of every tourist joining your trip, including yourself, before your scheduled tour.' : 'We are pleased to confirm your reservation. Please review the information below before your scheduled booking.';
     $submissionId = max(0, (int)($data['tourist_submission_booking_id'] ?? 0));
     $submissionUrl = $submissionId > 0 ? itourEmailProfileUrl(['section' => 'bookings', 'submit_tourists' => $submissionId]) : '';
     $touristReminder = $submissionId > 0 ? '<tr><td style="padding:20px 30px 0;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#edf8f3;border:1px solid #b9dfd1;border-radius:10px;"><tr><td style="padding:18px;color:#315b4e;font-size:14px;line-height:1.65;"><strong style="display:block;margin-bottom:10px;color:#164f3e;">Required: Submit your tourist details</strong><p style="margin:0 0 12px;text-align:justify;text-indent:28px;">Please submit the details of every tourist included in your booking, including yourself. This list is required for your tour, so please complete it before your scheduled trip.</p><p style="margin:0;text-align:justify;text-indent:28px;">To access the form, sign in to your tourist account, go to <strong>Profile &gt; Bookings</strong>, find this booking, and select <strong>Add Tourist</strong>. You can also use the button below to open the form directly.</p>'
@@ -119,10 +126,10 @@ function BookingConfirmationEmailTemplate(array $data): string
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>iTour Mercedes Booking Confirmation</title>
+  <title>' . $emailTitle . '</title>
 </head>
 <body style="margin:0;padding:0;background:#eef4f1;font-family:Arial,Helvetica,sans-serif;color:#183b31;">
-  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">Your iTour Mercedes ' . $serviceLabel . ' is confirmed.</div>
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">' . $preheader . '</div>
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;background:#eef4f1;">
     <tr><td align="center" style="padding:28px 12px;">
       <table role="presentation" width="640" cellspacing="0" cellpadding="0" border="0" style="width:100%;max-width:640px;background:#ffffff;border:1px solid #d8e6e0;border-radius:16px;overflow:hidden;box-shadow:0 10px 30px rgba(18,72,55,.08);">
@@ -138,15 +145,15 @@ function BookingConfirmationEmailTemplate(array $data): string
                     </tr>
                   </table>
                 </td>
-                <td align="right" valign="middle" style="padding-left:20px;color:#cce4db;font-size:10px;font-weight:700;line-height:1.4;letter-spacing:1.1px;text-align:right;text-transform:uppercase;vertical-align:middle;white-space:nowrap;">Official booking confirmation</td>
+                <td align="right" valign="middle" style="padding-left:20px;color:#cce4db;font-size:10px;font-weight:700;line-height:1.4;letter-spacing:1.1px;text-align:right;text-transform:uppercase;vertical-align:middle;white-space:nowrap;">' . $eyebrow . '</td>
               </tr>
             </table>
           </td>
         </tr>
         <tr>
           <td style="padding:30px 30px 22px;text-align:center;background:#f5faf8;border-bottom:1px solid #deebe6;">
-            <div style="display:inline-block;padding:7px 13px;border-radius:999px;background:#dff3ea;color:#176148;font-size:11px;font-weight:800;letter-spacing:.8px;">CONFIRMED</div>
-            <h1 style="margin:15px 0 7px;color:#123f31;font-size:26px;line-height:1.2;">' . $serviceLabel . ' Confirmed</h1>
+            <div style="display:inline-block;padding:7px 13px;border-radius:999px;background:#dff3ea;color:#176148;font-size:11px;font-weight:800;letter-spacing:.8px;">' . $badge . '</div>
+            <h1 style="margin:15px 0 7px;color:#123f31;font-size:26px;line-height:1.2;">' . $heading . '</h1>
             <p style="margin:0;color:#63766f;font-size:14px;line-height:1.6;text-align:justify;text-indent:28px;">' . $intro . '</p>
             ' . ($reference !== '' ? '<div style="margin-top:17px;color:#6a7e76;font-size:12px;">Booking reference<br><strong style="display:inline-block;margin-top:4px;color:#174e3d;font-size:16px;letter-spacing:.8px;">' . $reference . '</strong></div>' : '') . '
           </td>
@@ -154,7 +161,7 @@ function BookingConfirmationEmailTemplate(array $data): string
         <tr>
           <td style="padding:26px 30px 8px;">
             <p style="margin:0 0 8px;color:#314f45;font-size:14px;line-height:1.65;text-align:left;text-indent:0;">Dear <strong>' . $guestName . '</strong>,</p>
-            <p style="margin:0 0 17px;color:#314f45;font-size:14px;line-height:1.65;text-indent:28px;text-align:justify;">We are pleased to confirm your reservation. Please review the information below before your scheduled booking.</p>
+            <p style="margin:0 0 17px;color:#314f45;font-size:14px;line-height:1.65;text-indent:28px;text-align:justify;">' . $greetingText . '</p>
             <h2 style="margin:0;padding:0 0 10px;color:#174e3d;font-size:14px;text-transform:uppercase;letter-spacing:.8px;">Reservation details</h2>
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;border:1px solid #dce8e3;border-radius:10px;border-collapse:separate;border-spacing:0;overflow:hidden;background:#fbfdfc;">' . $detailRows . '</table>
           </td>

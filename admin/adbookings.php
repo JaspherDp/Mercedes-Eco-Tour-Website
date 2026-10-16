@@ -8,10 +8,37 @@ require_once __DIR__ . '/../php/booking_reference_helper.php';
 require_once __DIR__ . '/../php/firebase_config.php';
 require_once __DIR__ . '/../php/admin_auth_helper.php';
 AdminRequireLogin();
+require_once __DIR__ . '/../php/admin_walkin_manifest.php';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['fetch_walkin_manifest','save_walkin_manifest'], true)) {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    try {
+        if (!AppVerifyCsrf('admin', 'walkin_manifest', $_POST['csrf_token'] ?? null)) {
+            http_response_code(403);
+            throw new RuntimeException('Your session expired. Refresh the page and try again.');
+        }
+        ensureBookingTouristManifestColumns($pdo);
+        $result = AdminWalkinManifestRequest($pdo, $_POST, (int)$_SESSION['admin_id']);
+        if (($_POST['action'] ?? '') === 'save_walkin_manifest') {
+            logActivity($pdo, 'Admin', (int)$_SESSION['admin_id'], (string)($_SESSION['admin_name'] ?? 'Administrator'),
+                $result['updated'] ? 'Walk-in Tourist List Updated' : 'Walk-in Tourist List Uploaded',
+                'Saved passenger information for no-account walk-in booking #' . (int)$_POST['booking_id'] . '.', 'Bookings', (int)$_POST['booking_id']);
+        }
+        echo json_encode($result, JSON_INVALID_UTF8_SUBSTITUTE);
+    } catch (Throwable $error) {
+        if (http_response_code() !== 403) http_response_code(422);
+        $message = $error instanceof PDOException ? 'The tourist list could not be saved. Refresh and try again.' : $error->getMessage();
+        echo json_encode(['success'=>false, 'message'=>$message], JSON_INVALID_UTF8_SUBSTITUTE);
+    }
+    exit;
+}
 require_once __DIR__ . '/../php/booking_cancellations_helper.php';
 require_once __DIR__ . '/../php/tour_resource_availability_helper.php';
 require_once __DIR__ . '/../php/hotel_rooms_helper.php';
 require_once __DIR__ . '/../php/input_validation.php';
+require_once __DIR__ . '/../php/payment_receipt_breakdown.php';
+require_once __DIR__ . '/../php/booking_addons_helper.php';
+require_once __DIR__ . '/../php/walkin_booking_helper.php';
 require_once __DIR__ . '/../payments/PayMongoService.php';
 require_once __DIR__ . '/../payments/PaymentReconciler.php';
 require_once __DIR__ . '/../php/app_url_helper.php';
@@ -19,7 +46,7 @@ BookingReferenceEnsureSchema($pdo);
 $adminFirebasePublicConfiguration = firebase_public_configuration();
 
 // ✅ Include SweetAlert2 alert system
-include 'php/alert.php';
+if (empty($_POST['walkin_ajax'])) include 'php/alert.php';
 
 require_once __DIR__ . '/../php/PHPMailer/src/Exception.php';
 require_once __DIR__ . '/../php/PHPMailer/src/PHPMailer.php';
@@ -27,6 +54,7 @@ require_once __DIR__ . '/../php/PHPMailer/src/SMTP.php';
 require_once __DIR__ . '/../php/booking_confirmation_email.php';
 require_once __DIR__ . '/../php/cancellation_approval_email.php';
 require_once __DIR__ . '/../php/provider_cancellation_email.php';
+require_once __DIR__ . '/../php/tourist_submission_alert_email.php';
 BookingConfirmationEnsureTourEmailTracking($pdo);
 
 use PHPMailer\PHPMailer\PHPMailer;
@@ -36,8 +64,8 @@ function getBookingConfirmationRecord(PDO $pdo, int $bookingId): ?array {
     $stmt = $pdo->prepare("
         SELECT
             b.*,
-            t.full_name,
-            t.email,
+            COALESCE(t.full_name,b.walkin_guest_name,'Walk-in - No Account') AS full_name,
+            COALESCE(t.email,b.walkin_guest_email) AS email,
             bt.name AS boat_name,
             tg.fullname AS guide_name
         FROM bookings b
@@ -537,7 +565,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'retry
             $sent = sendProviderCancellationEmail($request, $request);
             $emailLabel = 'cancellation and refund notice';
         }
-        if (!$sent) throw new RuntimeException('Gmail did not confirm delivery. Check the recipient address and SMTP connection, then try again.');
+        if (!$sent) throw new RuntimeException(bookingWorkflowEmailFailureMessage());
         $emailCountUpdate = $pdo->prepare('UPDATE booking_cancellation_requests SET provider_email_sent_count=provider_email_sent_count+1, provider_email_last_sent_at=NOW() WHERE cancellation_request_id=?');
         $emailCountUpdate->execute([$requestId]);
         logActivity($pdo, 'Admin', (int)($_SESSION['admin_id'] ?? 0), (string)($_SESSION['admin_name'] ?? 'Administrator'),
@@ -766,10 +794,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['action'] ?? '') === 'searchW
 // =============================
 // STAFF: CREATE WALK-IN BOOKING
 // =============================
+if (($_GET['action'] ?? '') === 'walkinAvailability' || ($_POST['action'] ?? '') === 'quote_walkin_booking') {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    try {
+        if (($_POST['action'] ?? '') === 'quote_walkin_booking') {
+            if (!hash_equals((string)$_SESSION['walkin_booking_csrf'], (string)($_POST['csrf_token'] ?? ''))) throw new RuntimeException('Your form session expired. Reopen the booking form.');
+            echo json_encode(['success' => true, 'quote' => WalkinBookingQuote($pdo, $_POST)]);
+        } else {
+            $start = ItourValidationDate($_GET['start'] ?? '', 'Tour date');
+            $end = ItourValidationDate($_GET['end'] ?? $start, 'Tour end date');
+            if ($end < $start) throw new DomainException('Choose a valid date range.');
+            echo json_encode(['success' => true] + WalkinBookingCatalog($pdo, $start, $end));
+        }
+    } catch (Throwable $error) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => $error->getMessage()]);
+    }
+    exit;
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'create_walkin_booking') {
     $redirectTab = 'pending';
+    $walkinLocks = [];
+    $walkinAjax = ($_POST['walkin_ajax'] ?? '') === '1';
+    $walkinResponse = null;
+    $walkinRequestId = (string)($_POST['walkin_request_id'] ?? '');
+    if ($walkinAjax) header('Content-Type: application/json; charset=utf-8');
 
     try {
+        if (!$walkinAjax || !preg_match('/^[a-f0-9]{32}$/D', $walkinRequestId)) throw new RuntimeException('Reopen Add Booking and pay using the final step.');
+        $savedWalkin = $_SESSION['walkin_payment_bookings'][$walkinRequestId] ?? null;
+        if ($savedWalkin && (int)$savedWalkin['admin_id'] === (int)($_SESSION['admin_id'] ?? 0)
+            && (hash_equals($savedWalkin['csrf_token'], (string)($_POST['csrf_token'] ?? '')) || hash_equals($savedWalkin['payment_csrf'], (string)($_POST['csrf_token'] ?? '')))) {
+            echo json_encode(['success' => true, 'booking' => WalkinBookingPaymentStatus($pdo, (int)$savedWalkin['booking_id']), 'csrf_token' => $savedWalkin['payment_csrf']]);
+            exit;
+        }
         if (!hash_equals((string)$_SESSION['walkin_booking_csrf'], (string)($_POST['csrf_token'] ?? ''))) {
             throw new RuntimeException('The form session expired. Please reopen the booking form.');
         }
@@ -815,30 +875,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
             $tourRange = $bookingDate;
         }
 
-        $serviceAmount = ItourValidationMoney($_POST['service_amount'] ?? null, 'Service amount');
+        WalkinBookingEnsureSchema($pdo);
+        ensureBookingCancellationRequestsTable($pdo);
+        $lockBoatIds = WalkinBookingBoatIds($_POST);
+        sort($lockBoatIds, SORT_NUMERIC);
+        foreach ($lockBoatIds as $id) $walkinLocks[] = tourResourceLock($pdo, 'boat', $id);
+        if ($bookingType === 'tourguide') $walkinLocks[] = tourResourceLock($pdo, 'tourguide', (int)($_POST['guide_id'] ?? 0));
+        if ($bookingType === 'package') {
+            $packageLockStmt = $pdo->prepare('SELECT package_title FROM tour_packages WHERE package_id=?');
+            $packageLockStmt->execute([(int)($_POST['package_id'] ?? 0)]);
+            $walkinLocks[] = tourPackageLock($pdo, (string)$packageLockStmt->fetchColumn());
+        }
+        $walkinQuote = WalkinBookingQuote($pdo, $_POST);
+        $serviceAmount = $walkinQuote['service_amount'];
         $expenseAmounts = [
-            'Environmental Fee' => ItourValidationMoney($_POST['expense_environmental'] ?? 0, 'Environmental fee'),
-            'Entrance Fee' => ItourValidationMoney($_POST['expense_entrance'] ?? 0, 'Entrance fee'),
-            'Docking / Landing Fee' => ItourValidationMoney($_POST['expense_docking'] ?? 0, 'Docking fee'),
-            'Other Fee' => ItourValidationMoney($_POST['expense_other'] ?? 0, 'Other fee'),
+            'Environmental Fee' => $walkinQuote['environmental'],
+            'Entrance Fee' => $walkinQuote['entrance'],
+            'Docking / Landing Fee' => $walkinQuote['docking'],
+            'Other Fee' => $walkinQuote['other'],
         ];
         $expensesTotal = round(array_sum($expenseAmounts), 2);
         $grandTotal = round($serviceAmount + $expensesTotal, 2);
-        $paymentAmount = ItourValidationMoney($_POST['payment_amount'] ?? 0, 'Payment amount');
-        if ($paymentAmount > $grandTotal) {
-            throw new RuntimeException('Payment received cannot exceed the total booking amount.');
+        if (abs(ItourValidationMoney($_POST['grand_total'] ?? null, 'Reviewed total') - $grandTotal) > 0.009) {
+            throw new RuntimeException('Prices or fees changed. Reopen the form and review the updated payment summary before confirming.');
         }
-        $remainingBalance = round($grandTotal - $paymentAmount, 2);
-        $paymentMethod = trim((string)($_POST['payment_method'] ?? ''));
-        $paymentOption = ($_POST['payment_option'] ?? 'partial') === 'full' ? 'full' : 'partial';
-        if ($paymentAmount > 0 && $paymentMethod === '') {
-            throw new RuntimeException('Select a payment method for the amount received.');
-        }
+        $walkinPayment = WalkinBookingPayment($_POST, $grandTotal);
+        $paymentAmount = $walkinPayment['amount'];
+        $remainingBalance = $walkinPayment['balance'];
+        $paymentMethod = $walkinPayment['method'];
 
-        $bookingStatus = ($_POST['booking_status'] ?? 'pending') === 'accepted' ? 'accepted' : 'pending';
+        $bookingStatus = $remainingBalance <= 0 && $paymentAmount > 0 ? 'accepted' : 'pending';
+        if (strtolower((string)($_POST['payment_method'] ?? '')) !== 'qr_code' && $bookingStatus !== 'accepted') {
+            throw new RuntimeException('Collect and confirm the full cash payment before paying for this booking.');
+        }
         $redirectTab = $bookingStatus;
         $phoneNumber = trim((string)($_POST['phone_number'] ?? ''));
-        $location = trim((string)($_POST['location'] ?? ''));
+        $location = implode(',', $walkinQuote['locations']);
         $packageName = null;
         $operatorId = null;
         $boatId = null;
@@ -847,43 +919,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
 
         $pdo->beginTransaction();
 
-        if ($guestMode === 'existing') {
-            $touristId = (int)($_POST['tourist_id'] ?? 0);
-            $touristStmt = $pdo->prepare("SELECT tourist_id, full_name, email, phone_number, status FROM tourist WHERE tourist_id = ? LIMIT 1");
-            $touristStmt->execute([$touristId]);
-            $tourist = $touristStmt->fetch(PDO::FETCH_ASSOC);
-            if (!$tourist || strtolower((string)$tourist['status']) !== 'active') {
-                throw new RuntimeException('Please select an active tourist account.');
-            }
-            if ($phoneNumber === '') {
-                $phoneNumber = trim((string)($tourist['phone_number'] ?? ''));
-            }
-        } else {
-            $guestName = trim((string)($_POST['guest_name'] ?? ''));
-            $guestEmail = strtolower(trim((string)($_POST['guest_email'] ?? '')));
-            $guestAddress = trim((string)($_POST['guest_address'] ?? ''));
-            if ($guestName === '' || !filter_var($guestEmail, FILTER_VALIDATE_EMAIL) || $phoneNumber === '') {
-                throw new RuntimeException('Walk-in guest name, valid email, and phone number are required.');
-            }
-
-            $existingStmt = $pdo->prepare("SELECT tourist_id, status FROM tourist WHERE LOWER(email) = ? LIMIT 1");
-            $existingStmt->execute([$guestEmail]);
-            $existingTourist = $existingStmt->fetch(PDO::FETCH_ASSOC);
-            if ($existingTourist) {
-                if (strtolower((string)$existingTourist['status']) !== 'active') {
-                    throw new RuntimeException('This email belongs to an inactive tourist account.');
-                }
-                $touristId = (int)$existingTourist['tourist_id'];
-            } else {
-                $temporaryPassword = password_hash(bin2hex(random_bytes(18)), PASSWORD_DEFAULT);
-                $insertTourist = $pdo->prepare("
-                    INSERT INTO tourist (full_name, email, phone_number, address, password_hash, email_verified, status)
-                    VALUES (?, ?, ?, ?, ?, 1, 'active')
-                ");
-                $insertTourist->execute([$guestName, $guestEmail, $phoneNumber, $guestAddress, $temporaryPassword]);
-                $touristId = (int)$pdo->lastInsertId();
-            }
-        }
+        $walkinGuest = WalkinBookingResolveGuest($pdo, $_POST);
+        $touristId = $walkinGuest['tourist_id'];
+        $phoneNumber = $walkinGuest['phone_number'];
 
         if ($phoneNumber === '') {
             throw new RuntimeException('A contact number is required.');
@@ -904,9 +942,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
             $resourceStmt->execute([$boatId]);
             $resource = $resourceStmt->fetch(PDO::FETCH_ASSOC);
             if (!$resource) throw new RuntimeException('Please select a valid tour boat.');
-            if ($pax > (int)$resource['total_pax']) {
-                throw new RuntimeException('Guest count exceeds the selected boat capacity.');
-            }
             $resourceName = (string)$resource['name'];
         } else {
             $guideId = (int)($_POST['guide_id'] ?? 0);
@@ -931,11 +966,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
             }
         }
 
+        if ($walkinQuote['boat_ids']) $boatId = $walkinQuote['boat_ids'][0];
         $isPaid = ($grandTotal > 0 && $remainingBalance <= 0) ? 1 : 0;
         $paymentLabel = $isPaid ? 'Paid' : ($paymentAmount > 0 ? 'Partial' : 'Unpaid');
         $preferredResource = $resourceName
             . ' | Walk-in booking'
-            . ' | Payment Option: ' . ($paymentOption === 'full' ? 'Full Payment' : '20% Partial Payment')
+            . ' | Payment Option: Full Payment'
             . ' | Payment Status: ' . $paymentLabel;
         $bookingReference = BookingReferenceGenerate($pdo, $bookingType);
 
@@ -960,18 +996,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
             $isPaid, ($paymentMethod !== '' ? $paymentMethod : null), $guideId, $boatId
         ]);
         $bookingId = (int)$pdo->lastInsertId();
+        if ($touristId === null) {
+            $saveGuest = $pdo->prepare('UPDATE bookings SET walkin_guest_name=?, walkin_guest_email=?, walkin_guest_address=? WHERE booking_id=?');
+            $saveGuest->execute([$walkinGuest['walkin_guest_name'], $walkinGuest['walkin_guest_email'], $walkinGuest['walkin_guest_address'], $bookingId]);
+        }
+
+        $reserveBoat = $pdo->prepare('INSERT INTO booking_resource_boats (booking_id, boat_id) VALUES (?, ?)');
+        foreach ($walkinQuote['boat_ids'] as $reservedBoatId) $reserveBoat->execute([$bookingId, $reservedBoatId]);
+        $saveDetails = $pdo->prepare('INSERT INTO booking_walkin_details (booking_id, details) VALUES (?, ?)');
+        $saveDetails->execute([$bookingId, json_encode($walkinQuote, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)]);
 
         $insertExpense = $pdo->prepare("
-            INSERT INTO booking_expenses (booking_id, expense_type, amount, note)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO booking_expenses (booking_id, expense_type, amount, note, expense_name, quantity, unit_price)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         ");
-        foreach ($expenseAmounts as $expenseType => $expenseAmount) {
+        foreach ($walkinQuote['fee_rows'] as $feeRow) {
+            $expenseAmount = $feeRow['amount'];
             if ($expenseAmount <= 0) continue;
+            $expenseType = str_starts_with($feeRow['description'], 'Environmental') ? 'Environmental Fee'
+                : (str_starts_with($feeRow['description'], 'Entrance') ? 'Entrance Fee'
+                : (str_starts_with($feeRow['description'], 'Docking') ? 'Docking / Landing Fee' : 'Other Fee'));
             $insertExpense->execute([
                 (string)$bookingId,
                 $expenseType,
                 $expenseAmount,
-                'Recorded during staff walk-in booking creation'
+                $feeRow['description'] . ($feeRow['detail'] !== '' ? ' — ' . $feeRow['detail'] : ''),
+                $feeRow['description'], $feeRow['quantity'], $feeRow['unit_price']
             ]);
         }
 
@@ -990,7 +1040,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
                 VALUES (?, ?, ?, ?, 'cash', ?, ?, ?, ?, 'PHP', 'paid', 'cash', ?, NOW())
             ");
             $cashLedger->execute([
-                $touristId,
+                (int)($touristId ?? 0),
                 $bookingType,
                 $bookingId,
                 $bookingReference,
@@ -1005,28 +1055,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
         logActivity(
             $pdo, 'Admin', (int)($_SESSION['admin_id'] ?? 0),
             (string)($_SESSION['admin_name'] ?? 'Administrator'),
-            'Walk-in Booking Added',
-            'Created walk-in ' . $bookingType . ' booking ' . $bookingReference . ' for ' . $resourceName . '.',
+            $isPaid ? 'Walk-in Booking Added' : 'Walk-in Payment Draft Prepared',
+            ($isPaid ? 'Created paid walk-in ' : 'Prepared unpaid walk-in payment draft for ') . $bookingType . ' booking ' . $bookingReference . ' for ' . $resourceName . '.',
             'Bookings', $bookingId
         );
 
         $pdo->commit();
         $_SESSION['walkin_booking_csrf'] = bin2hex(random_bytes(32));
-        $_SESSION['alert'] = [
-            'type' => 'success',
-            'title' => 'Booking Added',
-            'message' => 'Walk-in booking ' . $bookingReference . ' was created successfully.'
-        ];
+        $_SESSION['walkin_payment_bookings'][$walkinRequestId] = ['booking_id' => $bookingId, 'admin_id' => (int)$_SESSION['admin_id'],
+            'csrf_token' => (string)$_POST['csrf_token'], 'payment_csrf' => $_SESSION['walkin_booking_csrf']];
+        $walkinResponse = ['success' => true, 'booking' => WalkinBookingPaymentStatus($pdo, $bookingId), 'csrf_token' => $_SESSION['walkin_booking_csrf']];
     } catch (Throwable $error) {
         if ($pdo->inTransaction()) $pdo->rollBack();
-        $_SESSION['alert'] = [
-            'type' => 'error',
-            'title' => 'Unable to Add Booking',
-            'message' => $error->getMessage()
-        ];
+        http_response_code(400);
+        $walkinResponse = ['success' => false, 'message' => $error->getMessage()];
     }
 
-    header('Location: adbookings.php?tab=' . urlencode($redirectTab));
+    foreach (array_reverse($walkinLocks) as $lockName) tourResourceUnlock($pdo, $lockName);
+    if ($walkinAjax) echo json_encode($walkinResponse);
+    else { $_SESSION['alert'] = ['type' => 'error', 'title' => 'Unable to Add Booking', 'message' => $walkinResponse['message'] ?? 'Reopen the form.']; header('Location: adbookings.php?tab=pending'); }
+    exit;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['finish_walkin_booking', 'pay_walkin_cash'], true)) {
+    header('Content-Type: application/json; charset=utf-8');
+    try {
+        $entry = $_SESSION['walkin_payment_bookings'][(string)($_POST['walkin_request_id'] ?? '')] ?? null;
+        $id = ItourValidationInt($_POST['booking_id'] ?? null, 'Booking ID', 1, PHP_INT_MAX);
+        if (!$entry || (int)$entry['booking_id'] !== $id || (int)$entry['admin_id'] !== (int)($_SESSION['admin_id'] ?? 0)
+            || !hash_equals($entry['payment_csrf'], (string)($_POST['csrf_token'] ?? ''))) throw new RuntimeException('This walk-in payment session expired. Refresh to check the booking before starting again.');
+        if ($_POST['action'] === 'pay_walkin_cash') WalkinBookingCollectCash($pdo, $id, (int)$_SESSION['admin_id'], (string)($_SESSION['admin_name'] ?? 'Administrator'));
+        $booking = WalkinBookingAcceptPaid($pdo, $id);
+        echo json_encode(['success' => true, 'booking' => $booking]);
+    } catch (Throwable $error) {
+        http_response_code(400);
+        echo json_encode(['success' => false, 'message' => $error->getMessage()]);
+    }
     exit;
 }
 
@@ -1041,78 +1105,14 @@ if (isset($_POST['action']) && $_POST['action'] === 'add_expense') {
         }
 
         $booking_id = ItourValidationInt($_POST['booking_id'] ?? null, 'Booking ID', 1, PHP_INT_MAX);
-        $type = ItourValidationText($_POST['expense_type'] ?? null, 'Expense type', 40, true);
-        $amount = ItourValidationMoney($_POST['amount'] ?? null, 'Expense amount', 10000000.00, false);
-        $note = ItourValidationText($_POST['note'] ?? '', 'Expense note', 500);
-        $allowedTypes = ['additional_boat', 'additional_tourguide', 'food', 'others'];
-
-        if ($booking_id <= 0 || $amount <= 0 || !in_array($type, $allowedTypes, true)) {
-            throw new Exception('Please provide valid expense details.');
-        }
-
-        $pdo->beginTransaction();
-
-        $bookingStateStmt = $pdo->prepare('SELECT status, is_complete FROM bookings WHERE booking_id = ? FOR UPDATE');
-        $bookingStateStmt->execute([$booking_id]);
-        $expenseBooking = $bookingStateStmt->fetch(PDO::FETCH_ASSOC);
-        if (!$expenseBooking || !in_array(strtolower((string)$expenseBooking['status']), ['pending', 'accepted'], true)
-            || strtolower((string)$expenseBooking['is_complete']) !== 'uncomplete') {
-            throw new RuntimeException('Expenses can only be added to pending or accepted bookings.');
-        }
-
-        // 1. Insert expense
-        $stmt = $pdo->prepare("
-            INSERT INTO booking_expenses (booking_id, expense_type, amount, note)
-            VALUES (:booking_id, :type, :amount, :note)
-        ");
-
-        $stmt->execute([
-            ':booking_id' => $booking_id,
-            ':type' => $type,
-            ':amount' => $amount,
-            ':note' => $note
-        ]);
-
-        // 2. Keep the booking accounting equation in sync. An expense raises
-        // both the total amount due and the unpaid balance by the same value.
-        $stmt2 = $pdo->prepare("
-            UPDATE bookings 
-            SET grand_total = grand_total + :total_amount,
-                remaining_balance = remaining_balance + :balance_amount,
-                is_paid = 0,
-                updated_at = NOW()
-            WHERE booking_id = :booking_id
-        ");
-
-        $stmt2->execute([
-            ':total_amount' => $amount,
-            ':balance_amount' => $amount,
-            ':booking_id' => $booking_id
-        ]);
-
-        // 3. Return both updated figures so any active billing UI can refresh
-        // from one authoritative response.
-        $stmt3 = $pdo->prepare("
-            SELECT grand_total, payment_amount, remaining_balance
-            FROM bookings 
-            WHERE booking_id = :booking_id
-        ");
-
-        $stmt3->execute([
-            ':booking_id' => $booking_id
-        ]);
-
-        $updatedBookingTotals = $stmt3->fetch(PDO::FETCH_ASSOC);
-        if (!$updatedBookingTotals) {
-            throw new RuntimeException('The updated booking totals could not be loaded.');
-        }
-
-        $pdo->commit();
+        $batch = BookingAddonsValidateRows($_POST);
+        BookingAddonsEnsureSchema($pdo);
+        $updatedBookingTotals = BookingAddonsSave($pdo, $booking_id, $batch);
 
         // 4. Return response
         echo json_encode([
             'success' => true,
-            'message' => 'Expense added successfully!',
+            'message' => count($batch['rows']) . ' add-on item(s) saved successfully.',
             'new_total' => (float)$updatedBookingTotals['grand_total'],
             'amount_paid' => (float)$updatedBookingTotals['payment_amount'],
             'new_balance' => (float)$updatedBookingTotals['remaining_balance'],
@@ -1255,6 +1255,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'confi
     exit;
 }
 
+// Each deliberate reminder is allowed until the tourist list is submitted.
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_tourist_submission_alert') {
+    $id = max(0, (int)($_POST['id'] ?? 0));
+    $returnTab = ($_POST['return_tab'] ?? '') === 'all' ? 'all' : 'accepted';
+    try {
+        if (!AppVerifyCsrf('admin', 'booking_management', $_POST['csrf_token'] ?? null)) {
+            throw new RuntimeException('Your session expired. Refresh the page and try again.');
+        }
+        $booking = getBookingConfirmationRecord($pdo, $id);
+        if ($booking && (int)($booking['tourist_id'] ?? 0) < 1) {
+            throw new RuntimeException('No-account walk-ins use Upload Tourist List instead of submission alert emails.');
+        }
+        if (!$booking || strtolower((string)$booking['status']) !== 'accepted'
+            || strtolower((string)($booking['is_complete'] ?? '')) !== 'uncomplete') {
+            throw new RuntimeException('Tourist submission alerts are only available for active accepted bookings.');
+        }
+        $check = $pdo->prepare("SELECT COUNT(*) FROM booking_cancellation_requests WHERE booking_domain = 'tour' AND booking_id = ? AND request_status IN ('pending','approved','decision_required','completed')");
+        $check->execute([$id]);
+        if ((int)$check->fetchColumn() > 0) {
+            throw new RuntimeException('This booking is in a cancellation workflow. A tourist submission alert cannot be sent.');
+        }
+        $check = $pdo->prepare('SELECT COUNT(*) FROM booking_tourists WHERE booking_id = ?');
+        $check->execute([$id]);
+        if ((int)$check->fetchColumn() > 0) {
+            throw new RuntimeException('This booking already has a tourist submission. No reminder was sent.');
+        }
+        if (!filter_var(trim((string)($booking['email'] ?? '')), FILTER_VALIDATE_EMAIL)) {
+            throw new RuntimeException('This tourist does not have a valid email address.');
+        }
+        if (!sendTouristSubmissionAlertEmail($booking)) {
+            throw new RuntimeException('The tourist submission alert could not be sent. Please try again.');
+        }
+        logActivity($pdo, 'Admin', (int)($_SESSION['admin_id'] ?? 0),
+            (string)($_SESSION['admin_name'] ?? 'Administrator'), 'Tourist Submission Alert Sent',
+            'Sent a tourist submission reminder for ' . BookingReferenceDisplay($booking) . ' to ' . $booking['email'] . '.', 'Bookings', $id);
+        $_SESSION['alert'] = ['type' => 'success', 'title' => 'Tourist submission alert sent',
+            'message' => 'The reminder was sent to <strong>' . htmlspecialchars($booking['email'], ENT_QUOTES, 'UTF-8') . '</strong>. You can send another reminder while this booking has no tourist submission.'];
+    } catch (Throwable $error) {
+        $_SESSION['alert'] = ['type' => 'warning', 'title' => 'Tourist submission alert not sent',
+            'message' => htmlspecialchars($error->getMessage(), ENT_QUOTES, 'UTF-8')];
+    }
+    header('Location: adbookings.php?tab=' . rawurlencode($returnTab));
+    exit;
+}
+
 // Retry a confirmation email without changing an already accepted booking.
 if ($_SERVER['REQUEST_METHOD'] === 'POST'
     && ($_POST['action'] ?? '') === 'retry_confirmation_email'
@@ -1361,9 +1406,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['id'
 
         switch ($action) {
             case 'accept':
-              $bookingStmt = $pdo->prepare("SELECT booking_type, boat_id, guide_id, booking_date, tour_type, tour_range FROM bookings WHERE booking_id = ? LIMIT 1");
+              $bookingStmt = $pdo->prepare("SELECT booking_type, boat_id, guide_id, booking_date, tour_type, tour_range, preferred_resource, is_paid, grand_total, remaining_balance, payment_amount FROM bookings WHERE booking_id = ? LIMIT 1");
               $bookingStmt->execute([$id]);
               $bookingToAccept = $bookingStmt->fetch(PDO::FETCH_ASSOC);
+              if ($bookingToAccept && stripos((string)$bookingToAccept['preferred_resource'], 'Walk-in booking') !== false
+                  && !WalkinBookingIsFullyPaid($bookingToAccept)) {
+                  throw new RuntimeException('Full payment has not been verified. This walk-in booking cannot be accepted.');
+              }
               if ($bookingToAccept) {
                   $resourceType = strtolower((string)$bookingToAccept['booking_type']);
                   $resourceId = $resourceType === 'boat' ? (int)$bookingToAccept['boat_id'] : ($resourceType === 'tourguide' ? (int)$bookingToAccept['guide_id'] : 0);
@@ -1498,7 +1547,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['id'
 // Filters & Search (GET)
 // ------------------------
 $activeTab = $_GET['tab'] ?? 'all';
-$validTabs = ['all','pending','accepted','completed','cancellations'];
+$validTabs = ['all','walkin','pending','accepted','completed','cancellations'];
 if (!in_array($activeTab, $validTabs)) {
     $activeTab = 'all';
 }
@@ -1522,7 +1571,7 @@ if ($rowsPerPage > 300) $rowsPerPage = 300;
 
 $isReport = isset($_GET['report_mode']) && $_GET['report_mode'] == '1';
 
-$where = [];
+$where = [WalkinBookingVisibleSql('b')];
 $params = [];
 
 // ----------------------
@@ -1546,17 +1595,20 @@ if (!$isReport) {
 // ----------------------
 // STATUS FILTER (for completed tab)
 // ----------------------
-if (in_array($activeTab, ['all', 'completed'], true)) {
+if ($activeTab === 'walkin') {
+    $where[] = "LOWER(COALESCE(b.preferred_resource,'')) LIKE '%walk-in booking%'";
+}
+if (in_array($activeTab, ['all', 'walkin', 'completed'], true)) {
     if (in_array($statusFilter, ['completed','declined','cancelled'], true)) {
         $where[] = "b.is_complete = :status";
         $params[':status'] = $statusFilter;
         if ($statusFilter === 'cancelled') {
             $where[] = "(cr.cancellation_request_id IS NULL OR cr.request_status='completed')";
         }
-    } elseif ($activeTab === 'all' && $statusFilter === 'pending') {
+    } elseif (in_array($activeTab, ['all','walkin'], true) && $statusFilter === 'pending') {
         $where[] = "b.status = 'pending'";
         $where[] = "b.is_complete = 'uncomplete'";
-    } elseif ($activeTab === 'all' && $statusFilter === 'accepted') {
+    } elseif (in_array($activeTab, ['all','walkin'], true) && $statusFilter === 'accepted') {
         $where[] = "b.status = 'accepted'";
         $where[] = "b.is_complete = 'uncomplete'";
     }
@@ -1593,7 +1645,7 @@ if (!empty($search_q)) {
     $where[] = "(
         CAST(b.booking_id AS CHAR) LIKE :search_booking_id
         OR b.booking_reference LIKE :search_reference
-        OR t.full_name LIKE :search_name
+        OR COALESCE(t.full_name,b.walkin_guest_name) LIKE :search_name
         OR b.location LIKE :search_location
         OR b.booking_date LIKE :search_date
         OR b.booking_type LIKE :search_type
@@ -1681,12 +1733,12 @@ $sql = "SELECT
             b.num_adults,
             b.num_children,
             t.tourist_id AS t_id, 
-            t.full_name AS t_full_name, 
-            t.email AS t_email, 
+            COALESCE(t.full_name,b.walkin_guest_name,'Walk-in - No Account') AS t_full_name, 
+            COALESCE(t.email,b.walkin_guest_email) AS t_email, 
             t.profile_picture AS t_profile_picture, 
             t.google_id AS t_google_id,
             t.phone_number AS t_phone, 
-            t.address AS t_address,
+            COALESCE(t.address,b.walkin_guest_address) AS t_address,
             t.email_verified AS t_email_verified,
             t.status AS t_status,
             t.ban_note AS t_ban_note,
@@ -1696,7 +1748,7 @@ $sql = "SELECT
             cr.request_status AS active_cancellation_status,
             cr.refund_status AS active_cancellation_refund_status,
             cr.refundable_amount AS active_cancellation_refundable_amount,
-            (SELECT COUNT(*) FROM bookings tb WHERE tb.tourist_id = t.tourist_id) AS t_total_bookings,
+            (SELECT COUNT(*) FROM bookings tb WHERE tb.tourist_id = t.tourist_id AND " . WalkinBookingVisibleSql('tb') . ") AS t_total_bookings,
             (SELECT COUNT(*) FROM bookings cb WHERE cb.tourist_id = t.tourist_id AND cb.is_complete = 'completed') AS t_completed_bookings,
             COALESCE(MONTHNAME(b.created_at), '') AS created_month,
             COALESCE(YEAR(b.created_at), '') AS created_year
@@ -1730,7 +1782,7 @@ if ($focusedBookingId > 0 && $activeTab === 'all' && $search_q === '') {
         }
     }
     if (!$alreadyLoaded) {
-        $focusedBookingStmt = $pdo->prepare($bookingSelectSql . ' WHERE b.booking_id = :focused_booking_id LIMIT 1');
+        $focusedBookingStmt = $pdo->prepare($bookingSelectSql . ' WHERE b.booking_id = :focused_booking_id AND ' . WalkinBookingVisibleSql('b') . ' LIMIT 1');
         $focusedBookingStmt->execute([':focused_booking_id' => $focusedBookingId]);
         $focusedBooking = $focusedBookingStmt->fetch(PDO::FETCH_ASSOC);
         if ($focusedBooking) $bookings[] = $focusedBooking;
@@ -2011,10 +2063,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'fetchBookingDetails') {
         $detailStmt = $pdo->prepare("
             SELECT
                 b.*,
-                t.full_name AS t_full_name,
-                t.email AS t_email,
+                COALESCE(t.full_name,b.walkin_guest_name,'Walk-in - No Account') AS t_full_name,
+                COALESCE(t.email,b.walkin_guest_email) AS t_email,
                 t.phone_number AS t_phone,
-                t.address AS t_address,
+                COALESCE(t.address,b.walkin_guest_address) AS t_address,
                 t.profile_picture AS t_profile_picture,
                 COALESCE(b.phone_number, t.phone_number) AS booking_phone,
                 bt.name AS boat_name,
@@ -2040,17 +2092,21 @@ if (isset($_GET['action']) && $_GET['action'] === 'fetchBookingDetails') {
         $booking['tour_end_date'] = tourResourceEndDate($booking);
 
         $expenseStmt = $pdo->prepare("
-            SELECT expense_type, amount, note, created_at
+            SELECT *
             FROM booking_expenses
             WHERE booking_id = ?
             ORDER BY id ASC
         ");
         $expenseStmt->execute([(string)$bookingId]);
 
+        $receiptExpenses = $expenseStmt->fetchAll(PDO::FETCH_ASSOC);
+        $receiptBase = max(0, max((float)$booking['grand_total'], (float)$booking['payment_amount'] + (float)$booking['remaining_balance']) - array_sum(array_column($receiptExpenses, 'amount')));
+        $receiptBreakdown = PaymentReceiptTourBreakdown($pdo, $booking, $receiptBase);
         echo json_encode([
             'success' => true,
             'booking' => $booking,
-            'expenses' => $expenseStmt->fetchAll(PDO::FETCH_ASSOC)
+            'receipt_breakdown' => $receiptBreakdown,
+            'expenses' => $receiptExpenses
         ], JSON_INVALID_UTF8_SUBSTITUTE);
     } catch (Throwable $error) {
         http_response_code(400);
@@ -2072,8 +2128,8 @@ if(isset($_GET['action']) && $_GET['action'] === 'fetchBookings') {
             SELECT 
                 b.booking_id,
                 b.booking_reference,
-                t.full_name AS name,
-                t.email,
+                COALESCE(t.full_name,b.walkin_guest_name,'Walk-in - No Account') AS name,
+                COALESCE(t.email,b.walkin_guest_email) AS email,
                 COALESCE(b.phone_number, t.phone_number) AS phone,
                 b.package_name,
                 b.location,
@@ -2098,6 +2154,7 @@ if(isset($_GET['action']) && $_GET['action'] === 'fetchBookings') {
                 END AS display_name
             FROM bookings b
             LEFT JOIN tourist t ON b.tourist_id = t.tourist_id
+            WHERE " . WalkinBookingVisibleSql('b') . "
             ORDER BY b.booking_id DESC
 
         ");
@@ -2123,10 +2180,12 @@ if(isset($_GET['action']) && $_GET['action'] === 'fetchBookings') {
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <link rel="stylesheet" href="styles/admin_panel_theme.css" />
-<link rel="stylesheet" href="styles/adbookings.css?v=35" />
+<link rel="stylesheet" href="styles/adbookings.css?v=42" />
+<link rel="stylesheet" href="styles/tourist-manifest-form.css?v=1" />
+<link rel="stylesheet" href="styles/admin-booking-addons.css?v=2" />
 <link rel="stylesheet" href="styles/tourist-booking-history.css?v=1" />
 <script defer src="js/tourist-booking-history.js?v=1"></script>
-<link rel="stylesheet" href="styles/admin_receipt.css?v=2" />
+<link rel="stylesheet" href="styles/admin_receipt.css?v=3" />
 </head>
 <style>
 /* Overlay */
@@ -2748,7 +2807,7 @@ if(isset($_GET['action']) && $_GET['action'] === 'fetchBookings') {
 
 <div class="card bookings-card">
 <div class="bookings-head">
-  <h3><?= $activeTab === 'cancellations' ? 'Cancellation Requests' : 'All Bookings' ?></h3>
+  <h3><?= $activeTab === 'cancellations' ? 'Cancellation Requests' : ($activeTab === 'walkin' ? 'Walk-in Bookings' : 'All Bookings') ?></h3>
   <div class="bookings-head-actions">
     <div class="tabs">
       <button class="tab-btn <?= $activeTab==='all'?'active':'' ?>" data-tab="all">All</button>
@@ -2757,8 +2816,9 @@ if(isset($_GET['action']) && $_GET['action'] === 'fetchBookings') {
       <button class="tab-btn <?= $activeTab==='completed'?'active':'' ?>" data-tab="completed">Completed</button>
       <button class="tab-btn <?= $activeTab==='cancellations'?'active':'' ?>" data-tab="cancellations">
         Cancellation Requests
-        <?php if ($cancellationSummary['pending'] > 0): ?><span class="tab-count"><?= $cancellationSummary['pending'] ?></span><?php endif; ?>
-      </button>
+          <?php if ($cancellationSummary['pending'] > 0): ?><span class="tab-count"><?= $cancellationSummary['pending'] ?></span><?php endif; ?>
+        </button>
+      <button class="tab-btn <?= $activeTab==='walkin'?'active':'' ?>" data-tab="walkin">Walk-in</button>
     </div>
     <button type="button" class="add-booking-btn payment-phone-btn" id="openAdminPaymentPhoneModal">
       <svg aria-hidden="true" viewBox="0 0 24 24">
@@ -2804,7 +2864,7 @@ if(isset($_GET['action']) && $_GET['action'] === 'fetchBookings') {
   <input type="number" id="rows" name="rows" class="input rows-input" min="1" max="300" step="1" value="<?= (int)$rowsPerPage ?>">
   <select name="status" class="select status-select">
     <option value="" <?= $statusFilter===''?'selected':'' ?>>All Statuses</option>
-    <?php if ($activeTab === 'all'): ?>
+    <?php if (in_array($activeTab, ['all','walkin'], true)): ?>
       <option value="pending" <?= $statusFilter==='pending'?'selected':'' ?>>Pending</option>
       <option value="accepted" <?= $statusFilter==='accepted'?'selected':'' ?>>Accepted</option>
     <?php endif; ?>
@@ -2849,6 +2909,7 @@ function renderBookings($bookings, $filter_status){
     $filteredBookings = array_filter($bookings, function($b) use ($filter_status) {
         $status = $b['status'] ?? 'pending';
         $is_complete = $b['is_complete'] ?? 'uncomplete';
+        if ($filter_status === 'walkin' && stripos((string)($b['preferred_resource'] ?? ''), 'Walk-in booking') === false) return false;
 
         if($filter_status==='pending' && $status!=='pending') return false;
         if($filter_status==='accepted' && !($status==='accepted' && $is_complete==='uncomplete')) return false;
@@ -2871,7 +2932,7 @@ function renderBookings($bookings, $filter_status){
         $rowCategory = in_array($is_complete, ['completed', 'cancelled', 'declined'], true)
             ? 'completed'
             : ($status === 'accepted' ? 'accepted' : 'pending');
-        $actionContext = $filter_status === 'all' ? $rowCategory : $filter_status;
+        $actionContext = in_array($filter_status, ['all','walkin'], true) ? $rowCategory : $filter_status;
         $t_name = $b['t_full_name'] ?? 'Guest';
         $t_email = $b['t_email'] ?? '-';
         $t_phone = !empty($b['booking_phone']) ? $b['booking_phone'] : (!empty($b['t_phone']) ? $b['t_phone'] : '-');
@@ -3002,7 +3063,8 @@ $paymentPill .= "</div>";
           
         // Only show Tourist Submission button on Accepted tab
         $touristSubmissionTd = '';
-        if($filter_status === 'accepted'){
+        $touristCount = 0;
+        if($filter_status === 'accepted' || $actionContext === 'accepted'){
             $bookingId = $b['booking_id'];
             $stmtTourist = $GLOBALS['pdo']->prepare("SELECT COUNT(*) FROM booking_tourists WHERE booking_id = :bookingId");
             $stmtTourist->execute(['bookingId' => $bookingId]);
@@ -3011,15 +3073,22 @@ $paymentPill .= "</div>";
             $touristBtn = $touristCount > 0 
                 ? "<button class='btn-tourists btn-primary' data-booking='$bookingId'>View Tourists</button>" 
                 : "<button class='btn-tourists-nosub btn-disabled' disabled>No Submission Yet</button>";
+            if ($touristCount === 0 && bookingTouristAdminWalkinCanManage($b) && empty($b['active_cancellation_request_id'])) {
+                $submitPax = max(0, (int)($b['pax'] ?? ((int)($b['num_adults'] ?? 0) + (int)($b['num_children'] ?? 0))));
+                $submitType = htmlspecialchars((string)$b['booking_type'], ENT_QUOTES, 'UTF-8');
+                $touristBtn = "<button type='button' class='btn-tourists-submit add-tourist-btn-user' data-booking-id='{$bookingId}' data-pax='{$submitPax}' data-booking-type='{$submitType}' data-manifest-mode='submit'>Submit Tourists</button>";
+            }
 
-            $touristSubmissionTd = "<td style='text-align:center;'>{$touristBtn}</td>";
+            if ($filter_status === 'accepted') {
+                $touristSubmissionTd = "<td style='text-align:center;'>{$touristBtn}</td>";
+            }
         }
 
 
         echo "<tr class='booking-row' data-booking-id='" . (int)$b['booking_id'] . "'>
     <td class='booker-cell' style='width:32%;'>
         <div class='booker-cell-wrap'>
-            <img src='{$picEsc}' class='profile-img hover-profile' alt='profile'
+            <img src='{$picEsc}' class='profile-img ".((int)($b['tourist_id'] ?? 0)>0 ? 'hover-profile' : '')."' alt='profile'
                 onerror=\"this.onerror=null;this.src='../img/profileicon.png';\"
                 role='button'
                 tabindex='0'
@@ -3046,6 +3115,7 @@ $paymentPill .= "</div>";
                     ".(!empty($created_month) ? "<div class='pill-month'>{$created_month} {$created_year}</div>" : "")."
                     <div class='profile-email'>{$tEmailEsc}</div>
                 </div>
+                ".((int)($b['tourist_id'] ?? 0) === 0 ? "<div class='booker-account-row'><span class='walkin-account-badge'>Walk-in - No Account</span></div>" : "")."
                 {$cancellationRequestNotice}
             </div>
         </div>
@@ -3090,15 +3160,16 @@ if ($showCancellationRequestState) {
       <div class='row-actions'>
         <button type='button' class='action-toggle-btn' aria-haspopup='menu' aria-expanded='false'>Actions</button>
         <div class='action-menu'>
-          {$viewDetailsBtn}";
+          {$viewDetailsBtn}
+          <button type='button' class='action-btn billing billing-btn' data-id='" . (int)$b['booking_id'] . "'>View Billing</button>";
 
 // ------------------------
 // Action buttons
 // ------------------------
 if ($actionContext === 'pending') {
 
-    $pendingReturnTab = $filter_status === 'all' ? 'all' : 'pending';
-    $completedReturnTab = $filter_status === 'all' ? 'all' : 'completed';
+    $pendingReturnTab = in_array($filter_status, ['all','walkin'], true) ? $filter_status : 'pending';
+    $completedReturnTab = in_array($filter_status, ['all','walkin'], true) ? $filter_status : 'completed';
 
     // ACCEPT stays the same
     echo "
@@ -3126,8 +3197,26 @@ if ($actionContext === 'pending') {
 
     $bookingId = htmlspecialchars($b['booking_id']);
     $remainingBalance = (float)($b['remaining_balance'] ?? 0);
-    $completedReturnTab = $filter_status === 'all' ? 'all' : 'completed';
-    $acceptedReturnTab = $filter_status === 'all' ? 'all' : 'accepted';
+    $completedReturnTab = in_array($filter_status, ['all','walkin'], true) ? $filter_status : 'completed';
+    $acceptedReturnTab = in_array($filter_status, ['all','walkin'], true) ? $filter_status : 'accepted';
+    $submissionAlertAction = '';
+    if (bookingTouristAdminWalkinCanManage($b)) {
+        $manifestEditing = $touristCount > 0;
+        $manifestLabel = $manifestEditing ? 'Edit Tourist List' : 'Upload Tourist List';
+        $manifestClass = $manifestEditing ? 'edit-tourist-btn-user' : 'add-tourist-btn-user';
+        $manifestMode = $manifestEditing ? 'edit' : 'submit';
+        $manifestPax = max(0, (int)($b['pax'] ?? ((int)($b['num_adults'] ?? 0) + (int)($b['num_children'] ?? 0))));
+        $submissionAlertAction = "<button type='button' class='action-btn accept {$manifestClass}' data-booking-id='{$bookingId}' data-pax='{$manifestPax}' data-booking-type='" . htmlspecialchars((string)$b['booking_type'], ENT_QUOTES, 'UTF-8') . "' data-manifest-mode='{$manifestMode}'>{$manifestLabel}</button>";
+    } elseif ($touristCount === 0 && (int)($b['tourist_id'] ?? 0) > 0) {
+        $submissionAlertAction = "
+          <form method='POST' class='inline-form' onsubmit='return confirmAction(event, this, \"submission_alert\");'>
+            <input type='hidden' name='id' value='{$bookingId}'>
+            <input type='hidden' name='action' value='send_tourist_submission_alert'>
+            <input type='hidden' name='csrf_token' value='" . htmlspecialchars(AppCsrfToken('admin', 'booking_management'), ENT_QUOTES, 'UTF-8') . "'>
+            <input type='hidden' name='return_tab' value='{$acceptedReturnTab}'>
+            <button class='action-btn accept retry-email-btn' type='submit'>Send Tourist Submission Alert</button>
+          </form>";
+    }
     $emailDeliveryStatus = strtolower((string)($b['confirmation_email_status'] ?? 'not_sent'));
     $retryEmailAction = '';
     if ($emailDeliveryStatus === 'failed' && filter_var((string)($b['t_email'] ?? ''), FILTER_VALIDATE_EMAIL)) {
@@ -3172,14 +3261,8 @@ if ($actionContext === 'pending') {
         <button class='action-btn cancel' type='submit'>Cancel Booking</button>
     </form>
 
-    <button
-        type='button'
-        class='action-btn billing billing-btn'
-        data-id='{$bookingId}'>
-        Billing
-    </button>
-
     {$retryEmailAction}
+    {$submissionAlertAction}
 
 </div>
 ";
@@ -3229,6 +3312,8 @@ function renderAdminCancellationRequests(array $requests): void
         $requestClass = in_array($requestStatus, ['approved', 'completed', 'rescheduled'], true) ? 'success' : ($requestStatus === 'rejected' ? 'danger' : 'pending');
         $refundClass = $refundFinished ? 'success' : ($refundableAmount <= 0.009 ? 'neutral' : 'pending');
         $details = htmlspecialchars(json_encode([
+            'booking_id' => (int)$request['booking_id'],
+            'booking_domain' => $domain,
             'tourist' => $touristName,
             'email' => $touristEmail,
             'phone' => (string)($request['tourist_phone'] ?? ''),
@@ -3339,6 +3424,13 @@ $columnsCompleted = $columnsBase . "<th>Actions</th>";
     </table>
 </div>
 
+<div id="walkin" class="tab-page <?= $activeTab==='walkin'?'active':'' ?>">
+    <table>
+        <thead><tr><?= $columnsBase ?><th>Actions</th></tr></thead>
+        <tbody><?php renderBookings($bookings, 'walkin'); ?></tbody>
+    </table>
+</div>
+
 <div id="pending" class="tab-page <?= $activeTab==='pending'?'active':'' ?>">
     <table>
         <thead>
@@ -3442,7 +3534,7 @@ $columnsCompleted = $columnsBase . "<th>Actions</th>";
           <div class="walkin-section-heading"><b>1</b><div><h3>Guest information</h3><p>Select an account or register a walk-in guest.</p></div></div>
           <div class="walkin-segmented">
             <label><input type="radio" name="guest_mode" value="existing" checked><span>Existing tourist</span></label>
-            <label><input type="radio" name="guest_mode" value="new"><span>New walk-in guest</span></label>
+            <label><input type="radio" name="guest_mode" value="new"><span>Walk-in - No Account</span></label>
           </div>
           <div id="walkinExistingGuest" class="walkin-account-picker">
             <label class="walkin-field"><span>Search tourist account <b>*</b></span>
@@ -3481,8 +3573,9 @@ $columnsCompleted = $columnsBase . "<th>Actions</th>";
             <label class="walkin-field"><span>Booking type <b>*</b></span>
               <select name="booking_type" id="walkinBookingType" required><option value="">Select a service</option><option value="package">Tour package</option><option value="boat">Tour boat</option><option value="tourguide">Tour guide</option></select>
             </label>
-            <label class="walkin-field"><span>Tour date <b>*</b></span>
-              <input type="text" id="walkinDateDisplay" placeholder="Select tour date" readonly required>
+            <label class="walkin-field"><span>Tour type <b>*</b></span><select name="tour_type" id="walkinTourType" required><option value="">Select tour type</option><option value="same-day">Day tour</option><option value="overnight">Overnight</option></select></label>
+            <label class="walkin-field walkin-span-2"><span>Tour duration <b>*</b></span>
+              <input type="text" id="walkinDateDisplay" placeholder="Choose tour type first" readonly required disabled>
               <input type="hidden" name="booking_date" id="walkinBookingDate">
               <input type="hidden" name="booking_end_date" id="walkinBookingEndDate">
             </label>
@@ -3494,7 +3587,8 @@ $columnsCompleted = $columnsBase . "<th>Actions</th>";
                 <?php endforeach; ?>
               </select>
             </label>
-            <label class="walkin-field walkin-span-2 walkin-resource-field" id="walkinBoatField" hidden><span>Tour boat <b>*</b></span>
+            <label class="walkin-field walkin-span-2" id="walkinIncludeBoatsField" hidden><span>Boat transport</span><select name="include_boats" id="walkinIncludeBoats"><option value="">Guide only — no boat transport</option><option value="1">Include boat transport</option></select></label>
+            <label class="walkin-field walkin-span-2 walkin-resource-field" id="walkinBoatField" hidden><span>Primary tour boat <b>*</b></span>
               <select name="boat_id" id="walkinBoatId" disabled><option value="">Select a tour boat</option>
                 <?php foreach ($walkInBoats as $boat): ?>
                   <option value="<?= (int)$boat['boat_id'] ?>" data-capacity="<?= (int)$boat['total_pax'] ?>"><?= htmlspecialchars($boat['name']) ?> — up to <?= (int)$boat['total_pax'] ?> guests</option>
@@ -3508,10 +3602,10 @@ $columnsCompleted = $columnsBase . "<th>Actions</th>";
             </label>
 
             <label class="walkin-field walkin-span-2" id="walkinLocationField" hidden><span>Destination <b>*</b></span>
-              <select name="location" id="walkinLocation" disabled><option value="">Select destination</option><option>Apuao</option><option>Apuao Grande</option><option>Cayucyucan</option><option>Canimog</option><option>Caringo</option><option>Malasugui</option><option>Quinapaguian</option></select>
+              <select name="locations[]" id="walkinLocation" disabled><option value="">Select destination</option><?php foreach (WalkinBookingLocations() as $destination): ?><option><?= htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?></select>
             </label>
-            <label class="walkin-field"><span>Trip duration <b>*</b></span><select name="tour_type" id="walkinTourType" required><option value="same-day">Day tour</option><option value="overnight">Overnight</option></select></label>
-            <label class="walkin-field"><span>Jump-off port <b>*</b></span>
+            <label class="walkin-field walkin-span-2" id="walkinSecondLocationField" hidden><span>Second destination (optional)</span><select name="locations[]" id="walkinSecondLocation" disabled><option value="">No second destination</option><?php foreach (WalkinBookingLocations() as $destination): ?><option><?= htmlspecialchars($destination, ENT_QUOTES, 'UTF-8') ?></option><?php endforeach; ?></select></label>
+            <label class="walkin-field walkin-span-2"><span>Jump-off port <b>*</b></span>
               <select name="jump_off_port" id="walkinJumpOffPort" required>
                 <option value="">Select jump-off port</option>
                 <option value="Mercedes Port">Mercedes Port</option>
@@ -3532,16 +3626,21 @@ $columnsCompleted = $columnsBase . "<th>Actions</th>";
                 <button type="button" data-pax-action="increase" data-pax-target="walkinChildren" aria-label="Add one child">+</button>
               </div>
             </label>
+            <p id="walkinCapacityNote" class="walkin-inline-note walkin-span-2" role="status" aria-live="polite" aria-atomic="true" hidden></p>
+            <div class="walkin-field walkin-span-2" id="walkinAdditionalBoatsField" hidden><span>Additional tour boats</span><p class="walkin-tourist-help">Choose extra boats until the combined seats cover all guests. Availability applies to the entire tour duration.</p><div id="walkinAdditionalBoats" class="walkin-boat-choices"></div><p id="walkinAvailabilityStatus" class="walkin-tourist-help" role="status">Choose tour type and dates to check availability.</p></div>
+            <div id="walkinChildAges" class="walkin-grid walkin-span-2"></div>
+            <label class="walkin-field walkin-span-2"><span>Environmental-fee category <b>*</b></span><select name="eco_category" id="walkinEcoCategory" required><option value="local">Local visitor</option><option value="mercedeno">Mercedeño resident</option><option value="foreigner">Foreign visitor</option><option value="senior">Senior citizen</option></select><small>Applies to adults; children age 7 or below are exempt from entrance fees.</small></label>
             <input type="hidden" name="tour_range" id="walkinTourRange">
           </div>
-          <p id="walkinCapacityNote" class="walkin-inline-note" hidden></p>
         </section>
 
         <section class="walkin-section walkin-step-panel" data-walkin-step="3" hidden>
           <div class="walkin-section-heading"><b>3</b><div><h3>Payment and confirmation</h3><p>Record the amount collected at the desk.</p></div></div>
           <div class="walkin-review" id="walkinReviewSummary" aria-live="polite"></div>
           <div class="walkin-expense-tally">
-            <div class="walkin-tally-heading"><div><strong>Price and expense tally</strong><span>Review or adjust charges before confirming.</span></div><b id="walkinExpensesTotalLabel">Expenses: ₱0.00</b></div>
+            <div class="walkin-tally-heading"><div><strong>Payment summary</strong><span>Calculated from the selected services, guests, and destinations.</span></div></div>
+            <p id="walkinQuoteStatus" role="status" class="walkin-inline-note">Complete the booking details to calculate charges.</p>
+            <div id="walkinPriceBreakdown" class="walkin-price-breakdown"></div>
             <div class="walkin-grid">
               <label class="walkin-field"><span>Service price <b>*</b></span><div class="walkin-money"><i>₱</i><input type="number" name="service_amount" id="walkinServiceAmount" min="0" step="0.01" value="0.00" required></div></label>
               <label class="walkin-field"><span>Environmental fee</span><div class="walkin-money"><i>₱</i><input type="number" name="expense_environmental" class="walkin-expense-input" min="0" step="0.01" value="0.00"></div></label>
@@ -3549,15 +3648,21 @@ $columnsCompleted = $columnsBase . "<th>Actions</th>";
               <label class="walkin-field"><span>Docking / landing fee</span><div class="walkin-money"><i>₱</i><input type="number" name="expense_docking" class="walkin-expense-input" min="0" step="0.01" value="0.00"></div></label>
               <label class="walkin-field walkin-span-2"><span>Other fees</span><div class="walkin-money"><i>₱</i><input type="number" name="expense_other" class="walkin-expense-input" min="0" step="0.01" value="0.00"></div></label>
             </div>
-            <div class="walkin-tally-total"><span>Grand total</span><strong id="walkinGrandTotalLabel">₱0.00</strong><input type="hidden" name="grand_total" id="walkinGrandTotal" value="0.00"></div>
           </div>
           <div class="walkin-grid walkin-payment-fields">
-            <label class="walkin-field"><span>Payment option <b>*</b></span><select name="payment_option" id="walkinPaymentOption" required><option value="partial" selected>20% down payment</option><option value="full">Full payment (100%)</option></select></label>
-            <label class="walkin-field"><span>Payment received</span><div class="walkin-money"><i>₱</i><input type="number" name="payment_amount" id="walkinPaymentAmount" min="0" step="0.01" value="0.00"></div></label>
-            <label class="walkin-field"><span>Remaining balance</span><div class="walkin-money is-readonly"><i>₱</i><input type="text" id="walkinRemainingBalance" value="0.00" readonly></div></label>
-            <label class="walkin-field"><span>Payment method</span><select name="payment_method" id="walkinPaymentMethod"><option value="">No payment yet</option><option value="Cash">Cash</option><option value="GCash">GCash</option><option value="Bank Transfer">Bank transfer</option></select></label>
-            <label class="walkin-field walkin-span-2"><span>Initial booking status <b>*</b></span><select name="booking_status" required><option value="accepted" selected>Accepted — confirmed by staff</option><option value="pending">Pending — needs confirmation</option></select></label>
+            <input type="hidden" name="payment_option" value="full">
+            <input type="hidden" name="payment_amount" id="walkinPaymentAmount" value="0.00">
+            <label class="walkin-field walkin-span-2" id="walkinPaymentMethodField"><span>Payment method <b>*</b></span><select name="payment_method" id="walkinPaymentMethod" required><option value="cash" selected>Cash</option><option value="qr_code">QR Code (PayMongo)</option></select></label>
+            <section class="qr-admin-device walkin-span-2" id="walkinQrAdminDeviceSection" hidden aria-live="polite">
+              <div class="qr-admin-device-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2"/><path d="M10 18h4"/></svg></div>
+              <div class="qr-admin-device-copy"><small>REGISTERED ADMIN PHONE</small><strong id="walkinQrAdminDeviceName">Checking registered phone...</strong><span id="walkinQrAdminDeviceMeta">Please wait.</span></div>
+              <button type="button" class="qr-admin-device-action" id="walkinManageAdminPhoneBtn">Register a Phone</button>
+            </section>
+            <label class="walkin-collection-confirm walkin-span-2" id="walkinCashCollectionField"><input type="checkbox" name="payment_collected" value="1" id="walkinPaymentCollected"><span><strong>I have collected the full cash payment</strong><small>Leave unchecked if the guest has not paid. Full payment only.</small></span></label>
+            <p id="walkinPaymentStatus" class="walkin-inline-note walkin-span-2" role="status">Unpaid — the full amount is still to be collected.</p>
+            <p class="walkin-inline-note walkin-span-2">The booking is confirmed and accepted only after full payment is received.</p>
           </div>
+          <div class="walkin-collection-total" aria-live="polite" aria-atomic="true"><span id="walkinCollectionTitle">Full amount to collect</span><strong id="walkinGrandTotalLabel">₱0.00</strong><small id="walkinCollectionNote">Includes all service charges and fees. No payment has been recorded.</small><input type="hidden" name="grand_total" id="walkinGrandTotal" value="0.00"></div>
         </section>
       </div>
       <div class="walkin-modal-footer">
@@ -3571,7 +3676,7 @@ $columnsCompleted = $columnsBase . "<th>Actions</th>";
             Continue to Booking Details<svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>
           </button>
           <button type="submit" class="walkin-btn primary" id="submitWalkinBooking" hidden>
-            <svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg>Confirm &amp; Create Booking
+            <svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg><span>Pay Booking</span>
           </button>
         </div>
       </div>
@@ -3824,8 +3929,8 @@ $columnsCompleted = $columnsBase . "<th>Actions</th>";
     </div>
     <footer class="billing-modal-footer">
       <button type="button" class="billing-footer-btn billing-close-btn" id="closeBillingModal">Close</button>
-      <button type="button" class="billing-footer-btn billing-receipt-btn" id="openBookingReceipt" disabled>Booking Receipt</button>
-      <button type="button" class="billing-footer-btn billing-expense-btn add-expense-btn" id="billingAddExpense">Add Expense</button>
+      <button type="button" class="billing-footer-btn billing-receipt-btn" id="openBookingReceipt" disabled>Payment Receipt</button>
+      <button type="button" class="billing-footer-btn billing-expense-btn add-expense-btn" id="billingAddExpense">Add-ons</button>
       <div class="billing-pay-wrap">
         <button type="button" class="billing-footer-btn billing-pay-btn" id="billingPayBalance">Pay Balance</button>
         <small id="billingPaidNote" hidden>Already paid</small>
@@ -3838,8 +3943,8 @@ $columnsCompleted = $columnsBase . "<th>Actions</th>";
 <div id="adminReceiptModal" class="admin-receipt-overlay" aria-hidden="true" inert>
   <section class="admin-receipt-shell" role="dialog" aria-modal="true" aria-labelledby="adminReceiptTitle">
     <header class="admin-receipt-head">
-      <div><span>OFFICIAL PAYMENT RECORD</span><h3 id="adminReceiptTitle">Booking Receipt</h3></div>
-      <button type="button" class="admin-receipt-x" data-close-admin-receipt aria-label="Close booking receipt">&times;</button>
+      <div><span>ACCOUNT PAYMENT RECORD</span><h3 id="adminReceiptTitle">Payment Receipt</h3></div>
+      <button type="button" class="admin-receipt-x" data-close-admin-receipt aria-label="Close payment receipt">&times;</button>
     </header>
     <div class="admin-receipt-stage">
       <article class="admin-receipt-paper" id="adminReceiptPaper"></article>
@@ -3982,52 +4087,36 @@ $columnsCompleted = $columnsBase . "<th>Actions</th>";
       </div>
       <div class="expense-heading-copy">
         <span>BOOKING ACCOUNT</span>
-        <h3 class="expense-title" id="expenseModalTitle">Add Booking Expense</h3>
-        <p id="expenseModalDescription">Record an additional charge for booking <strong id="expenseBookingLabel">—</strong>.</p>
+        <h3 class="expense-title" id="expenseModalTitle">Add-ons</h3>
+        <p id="expenseModalDescription">Record itemized add-ons for booking <strong id="expenseBookingLabel">—</strong>.</p>
       </div>
-      <button type="button" class="expense-icon-close" id="expenseIconClose" aria-label="Close add expense dialog">&times;</button>
+      <button type="button" class="expense-icon-close" id="expenseIconClose" aria-label="Close add-ons dialog">&times;</button>
     </header>
 
     <form id="expenseForm" method="POST" class="expense-form">
-
-        <input type="hidden" name="action" value="add_expense">
-        <input type="hidden" name="booking_id" id="expenseBookingId">
-
-        <div class="form-group">
-            <label for="expenseType">Expense Type <span class="expense-required">*</span></label>
-            <select id="expenseType" name="expense_type" required class="expense-input">
-                <option value="additional_boat">Additional Boat</option>
-                <option value="additional_tourguide">Additional Tour Guide</option>
-                <option value="food">Food</option>
-                <option value="others">Others</option>
-            </select>
-            <p class="expense-field-help">Choose the service or charge being added to this booking.</p>
-        </div>
-
-        <div class="form-group">
-            <label for="expenseAmount">Amount <span class="expense-required">*</span></label>
-            <div class="expense-amount-wrap">
-              <span class="expense-currency" aria-hidden="true">&#8369;</span>
-              <input id="expenseAmount" type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" required class="expense-input">
-            </div>
-            <p class="expense-field-help">This amount will be added to the booking’s remaining balance.</p>
-        </div>
-
-        <div class="form-group">
-            <label for="expenseNote">Internal Note <span class="expense-optional">(optional)</span></label>
-            <textarea id="expenseNote" name="note" maxlength="500" placeholder="Add a short explanation for this charge..." class="expense-input textarea"></textarea>
-            <p class="expense-field-help">Use a clear description that staff can recognize later.</p>
-        </div>
-
-        <div class="expense-actions">
-            <button type="button" class="expense-action-btn cancel" id="closeExpenseModal">Cancel</button>
-            <button type="submit" class="expense-action-btn accept">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-              <span>Save Expense</span>
-            </button>
-        </div>
-
+      <input type="hidden" name="action" value="add_expense">
+      <input type="hidden" name="booking_id" id="expenseBookingId">
+      <div class="admin-addon-guest"><div><small>CHARGE TO</small><strong id="expenseGuestName">Guest</strong></div><span>Active booking</span></div>
+      <div id="adminAddonRows"></div>
+      <div class="admin-addon-total"><span>New charges total</span><strong id="adminAddonTotal">&#8369;0.00</strong></div>
+      <div class="expense-actions">
+        <button type="button" class="expense-action-btn cancel" id="adminAddonAdd">+ Add Another Item</button>
+        <div class="admin-addon-footer-right"><button type="button" class="expense-action-btn cancel" id="closeExpenseModal">Cancel</button><button type="submit" class="expense-action-btn accept">Save Add-ons</button></div>
+      </div>
     </form>
+    <template id="adminAddonRowTemplate">
+      <section class="admin-addon-row">
+        <header><span data-addon-label>ADD-ON ITEM 01</span><strong data-addon-total>&#8369;0.00</strong></header>
+        <div class="admin-addon-fields">
+          <label>Type<select name="expense_type[]" required class="expense-input"><option value="">Select</option><option value="additional_boat">Additional Boat</option><option value="additional_tourguide">Additional Tour Guide</option><option value="food">Food</option><option value="others">Others</option></select></label>
+          <label>Description<input type="text" name="expense_name[]" maxlength="160" placeholder="Enter item or service" required class="expense-input"></label>
+          <label>Qty<input type="number" name="quantity[]" min="1" max="1000" step="1" value="1" required class="expense-input" inputmode="numeric"></label>
+          <label>Unit Price<span class="admin-addon-price"><span>&#8369;</span><input type="number" name="unit_price[]" min="0.01" max="10000000" step="0.01" placeholder="0.00" required class="expense-input" inputmode="decimal"></span></label>
+          <label class="admin-addon-notes">Notes<input type="text" name="note[]" maxlength="500" placeholder="Optional explanation or reference" class="expense-input"></label>
+          <button type="button" class="admin-addon-remove" aria-label="Remove add-on item">&times;</button>
+        </div>
+      </section>
+    </template>
 
   </section>
 
@@ -4038,11 +4127,15 @@ $columnsCompleted = $columnsBase . "<th>Actions</th>";
 </main>
 </div>
 
+<?php $manifestCsrf = AppCsrfToken('admin', 'walkin_manifest'); require __DIR__ . '/../php/tourist_manifest_form.php'; ?>
+<script>window.TouristManifestConfig = {adminWalkin: true, locationsEndpoint: 'php/geonames_locations.php'};</script>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<script src="js/tourist-manifest-form.js?v=1"></script>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+<script src="js/vendor/payment-summary/jspdf.umd.min.js"></script>
+<script src="js/vendor/payment-summary/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="js/admin-walkin-payment.js?v=3"></script>
 <script>
 // ---------------------------------------------------------------------
 // TABS — preserves filters + search
@@ -4052,7 +4145,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
         const url = new URL(window.location);
         url.searchParams.set('tab', btn.dataset.tab);
         url.searchParams.delete('focus_request');
-        if (btn.dataset.tab === 'all') url.searchParams.delete('status');
+        if (btn.dataset.tab === 'all' || btn.dataset.tab === 'walkin') url.searchParams.delete('status');
         window.location = url.toString();
     });
 });
@@ -4383,11 +4476,15 @@ let previousExpenseFocus = null;
 function openExpenseModal(bookingId, trigger) {
     previousExpenseFocus = trigger || document.activeElement;
     document.getElementById('expenseBookingId').value = bookingId;
-    expenseBookingLabel.textContent = bookingId ? `#${bookingId}` : '—';
+    const receiptBooking = billingState.receipt?.booking;
+    const currentBooking = Number(receiptBooking?.booking_id) === Number(bookingId) ? receiptBooking : null;
+    expenseBookingLabel.textContent = currentBooking?.booking_reference || (bookingId ? '#' + bookingId : '—');
+    document.getElementById('expenseGuestName').textContent = currentBooking?.t_full_name || 'Guest';
+    window.AdminBookingAddons.reset();
     modal.classList.add('active');
     modal.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
-    window.setTimeout(() => document.getElementById('expenseType')?.focus(), 40);
+    window.setTimeout(() => document.querySelector('#adminAddonRows select')?.focus(), 40);
 }
 
 function closeExpenseEntryModal() {
@@ -4419,54 +4516,29 @@ document.addEventListener('keydown', (e) => {
 });
 
 // SUBMIT VIA AJAX (NO PAGE RELOAD)
-form.addEventListener('submit', function (e) {
-    e.preventDefault();
-
+form.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    const saveButton = form.querySelector('[type="submit"]');
+    if (saveButton.disabled || !form.reportValidity()) return;
     const formData = new FormData(form);
-    formData.append('action', 'add_expense');
-    formData.append('csrf_token', adminBookingCsrf);
-
-    fetch(window.location.href, {
-        method: 'POST',
-        body: formData
-    })
-    .then(res => res.json())
-    .then(data => {
-
-    if (data.success) {
-
+    formData.set('action', 'add_expense');
+    formData.set('csrf_token', adminBookingCsrf);
+    saveButton.disabled = true;
+    saveButton.textContent = 'Saving Add-ons...';
+    try {
+        const response = await fetch(window.location.href, { method: 'POST', body: formData });
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.message || 'Add-ons could not be saved.');
         closeExpenseEntryModal();
-        form.reset();
-
-        Swal.fire({
-            icon: 'success',
-            title: 'Success!',
-            text: data.message,
-            confirmButtonColor: '#2b7a66'
-        }).then(() => {
-            // 🔥 REFRESH AFTER USER CLICKS OK
-            location.reload();
-        });
-
-    } else {
-
-        Swal.fire({
-            icon: 'error',
-            title: 'Failed!',
-            text: data.message
-        });
+        await Swal.fire({ icon: 'success', title: 'Add-ons Saved', text: data.message, confirmButtonColor: '#2b7a66' });
+        location.reload();
+    } catch (error) {
+        await Swal.fire({ icon: 'error', title: 'Add-ons Not Saved', text: error.message, confirmButtonColor: '#2b7a66' });
+    } finally {
+        saveButton.disabled = false;
+        saveButton.textContent = 'Save Add-ons';
     }
-
-})
-    .catch(() => {
-        Swal.fire({
-            icon: 'error',
-            title: 'Error!',
-            text: 'Something went wrong.'
-        });
-    });
 });
-
 
 document.addEventListener("DOMContentLoaded", function () {
 
@@ -4656,7 +4728,7 @@ const amount = document.getElementById("paymentAmount")?.value || 0;
 
 });
 
-const paymentFlow = { balance: 0, completeAfterPayment: false };
+const paymentFlow = { balance: 0, fromMarkCompleted: false };
 const adminPayMongoCsrf = <?= json_encode($_SESSION['paymongo_admin_csrf'], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 const adminBookingCsrf = <?= json_encode(AppCsrfToken('admin', 'booking_management'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 const adminPayMongoPendingKey = 'itour_admin_paymongo_pending';
@@ -4701,30 +4773,30 @@ function closePaymentModal() {
   paymentModal.setAttribute('aria-hidden', 'true');
 }
 
-function openPaymentModal(bookingId, balance, completeAfterPayment = false) {
+function openPaymentModal(bookingId, balance, fromMarkCompleted = false) {
   const paymentModal = document.getElementById('paymentModal');
   const amountInput = document.getElementById('paymentAmount');
   if (!paymentModal || !bookingId || balance <= 0) return;
 
   closeBillingModal();
   paymentFlow.balance = Number(balance);
-  paymentFlow.completeAfterPayment = Boolean(completeAfterPayment);
+  paymentFlow.fromMarkCompleted = Boolean(fromMarkCompleted);
   document.getElementById('paymentBookingId').value = bookingId;
   document.getElementById('paymentMethod').value = '';
   document.getElementById('paymentMethod').classList.remove('has-device-panel');
   document.getElementById('qrAdminDeviceSection').hidden = true;
   document.getElementById('paymentInfo').textContent = `Remaining Balance: ${formatBookingMoney(balance)}`;
-  document.getElementById('paymentModalTitle').textContent = completeAfterPayment ? 'Complete Payment & Booking' : 'Pay Balance';
-  document.getElementById('paymentContextNote').textContent = completeAfterPayment
+  document.getElementById('paymentModalTitle').textContent = fromMarkCompleted ? 'Pay the Balance Before Completing This Booking' : 'Pay Balance';
+  document.getElementById('paymentContextNote').textContent = fromMarkCompleted
     ? 'The full balance must be collected to mark this booking as completed.'
     : 'Record the amount received. Partial payments are allowed.';
-  document.getElementById('confirmPaymentBtn').textContent = completeAfterPayment ? 'Pay & Mark Completed' : 'Confirm Payment';
+  document.getElementById('confirmPaymentBtn').textContent = fromMarkCompleted ? 'Pay Balance' : 'Confirm Payment';
   amountInput.max = Number(balance).toFixed(2);
   amountInput.value = Number(balance).toFixed(2);
-  amountInput.readOnly = Boolean(completeAfterPayment);
+  amountInput.readOnly = Boolean(fromMarkCompleted);
   paymentModal.style.display = 'flex';
   paymentModal.setAttribute('aria-hidden', 'false');
-  setTimeout(() => completeAfterPayment ? document.getElementById('paymentMethod').focus() : amountInput.focus(), 50);
+  setTimeout(() => fromMarkCompleted ? document.getElementById('paymentMethod').focus() : amountInput.focus(), 50);
 }
 
 function clampPayBalanceAmount() {
@@ -4802,6 +4874,32 @@ function renderRegisteredAdminPhone(payload) {
     if (overviewAction) overviewAction.textContent = 'Register Phone';
     overviewCard?.classList.remove('is-registered');
   }
+  const walkinName = document.getElementById('walkinQrAdminDeviceName');
+  const walkinMeta = document.getElementById('walkinQrAdminDeviceMeta');
+  const walkinAction = document.getElementById('walkinManageAdminPhoneBtn');
+  if (walkinName) walkinName.textContent = name.textContent;
+  if (walkinMeta) walkinMeta.textContent = meta.textContent;
+  if (walkinAction) {
+    walkinAction.disabled = action.disabled;
+    walkinAction.textContent = action.textContent;
+    walkinAction.dataset.mode = action.dataset.mode;
+  }
+}
+
+// Both Pay Balance and Add Booking use this exact request/validation path.
+async function requestAdminPaymentQr(bookingId, amount, walkinFullPayment = false) {
+  const body = new FormData();
+  body.append('type', 'tour');
+  body.append('id', String(bookingId));
+  body.append('amount', Number(amount).toFixed(2));
+  body.append('csrf_token', adminPayMongoCsrf);
+  if (walkinFullPayment) body.append('walkin_full_payment', '1');
+  const response = await fetch(adminPayMongoCheckoutEndpoint, { method: 'POST', body, headers: { Accept: 'application/json' } });
+  const data = await readAdminPaymentJson(response, 'The PayMongo payment service returned an invalid response. Please try again.');
+  if (!response.ok || !data.success) throw new Error(data.message || 'The PayMongo QR payment could not be opened.');
+  const url = new URL(data.checkout_url);
+  if (url.protocol !== 'https:' || (url.hostname !== 'checkout.paymongo.com' && !url.hostname.endsWith('.paymongo.com'))) throw new Error('PayMongo returned an invalid checkout URL.');
+  return data;
 }
 
 async function refreshRegisteredAdminPhone(silent = false) {
@@ -4812,6 +4910,12 @@ async function refreshRegisteredAdminPhone(silent = false) {
     if (name) name.textContent = 'Checking registered phone...';
     if (meta) meta.textContent = 'Please wait.';
     if (action) action.disabled = true;
+    const walkinName = document.getElementById('walkinQrAdminDeviceName');
+    const walkinMeta = document.getElementById('walkinQrAdminDeviceMeta');
+    const walkinAction = document.getElementById('walkinManageAdminPhoneBtn');
+    if (walkinName) walkinName.textContent = 'Checking registered phone...';
+    if (walkinMeta) walkinMeta.textContent = 'Please wait.';
+    if (walkinAction) walkinAction.disabled = true;
   }
   try {
     const payload = await fetchRegisteredAdminPhone();
@@ -4822,6 +4926,12 @@ async function refreshRegisteredAdminPhone(silent = false) {
       if (action) action.disabled = false;
       if (name) name.textContent = 'Unable to check registered phone';
       if (meta) meta.textContent = error.message;
+      const walkinName = document.getElementById('walkinQrAdminDeviceName');
+      const walkinMeta = document.getElementById('walkinQrAdminDeviceMeta');
+      const walkinAction = document.getElementById('walkinManageAdminPhoneBtn');
+      if (walkinName) walkinName.textContent = 'Unable to check registered phone';
+      if (walkinMeta) walkinMeta.textContent = error.message;
+      if (walkinAction) walkinAction.disabled = false;
     }
     return null;
   }
@@ -4841,7 +4951,10 @@ function startPaymentDevicePolling() {
     const paymentModal = document.getElementById('paymentModal');
     const isQrOpen = paymentModal?.style.display !== 'none'
       && document.getElementById('paymentMethod')?.value === 'qr_code';
-    if (!isQrOpen) {
+    const isWalkinQrOpen = document.getElementById('walkinBookingModal')?.classList.contains('is-open')
+      && !document.querySelector('#walkinBookingForm [data-walkin-step="3"]')?.hidden
+      && document.getElementById('walkinPaymentMethod')?.value === 'qr_code';
+    if (!isQrOpen && !isWalkinQrOpen) {
       stopPaymentDevicePolling();
       return;
     }
@@ -4984,7 +5097,7 @@ function closeAdminPhoneRegistrationModal() {
   modal.classList.remove('show');
   modal.setAttribute('aria-hidden', 'true');
   modal.inert = true;
-  if (document.getElementById('paymentMethod')?.value === 'qr_code') {
+  if (document.getElementById('paymentMethod')?.value === 'qr_code' || document.getElementById('walkinPaymentMethod')?.value === 'qr_code') {
     refreshRegisteredAdminPhone(true);
   }
 }
@@ -4998,20 +5111,21 @@ document.getElementById('paymentMethod')?.addEventListener('change', event => {
   deviceSection.hidden = !isQr;
   if (isQr) {
     startPaymentDevicePolling();
-    note.textContent = paymentFlow.completeAfterPayment
-      ? 'PayMongo will display a secure QR for the tourist to scan. The booking completes only after the full payment is verified.'
+    note.textContent = paymentFlow.fromMarkCompleted
+      ? 'PayMongo will display a secure QR for the tourist to scan. Once the full payment is verified, you can mark the booking as completed.'
       : 'PayMongo will display a secure QR for the tourist to scan. The balance updates only after payment is verified.';
     button.textContent = 'Open PayMongo QR';
   } else {
     stopPaymentDevicePolling();
-    note.textContent = paymentFlow.completeAfterPayment
+    note.textContent = paymentFlow.fromMarkCompleted
       ? 'The full balance must be collected to mark this booking as completed.'
       : 'Record the cash amount received. Partial payments are allowed.';
-    button.textContent = paymentFlow.completeAfterPayment ? 'Pay & Mark Completed' : 'Confirm Payment';
+    button.textContent = paymentFlow.fromMarkCompleted ? 'Pay Balance' : 'Confirm Payment';
   }
 });
 
 document.getElementById('manageAdminPhoneBtn')?.addEventListener('click', openAdminPhoneRegistrationModal);
+document.getElementById('walkinManageAdminPhoneBtn')?.addEventListener('click', openAdminPhoneRegistrationModal);
 document.getElementById('openAdminPaymentPhoneModal')?.addEventListener('click', async event => {
   const button = event.currentTarget;
   const originalContent = button.innerHTML;
@@ -5130,7 +5244,7 @@ async function cancelAdminPayMongoPayment(bookingId, returnToken) {
   return Boolean(result.cancelled);
 }
 
-async function monitorAdminPhoneQrPayment(token, bookingId = 0) {
+async function monitorAdminPhoneQrPayment(token, bookingId = 0, fromMarkCompleted = false) {
   if (!/^[a-f0-9]{64}$/.test(token)) return false;
   let trackedBookingId = Number(bookingId || 0);
   let cancelRequested = false;
@@ -5187,8 +5301,10 @@ async function monitorAdminPhoneQrPayment(token, bookingId = 0) {
         sessionStorage.removeItem(adminPayMongoPendingKey);
         await Swal.fire({
           icon: 'success',
-          title: 'QR Payment Verified',
-          text: `${formatBookingMoney(result.amount)} was applied to Booking ${result.booking_reference || result.booking_id}.`,
+          title: fromMarkCompleted ? 'Payment Successful' : 'QR Payment Verified',
+          text: fromMarkCompleted
+            ? 'The balance is now fully paid. You can now mark the booking as completed.'
+            : `${formatBookingMoney(result.amount)} was applied to Booking ${result.booking_reference || result.booking_id}.`,
           confirmButtonColor: '#2b7a66'
         });
         window.location.reload();
@@ -5255,11 +5371,12 @@ document.getElementById('confirmPaymentBtn')?.addEventListener('click', async ()
     Swal.fire('Invalid Amount', 'Payment cannot exceed the current balance.', 'warning');
     return;
   }
-  if (paymentFlow.completeAfterPayment && Math.abs(amount - paymentFlow.balance) > 0.009) {
+  if (paymentFlow.fromMarkCompleted && Math.abs(amount - paymentFlow.balance) > 0.009) {
     Swal.fire('Full Payment Required', 'Collect the entire balance before completing this booking.', 'warning');
     return;
   }
 
+  const fromMarkCompleted = paymentFlow.fromMarkCompleted;
   const confirmButton = document.getElementById('confirmPaymentBtn');
   confirmButton.disabled = true;
   const originalButtonText = confirmButton.textContent;
@@ -5270,21 +5387,9 @@ document.getElementById('confirmPaymentBtn')?.addEventListener('click', async ()
       return;
     }
     setPayMongoButtonLoading(confirmButton, true, originalButtonText);
-    const checkoutData = new FormData();
-    checkoutData.append('type', 'tour');
-    checkoutData.append('id', bookingId);
-    checkoutData.append('amount', amount.toFixed(2));
-    checkoutData.append('csrf_token', adminPayMongoCsrf);
-    if (paymentFlow.completeAfterPayment) checkoutData.append('complete_after_payment', '1');
     try {
       while (true) {
-        const response = await fetch(adminPayMongoCheckoutEndpoint, {
-          method: 'POST',
-          body: checkoutData,
-          headers: { Accept: 'application/json' }
-        });
-        const data = await readAdminPaymentJson(response, 'The PayMongo payment service returned an invalid response. Please try again.');
-        if (!response.ok || !data.success) throw new Error(data.message || 'The PayMongo QR payment page could not be opened.');
+        const data = await requestAdminPaymentQr(bookingId, amount);
         const checkoutUrl = new URL(data.checkout_url);
         if (checkoutUrl.protocol !== 'https:' || (checkoutUrl.hostname !== 'checkout.paymongo.com' && !checkoutUrl.hostname.endsWith('.paymongo.com'))) {
           throw new Error('PayMongo returned an invalid checkout URL.');
@@ -5294,12 +5399,13 @@ document.getElementById('confirmPaymentBtn')?.addEventListener('click', async ()
           id: Number(bookingId),
           token: String(data.return_token || ''),
           phoneHandoff: Boolean(data.phone_notification?.sent),
+          fromMarkCompleted,
           startedAt: Date.now()
         }));
         if (data.phone_notification?.sent && /^[a-f0-9]{64}$/.test(String(data.return_token || ''))) {
           setPayMongoButtonLoading(confirmButton, false, originalButtonText);
           closePaymentModal();
-          await monitorAdminPhoneQrPayment(String(data.return_token), Number(bookingId));
+          await monitorAdminPhoneQrPayment(String(data.return_token), Number(bookingId), fromMarkCompleted);
           return;
         }
         if (data.phone_notification && !data.phone_notification.sent) {
@@ -5348,7 +5454,6 @@ document.getElementById('confirmPaymentBtn')?.addEventListener('click', async ()
   formData.append('payment_method', paymentMethod);
   formData.append('amount', amount.toFixed(2));
   formData.append('csrf_token', adminPayMongoCsrf);
-  if (paymentFlow.completeAfterPayment) formData.append('complete_after_payment', '1');
 
   try {
     const response = await fetch(window.location.href, { method: 'POST', body: formData });
@@ -5357,8 +5462,10 @@ document.getElementById('confirmPaymentBtn')?.addEventListener('click', async ()
     closePaymentModal();
     await Swal.fire({
       icon: 'success',
-      title: data.completed ? 'Booking Completed' : 'Payment Recorded',
-      text: data.completed ? 'The balance was paid and the booking was marked completed.' : (data.is_paid ? 'The booking is now fully paid.' : 'The partial payment was recorded.'),
+      title: fromMarkCompleted && data.is_paid ? 'Payment Successful' : (data.completed ? 'Booking Completed' : 'Payment Recorded'),
+      text: fromMarkCompleted && data.is_paid
+        ? 'The balance is now fully paid. You can now mark the booking as completed.'
+        : (data.completed ? 'The balance was paid and the booking was marked completed.' : (data.is_paid ? 'The booking is now fully paid.' : 'The partial payment was recorded.')),
       confirmButtonColor: '#2b7a66'
     });
     location.reload();
@@ -5380,6 +5487,13 @@ async function handleAdminPayMongoReturn(historyToken = '') {
   const returnType = historyToken ? 'paymongo' : params.get('payment_return');
   const token = historyToken || params.get('payment_return_token') || '';
   if (!['paymongo', 'cancelled'].includes(returnType) || !/^[a-f0-9]{64}$/.test(token)) return;
+  let fromMarkCompleted = false;
+  try {
+    const pending = JSON.parse(sessionStorage.getItem(adminPayMongoPendingKey) || 'null');
+    fromMarkCompleted = pending?.token === token && pending?.fromMarkCompleted === true;
+  } catch (_) {
+    // Missing or invalid local context keeps the standard payment wording.
+  }
   sessionStorage.removeItem(adminPayMongoPendingKey);
 
   const cleanReturnUrl = () => {
@@ -5410,8 +5524,10 @@ async function handleAdminPayMongoReturn(historyToken = '') {
         cleanReturnUrl();
         await Swal.fire({
           icon: 'success',
-          title: 'QR Payment Verified',
-          text: `${formatBookingMoney(result.amount)} was applied to Booking ${result.booking_reference || result.booking_id}.`,
+          title: fromMarkCompleted ? 'Payment Successful' : 'QR Payment Verified',
+          text: fromMarkCompleted
+            ? 'The balance is now fully paid. You can now mark the booking as completed.'
+            : `${formatBookingMoney(result.amount)} was applied to Booking ${result.booking_reference || result.booking_id}.`,
           confirmButtonColor: '#2b7a66'
         });
         window.location.reload();
@@ -5444,7 +5560,6 @@ window.addEventListener('pageshow', async event => {
   const pendingRaw = sessionStorage.getItem(adminPayMongoPendingKey);
   if (!returnedByHistory || returnType || !pendingRaw) return;
 
-  sessionStorage.removeItem(adminPayMongoPendingKey);
   closePaymentModal();
   try {
     const pending = JSON.parse(pendingRaw);
@@ -5460,7 +5575,7 @@ const billingExpenseLabels = {
   additional_boat: 'Additional Boat',
   additional_tourguide: 'Additional Tour Guide',
   food: 'Food',
-  others: 'Other Expense'
+  others: 'Other Add-on'
 };
 
 function closeBillingModal() {
@@ -5513,8 +5628,8 @@ async function openBillingModal(bookingId) {
     const expenseRows = expenses.length
       ? expenses.map(item => {
           const rawType = String(item.expense_type || 'Expense');
-          const label = billingExpenseLabels[rawType] || rawType.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
-          const note = String(item.note || '').trim();
+          const label = item.expense_name || billingExpenseLabels[rawType] || rawType.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
+          const note = [item.quantity && item.unit_price != null ? `${item.quantity} × ${formatBookingMoney(item.unit_price)}` : '', item.note].filter(Boolean).join(' · ');
           return `<div class="billing-line"><span>${escapeBookingDetail(label)}${note ? `<small class="billing-line-note">${escapeBookingDetail(note)}</small>` : ''}</span><strong>${formatBookingMoney(item.amount)}</strong></div>`;
         }).join('')
       : '<div class="billing-line"><span>No additional expenses</span><strong>₱0.00</strong></div>';
@@ -5522,6 +5637,7 @@ async function openBillingModal(bookingId) {
     billingState.balance = balance;
     billingState.paid = isPaid;
     billingState.receipt = {
+      priceBreakdown: payload.receipt_breakdown,
       booking,
       expenses,
       serviceName,
@@ -5569,118 +5685,14 @@ async function openBillingModal(bookingId) {
 }
 
 function setAdminReceiptModal(open) {
-  const modal = document.getElementById('adminReceiptModal');
-  if (!modal) return;
-  if (open) {
-    modal.inert = false;
-    modal.setAttribute('aria-hidden', 'false');
-    modal.classList.add('show');
-    return;
-  }
-  const focused = document.activeElement;
-  if (focused instanceof HTMLElement && modal.contains(focused)) focused.blur();
-  modal.classList.remove('show');
-  modal.setAttribute('aria-hidden', 'true');
-  modal.inert = true;
+  if (open) openAdminBookingReceipt();
+  else window.BookingPaymentSummary?.close();
 }
-
 function openAdminBookingReceipt() {
-  const receipt = billingState.receipt;
-  const paper = document.getElementById('adminReceiptPaper');
-  if (!receipt || !paper) return;
-
-  const booking = receipt.booking || {};
-  const reference = booking.booking_reference || booking.booking_id || '-';
-  const guest = booking.t_full_name || 'Guest';
-  const bookingType = String(booking.booking_type || 'Tour').replace(/_/g, ' ');
-  const bookingTypeLabel = `${bookingType.charAt(0).toUpperCase()}${bookingType.slice(1)} reservation`;
-  const receiptLogo = new URL('img/newlogo.png', window.location.href).href;
-  const receiptWordmark = new URL('img/textlogo2.png', window.location.href).href;
-  const expenseRows = receipt.expenses.length
-    ? receipt.expenses.map(item => {
-        const rawType = String(item.expense_type || 'Expense');
-        const label = billingExpenseLabels[rawType] || rawType.replace(/_/g, ' ').replace(/\b\w/g, letter => letter.toUpperCase());
-        return `<tr><td>${escapeBookingDetail(label)}</td><td>${formatBookingMoney(item.amount)}</td></tr>`;
-      }).join('')
-    : `<tr><td>No additional charges</td><td>${formatBookingMoney(0)}</td></tr>`;
-
-  paper.innerHTML = `
-    <div class="receipt-brand">
-      <div class="receipt-brand-identity"><img class="receipt-brand-logo" src="${receiptLogo}" alt="iTour Mercedes seal"><div><img class="receipt-brand-wordmark" src="${receiptWordmark}" alt="iTour Mercedes"><p>OFFICIAL BOOKING RECEIPT</p></div></div>
-      <div class="receipt-number"><small>RECEIPT REFERENCE</small><strong>${escapeBookingDetail(reference)}</strong>${receipt.completed ? '<span class="receipt-paid-stamp">COMPLETED</span>' : ''}</div>
-    </div>
-    <div class="receipt-meta">
-      <div><small>BILLED TO</small><strong>${escapeBookingDetail(guest)}</strong></div>
-      <div><small>SERVICE</small><strong>${escapeBookingDetail(receipt.serviceName)}</strong></div>
-      <div><small>BOOKING TYPE</small><strong>${escapeBookingDetail(bookingTypeLabel)}</strong></div>
-      <div><small>RECEIPT STATUS</small><strong>${receipt.completed ? 'Final receipt' : 'Preview only'}</strong></div>
-    </div>
-    <table class="receipt-table">
-      <thead><tr><th>DESCRIPTION</th><th>AMOUNT</th></tr></thead>
-      <tbody>
-        <tr><td>Tour service</td><td>${formatBookingMoney(receipt.serviceAmount)}</td></tr>
-        ${expenseRows}
-        <tr class="receipt-total"><td>TOTAL</td><td>${formatBookingMoney(receipt.billingTotal)}</td></tr>
-      </tbody>
-    </table>
-    <div class="receipt-summary">
-      <div><small>AMOUNT PAID</small><strong>${formatBookingMoney(receipt.amountPaid)}</strong></div>
-      <div><small>BALANCE</small><strong>${formatBookingMoney(receipt.balance)}</strong></div>
-      <div><small>PAYMENT STATUS</small><strong>${escapeBookingDetail(receipt.paymentStatus)}</strong></div>
-    </div>
-    <div class="receipt-foot">This receipt reflects the booking account at the time it was generated. Please retain it as your payment and reservation record.</div>`;
-
-  setAdminReceiptModal(true);
+  if (billingState.receipt) window.BookingPaymentSummary.open({ ...billingState.receipt, kind: 'tour' });
 }
-
-function printAdminBookingReceipt() {
-  const paper = document.getElementById('adminReceiptPaper');
-  if (!paper?.innerHTML.trim()) return;
-  const printWindow = window.open('', '_blank', 'width=900,height=720');
-  if (!printWindow) {
-    Swal.fire('Print Blocked', 'Allow pop-ups for this site, then try printing the receipt again.', 'warning');
-    return;
-  }
-  const stylesheet = Array.from(document.styleSheets).find(sheet => String(sheet.href || '').includes('styles/admin_receipt.css'))?.href
-    || new URL('styles/admin_receipt.css', window.location.href).href;
-  printWindow.document.write(`<!doctype html><html><head><title>Booking Receipt</title><link rel="stylesheet" href="${stylesheet}"><style>body{margin:0;padding:20px;background:#fff}.admin-receipt-paper{width:560px;min-height:0;margin:auto;box-shadow:none}@page{size:A4 portrait;margin:12mm}@media print{body{padding:0}.admin-receipt-paper{width:100%;max-width:560px}}</style></head><body><article class="admin-receipt-paper">${paper.innerHTML}</article></body></html>`);
-  printWindow.document.close();
-  printWindow.addEventListener('load', () => setTimeout(() => {
-    printWindow.focus();
-    printWindow.print();
-  }, 150));
-}
-
-async function downloadAdminBookingReceipt() {
-  const paper = document.getElementById('adminReceiptPaper');
-  const button = document.getElementById('downloadAdminReceipt');
-  if (!paper?.innerHTML.trim() || !window.html2canvas || !window.jspdf?.jsPDF) {
-    Swal.fire('Download Unavailable', 'The PDF tools did not load. Refresh the page and try again.', 'error');
-    return;
-  }
-
-  button.disabled = true;
-  const originalText = button.textContent;
-  button.textContent = 'Preparing...';
-  try {
-    const canvas = await html2canvas(paper, { scale: 2, backgroundColor: '#ffffff', useCORS: true });
-    const { jsPDF } = window.jspdf;
-    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const maxWidth = 190;
-    const maxHeight = 277;
-    const scale = Math.min(maxWidth / canvas.width, maxHeight / canvas.height);
-    const width = canvas.width * scale;
-    const height = canvas.height * scale;
-    pdf.addImage(canvas.toDataURL('image/png'), 'PNG', (210 - width) / 2, 10, width, height, undefined, 'FAST');
-    const reference = String(billingState.receipt?.booking?.booking_reference || billingState.bookingId || 'booking').replace(/[^a-z0-9_-]+/gi, '-');
-    pdf.save(`booking-receipt-${reference}.pdf`);
-  } catch (error) {
-    Swal.fire('Download Failed', 'The booking receipt could not be prepared. Please try again.', 'error');
-  } finally {
-    button.disabled = false;
-    button.textContent = originalText;
-  }
-}
+function printAdminBookingReceipt() { window.BookingPaymentSummary.print(); }
+function downloadAdminBookingReceipt() { return window.BookingPaymentSummary.download(); }
 
 document.addEventListener('click', event => {
   const billingButton = event.target.closest('.billing-btn');
@@ -5693,12 +5705,10 @@ document.getElementById('billingPayBalance')?.addEventListener('click', () => {
   if (!billingState.paid && billingState.balance > 0) openPaymentModal(billingState.bookingId, billingState.balance, false);
 });
 document.getElementById('openBookingReceipt')?.addEventListener('click', openAdminBookingReceipt);
-document.getElementById('printAdminReceipt')?.addEventListener('click', printAdminBookingReceipt);
-document.getElementById('downloadAdminReceipt')?.addEventListener('click', downloadAdminBookingReceipt);
-document.querySelectorAll('[data-close-admin-receipt]').forEach(button => button.addEventListener('click', () => setAdminReceiptModal(false)));
-document.getElementById('adminReceiptModal')?.addEventListener('mousedown', event => {
-  if (event.target.id === 'adminReceiptModal') setAdminReceiptModal(false);
-});
+
+
+
+
 document.getElementById('closeBillingModal')?.addEventListener('click', closeBillingModal);
 document.getElementById('billingIconClose')?.addEventListener('click', closeBillingModal);
 document.getElementById('billingModal')?.addEventListener('mousedown', event => {
@@ -5732,6 +5742,7 @@ function parseBookingMeta(preferredResource) {
   };
   const raw = String(preferredResource || '').trim();
   if (!raw) return result;
+  let hasExplicitPaymentStatus = false;
 
   const parts = raw.split('|').map(p => p.trim()).filter(Boolean);
   for (const part of parts) {
@@ -5745,13 +5756,14 @@ function parseBookingMeta(preferredResource) {
     } else if (lower.startsWith('payment:') || lower.startsWith('payment option:')) {
       result.paymentOption = part.substring(part.indexOf(':') + 1).trim() || '-';
     } else if (lower.startsWith('payment status:')) {
+      hasExplicitPaymentStatus = true;
       result.paymentStatus = part.substring(part.indexOf(':') + 1).trim() || 'Unpaid';
     } else if (lower.startsWith('pay now:')) {
       result.payNow = part.substring(part.indexOf(':') + 1).trim() || '-';
     }
   }
 
-  if (result.paymentStatus === 'Unpaid' && result.paymentOption !== '-') {
+  if (!hasExplicitPaymentStatus && result.paymentStatus === 'Unpaid' && result.paymentOption !== '-') {
     const paymentOption = String(result.paymentOption).toLowerCase();
     if (paymentOption.includes('partial') || paymentOption.includes('20%')) {
       result.paymentStatus = 'Partial';
@@ -5858,7 +5870,7 @@ async function openBookingDetailsModal(bookingId) {
     const scheduleDetails = bookingScheduleDetails(booking);
     const profileImageUrl = `adbookings.php?action=fetchTouristProfileImage&id=${encodeURIComponent(Number(booking.booking_id || bookingId))}`;
     const expenseRows = expenses.length
-      ? expenses.map(expense => `<div><span>${escapeBookingDetail(expense.expense_type)}</span><strong>${formatBookingMoney(expense.amount)}</strong></div>`).join('')
+      ? expenses.map(expense => `<div><span>${escapeBookingDetail(expense.expense_name || expense.expense_type)}${expense.quantity ? ` (${Number(expense.quantity)} × ${formatBookingMoney(expense.unit_price)})` : ''}</span><strong>${formatBookingMoney(expense.amount)}</strong></div>`).join('')
       : '<div class="bd-no-expense"><span>No additional expenses recorded</span><strong>₱0.00</strong></div>';
 
     content.innerHTML = `
@@ -5898,7 +5910,7 @@ async function openBookingDetailsModal(bookingId) {
         <div class="bd-section-title">
           <span>${bookingDetailIcons.payment}</span>
           <div><h4>Payment and expenses</h4><p>Complete financial summary for this booking</p></div>
-          <button type="button" class="bd-go-billing" data-details-billing data-booking-id="${Number(booking.booking_id || bookingId)}">Go to Billing</button>
+          <button type="button" class="bd-go-billing" data-details-billing data-booking-id="${Number(booking.booking_id || bookingId)}">View Billing</button>
         </div>
         <div class="bd-payment-lines">
           <div><span>Service amount</span><strong>${formatBookingMoney(serviceAmount)}</strong></div>
@@ -6007,7 +6019,7 @@ function generateReportHTML() {
   const orientation = document.getElementById('reportOrientation').value || 'portrait';
   const paperSize = document.getElementById('reportPaperSize').value;
   const printSize = paperSize === 'letter' ? 'letter' : paperSize === 'long' ? 'legal' : 'A4';
-  const stylesheet = new URL('styles/adbookings.css?v=35', window.location.href).href;
+  const stylesheet = new URL('styles/adbookings.css?v=40', window.location.href).href;
 
   return `
     <!doctype html><html>
@@ -6662,6 +6674,7 @@ function confirmAction(event, form, action) {
   const texts = {
     accept: "Accept this booking?",
     retry_email: "Retry sending the confirmation email?",
+    submission_alert: "Send this tourist an email reminder to submit the tourist list for this booking?",
     decline: "Decline this booking?",
     finish: "Mark this booking as Completed?",
     cancel: "Cancel this booking?"
@@ -6670,6 +6683,7 @@ function confirmAction(event, form, action) {
   const icons = {
     accept: 'question',
     retry_email: 'question',
+    submission_alert: 'question',
     decline: 'warning',
     finish: 'info',
     cancel: 'warning'
@@ -6691,10 +6705,12 @@ function confirmAction(event, form, action) {
     if (!r.isConfirmed) return;
 
     form.dataset.submitting = 'true';
-    if (action === 'accept' || action === 'retry_email') {
+    if (action === 'accept' || action === 'retry_email' || action === 'submission_alert') {
       Swal.fire({
-        title: 'Sending Confirmation Email',
-        html: action === 'accept'
+        title: action === 'submission_alert' ? 'Sending Tourist Submission Alert' : 'Sending Confirmation Email',
+        html: action === 'submission_alert'
+          ? 'Please wait while the tourist submission reminder is sent.'
+          : action === 'accept'
           ? 'Please wait while the booking is accepted and the confirmation email is sent.'
           : 'Please wait while the booking confirmation email is sent again.',
         color: '#173f34',
@@ -6998,6 +7014,7 @@ function openCancellationDetailsDrawer(request) {
   const initials = touristName.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'G';
   const profileImage = String(request.profile_endpoint || request.profile_image || '').trim();
   const isTourRequest = String(request.type || '').toLowerCase() !== 'hotel';
+  const billingBookingId = Number(request.booking_id || 0);
   const requestSchedule = bookingScheduleDetails({
     tour_start_date: request.service_date,
     tour_end_date: request.service_end_date || request.service_date,
@@ -7007,6 +7024,7 @@ function openCancellationDetailsDrawer(request) {
     ? `<img src="${cancellationHtml(profileImage)}" alt="${cancellationHtml(touristName)} profile picture">`
     : cancellationHtml(initials);
   const item = (label, value, extraClass = '') => `<div class="crd-info-item ${extraClass}"><span>${cancellationHtml(label)}</span><strong>${cancellationHtml(value || '-')}</strong></div>`;
+  const billingSummary = `<div class="crd-info-grid">${item('Booking total at cancellation', cancellationMoney(request.total))}${item('Amount paid at cancellation', cancellationMoney(request.paid))}${item('Balance at cancellation', cancellationMoney(Math.max(0, Number(request.total || 0) - Number(request.paid || 0))))}</div>`;
 
   content.innerHTML = `
     <div class="crd-hero"><div><span>BOOKING REFERENCE</span><strong>${cancellationHtml(request.reference || '-')}</strong><small>${cancellationHtml(request.type || 'Booking')} cancellation request</small></div><b>${cancellationHtml(request.request_status || 'Awaiting approval')}</b></div>
@@ -7023,7 +7041,16 @@ function openCancellationDetailsDrawer(request) {
       <div class="crd-status-row"><div><span>REQUEST STATUS</span><strong>${cancellationHtml(request.request_status || '-')}</strong></div><div><span>REFUND STATUS</span><strong>${cancellationHtml(request.refund_status || '-')}</strong></div></div>
     </section>
     <section class="crd-section crd-reason-section"><div class="crd-section-title"><i>03</i><div><h4>Cancellation reason</h4><p>Statement submitted by the tourist</p></div></div><blockquote>${cancellationHtml(request.reason || 'No reason provided.')}</blockquote>${request.admin_note ? `<div class="crd-admin-note"><span>ADMIN REVIEW NOTE</span><p>${cancellationHtml(request.admin_note)}</p></div>` : ''}</section>
+    <section class="crd-section">
+      <div class="crd-section-title"><i>04</i><div><h4>Payment and billing</h4><p>Financial details for this booking</p></div>${request.booking_domain === 'tour' && billingBookingId > 0 ? '<button type="button" class="bd-go-billing" data-cancellation-billing>View Billing</button>' : ''}</div>
+      ${request.booking_domain === 'tour' && billingBookingId > 0 ? '' : `<details class="crd-billing-summary"><summary class="bd-go-billing">View Billing</summary>${billingSummary}</details>`}
+    </section>
     <div class="crd-verification-note"><strong>Request record verified</strong><span>Details are loaded from the current cancellation and booking records.</span></div>`;
+
+  content.querySelector('[data-cancellation-billing]')?.addEventListener('click', () => {
+    closeCancellationDetailsDrawer();
+    openBillingModal(billingBookingId);
+  });
 
   content.querySelector('.crd-avatar img')?.addEventListener('error', event => {
     event.currentTarget.parentElement.textContent = initials;
@@ -7290,14 +7317,22 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
   const boatSelect = document.getElementById('walkinBoatId');
   const guideSelect = document.getElementById('walkinGuideId');
   const locationSelect = document.getElementById('walkinLocation');
+  const secondLocation = document.getElementById('walkinSecondLocation');
+  const includeBoats = document.getElementById('walkinIncludeBoats');
+  const additionalBoats = document.getElementById('walkinAdditionalBoats');
+  const quoteStatus = document.getElementById('walkinQuoteStatus');
+  let boatCatalog = <?= json_encode($walkInBoats, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
+  let availabilityRequest = 0;
+  let quoteRequest = 0;
+  let quoteTimer = null;
+  let quoteValid = false;
+  let walkinReservationLocked = false;
   const serviceAmountInput = document.getElementById('walkinServiceAmount');
   const expenseInputs = Array.from(form.querySelectorAll('.walkin-expense-input'));
   const totalInput = document.getElementById('walkinGrandTotal');
   const grandTotalLabel = document.getElementById('walkinGrandTotalLabel');
-  const expensesTotalLabel = document.getElementById('walkinExpensesTotalLabel');
-  const paymentOption = document.getElementById('walkinPaymentOption');
+  const paymentCollected = document.getElementById('walkinPaymentCollected');
   const paymentInput = document.getElementById('walkinPaymentAmount');
-  const remainingInput = document.getElementById('walkinRemainingBalance');
   const paymentMethod = document.getElementById('walkinPaymentMethod');
   const adultsInput = document.getElementById('walkinAdults');
   const childrenInput = document.getElementById('walkinChildren');
@@ -7314,7 +7349,6 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
   const stepLines = Array.from(form.querySelectorAll('.walkin-step-line'));
   let currentStep = 1;
   let walkinDatePicker = null;
-  let paymentManuallyEdited = false;
   let touristSearchTimer = null;
   let touristSearchRequest = 0;
   const servicePriceRows = <?= json_encode($walkInServicePrices, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
@@ -7335,17 +7369,18 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
 
   const normalizeTourType = value => {
     const normalized = String(value || '').toLowerCase().trim();
-    return ['overnight', 'night', 'night tour', 'multi-day'].includes(normalized)
+    return ['overnight', 'overnight-tour', 'overnight tour', 'night', 'night tour', 'multi-day', 'multi day'].includes(normalized)
       ? 'overnight'
       : 'same-day';
   };
 
   const configureDatePicker = (clearSelection = true) => {
+    dateDisplay.disabled = !tourType.value;
+    dateDisplay.placeholder = !tourType.value ? 'Choose tour type first' : (tourType.value === 'overnight' ? 'Select start and end dates' : 'Select tour date');
     if (!walkinDatePicker) return;
     const overnight = tourType.value === 'overnight';
     walkinDatePicker.set('mode', overnight ? 'range' : 'single');
     walkinDatePicker.set('showMonths', window.innerWidth >= 760 ? 2 : 1);
-    dateDisplay.placeholder = overnight ? 'Select start and end dates' : 'Select tour date';
     if (clearSelection) {
       walkinDatePicker.clear(false);
       bookingDateInput.value = '';
@@ -7373,6 +7408,8 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
         document.getElementById('walkinTourRange').value = overnight && bookingEndDateInput.value
           ? `${bookingDateInput.value} to ${bookingEndDateInput.value}`
           : bookingDateInput.value;
+        refreshAvailability();
+        syncSuggestedPrice();
       }
     });
   }
@@ -7502,7 +7539,7 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
       ['tourguide', document.getElementById('walkinGuideField'), guideSelect]
     ];
     resources.forEach(([name, field, select]) => {
-      const active = type === name;
+      const active = type === name || (name === 'boat' && type === 'tourguide' && includeBoats.value === '1');
       field.hidden = !active;
       select.disabled = !active;
       select.required = active;
@@ -7513,56 +7550,51 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
     locationSelect.disabled = !needsLocation;
     locationSelect.required = needsLocation;
     if (!needsLocation) locationSelect.value = '';
+    document.getElementById('walkinSecondLocationField').hidden = !needsLocation;
+    secondLocation.disabled = !needsLocation;
+    if (!needsLocation) secondLocation.value = '';
+    document.getElementById('walkinIncludeBoatsField').hidden = type !== 'tourguide';
+    includeBoats.disabled = type !== 'tourguide';
+    const usesBoats = type === 'boat' || (type === 'tourguide' && includeBoats.value === '1');
+    if (!usesBoats) additionalBoats.querySelectorAll('input').forEach(input => { input.checked = false; input.disabled = true; });
+    filterPackages();
+    renderAdditionalBoats();
     syncSuggestedPrice();
     syncCapacity();
   };
 
   const syncSuggestedPrice = () => {
-    const type = typeSelect.value;
-    let price = 0;
-    if (type === 'package') {
-      const option = packageSelect.options[packageSelect.selectedIndex];
-      const guests = Math.max(1, Number(adultsInput.value || 0) + Number(childrenInput.value || 0));
-      price = Number(option?.dataset.price || 0) * guests;
-      if (option?.dataset.tourType) {
-        const packageTourType = normalizeTourType(option.dataset.tourType);
-        if (tourType.value !== packageTourType) {
-          tourType.value = packageTourType;
-          configureDatePicker(true);
-        }
-      }
-    } else if (servicePrices[type]) {
-      price = tourType.value === 'overnight'
-        ? servicePrices[type].overnight
-        : servicePrices[type].day;
-    }
-    serviceAmountInput.value = price.toFixed(2);
+    if (walkinReservationLocked) return;
+    quoteValid = false;
+    paymentCollected.checked = false;
     syncBalance();
+    quoteRequest++;
+    clearTimeout(quoteTimer);
+    quoteStatus.textContent = 'Updating payment summary…';
+    quoteTimer = setTimeout(refreshQuote, 200);
   };
 
-  const syncBalance = (applySuggestedPayment = false) => {
+  const syncBalance = () => {
     const serviceAmount = Math.max(0, Number(serviceAmountInput.value || 0));
     const expensesTotal = expenseInputs.reduce((sum, input) => sum + Math.max(0, Number(input.value || 0)), 0);
     const total = serviceAmount + expensesTotal;
     totalInput.value = total.toFixed(2);
     grandTotalLabel.textContent = `₱${total.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    expensesTotalLabel.textContent = `Expenses: ₱${expensesTotal.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    if (applySuggestedPayment || !paymentManuallyEdited) {
-      const percentage = paymentOption.value === 'full' ? 1 : 0.2;
-      paymentInput.value = (total * percentage).toFixed(2);
-    }
-    const payment = Math.max(0, Number(paymentInput.value || 0));
-    remainingInput.value = Math.max(0, total - payment).toFixed(2);
-    paymentInput.max = total.toFixed(2);
-    paymentMethod.required = payment > 0;
-    if (payment <= 0) paymentMethod.value = '';
+    const qr = paymentMethod.value === 'qr_code';
+    document.getElementById('walkinQrAdminDeviceSection').hidden = !qr;
+    document.getElementById('walkinCashCollectionField').hidden = qr;
+    paymentCollected.disabled = qr || total <= 0 || !quoteValid;
+    if (paymentCollected.disabled) paymentCollected.checked = false;
+    const collected = paymentCollected.checked;
+    paymentInput.value = (collected ? total : 0).toFixed(2);
+    paymentMethod.required = true;
+    paymentMethod.disabled = false;
+    document.getElementById('walkinCollectionTitle').textContent = collected ? 'Full payment collected' : 'Full amount to collect';
+    document.getElementById('walkinCollectionNote').textContent = qr ? 'Full payment will be collected through PayMongo QR.' : (collected ? 'This full cash payment will be recorded when the booking is created.' : 'Includes all service charges and fees. No payment has been recorded.');
+    document.getElementById('walkinPaymentStatus').textContent = qr ? 'The QR will be sent to the registered payment phone after the booking is created. Payment stays pending until PayMongo verifies it.' : (collected ? 'Full cash payment confirmed by staff.' : 'Unpaid — the full amount is still to be collected.');
   };
 
   const syncPaxButtons = () => {
-    const boatOption = boatSelect.options[boatSelect.selectedIndex];
-    const boatCapacity = typeSelect.value === 'boat'
-      ? Number(boatOption?.dataset.capacity || 0)
-      : 0;
     const totalGuests = Number(adultsInput.value || 0) + Number(childrenInput.value || 0);
 
     paxButtons.forEach(button => {
@@ -7574,14 +7606,17 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
       const decreasing = button.dataset.paxAction === 'decrease';
       button.disabled = decreasing
         ? value <= minimum
-        : value >= maximum || (boatCapacity > 0 && totalGuests >= boatCapacity);
+        : value >= maximum || totalGuests >= 100;
     });
   };
 
   const syncCapacity = () => {
+    if (walkinReservationLocked) return;
+    syncAdditionalBoatVisibility();
     const option = boatSelect.options[boatSelect.selectedIndex];
-    const capacity = Number(option?.dataset.capacity || 0);
-    if (typeSelect.value !== 'boat' || !capacity) {
+    const extraCapacity = Array.from(additionalBoats.querySelectorAll('input:checked:not(:disabled)')).reduce((sum, input) => sum + Number(input.dataset.capacity || 0), 0);
+    const capacity = Number(option?.dataset.capacity || 0) + extraCapacity;
+    if (boatSelect.disabled) {
       capacityNote.hidden = true;
       capacityNote.classList.remove('is-error');
       boatSelect.setCustomValidity('');
@@ -7593,15 +7628,174 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
     capacityNote.hidden = false;
     capacityNote.classList.toggle('is-error', exceeds);
     capacityNote.textContent = exceeds
-      ? `Guest count exceeds this boat's ${capacity}-person capacity.`
-      : `${guests} of ${capacity} boat seats will be used.`;
-    boatSelect.setCustomValidity(exceeds ? 'Select a larger boat or reduce the guest count.' : '');
+      ? `Additional boat required: ${guests} guests, but only ${capacity} seats selected. Choose an available boat directly below for the remaining ${guests - capacity} guest(s).`
+      : `${guests} guests · ${capacity} combined boat seats. All guests are covered.`;
+    boatSelect.setCustomValidity(exceeds ? 'Choose another available boat to provide enough seats for all guests.' : '');
     syncPaxButtons();
   };
 
   const selectedText = select => {
     const option = select?.options[select.selectedIndex];
     return option && option.value ? option.textContent.trim() : 'Not selected';
+  };
+
+  const usesBoatTransport = () => typeSelect.value === 'boat' || (typeSelect.value === 'tourguide' && includeBoats.value === '1');
+  const syncAdditionalBoatVisibility = () => {
+    const primaryCapacity = Number(boatSelect.options[boatSelect.selectedIndex]?.dataset.capacity || 0);
+    const guests = Number(adultsInput.value || 0) + Number(childrenInput.value || 0);
+    const needsExtraBoats = usesBoatTransport() && primaryCapacity > 0 && guests > primaryCapacity;
+    document.getElementById('walkinAdditionalBoatsField').hidden = !needsExtraBoats;
+    let selectionCleared = false;
+    const inputs = Array.from(additionalBoats.querySelectorAll('input'));
+    inputs.forEach(input => {
+      if (input.checked && (!needsExtraBoats || !boatCatalog.find(boat => String(boat.boat_id) === input.value)?.available)) {
+        input.checked = false;
+        selectionCleared = true;
+      }
+    });
+    let selectedCapacity = primaryCapacity + inputs.filter(input => input.checked).reduce((sum, input) => sum + Number(input.dataset.capacity || 0), 0);
+    // Keep only boats needed to cover the group, including after a pax decrease
+    // or switching to a larger primary boat.
+    [...inputs].reverse().forEach(input => {
+      const capacity = Number(input.dataset.capacity || 0);
+      if (input.checked && selectedCapacity - capacity >= guests) {
+        input.checked = false;
+        selectedCapacity -= capacity;
+        selectionCleared = true;
+      }
+    });
+    const covered = selectedCapacity >= guests;
+    inputs.forEach(input => {
+      input.disabled = !needsExtraBoats || !boatCatalog.find(boat => String(boat.boat_id) === input.value)?.available || (covered && !input.checked);
+      input.closest('label')?.classList.toggle('is-unavailable', input.disabled);
+    });
+    const selectedCount = inputs.filter(input => input.checked).length;
+    const help = document.getElementById('walkinAdditionalBoatsField').querySelector('p');
+    help.textContent = covered && needsExtraBoats
+      ? `${selectedCount} additional boat${selectedCount === 1 ? '' : 's'} selected. All guests are covered. Uncheck a selected boat to choose a different one.`
+      : `Choose additional boats to cover ${Math.max(0, guests - selectedCapacity)} more guest(s). Other choices will be disabled once all guests have seats.`;
+    if (selectionCleared) syncSuggestedPrice();
+  };
+  const filterPackages = () => {
+    Array.from(packageSelect.options).forEach(option => {
+      if (!option.value) return;
+      option.disabled = !tourType.value || normalizeTourType(option.dataset.tourType) !== tourType.value;
+      option.hidden = option.disabled;
+      if (option.selected && option.disabled) packageSelect.value = '';
+    });
+  };
+  const renderAdditionalBoats = () => {
+    const selected = new Set(Array.from(additionalBoats.querySelectorAll('input:checked')).map(input => input.value));
+    additionalBoats.replaceChildren();
+    boatCatalog.forEach(boat => {
+      if (String(boat.boat_id) === boatSelect.value) return;
+      const label = document.createElement('label');
+      label.className = 'walkin-boat-choice';
+      const input = document.createElement('input');
+      input.type = 'checkbox';
+      input.name = 'additional_boat_ids[]';
+      input.value = String(boat.boat_id);
+      input.dataset.capacity = String(boat.total_pax);
+      input.disabled = !usesBoatTransport() || !boat.available;
+      input.checked = selected.has(input.value) && !input.disabled;
+      const copy = document.createElement('span');
+      const title = document.createElement('strong');
+      title.textContent = boat.name;
+      const note = document.createElement('small');
+      note.textContent = `${boat.total_pax} seats · ${boat.available ? 'Available' : (bookingDateInput.value ? 'Not available for these dates' : 'Choose tour dates first')}`;
+      label.classList.toggle('is-unavailable', input.disabled);
+      copy.append(title, note);
+      label.append(input, copy);
+      additionalBoats.appendChild(label);
+      input.addEventListener('change', () => { syncCapacity(); syncSuggestedPrice(); });
+    });
+    syncAdditionalBoatVisibility();
+  };
+  const renderChildAges = () => {
+    const container = document.getElementById('walkinChildAges');
+    const existing = Array.from(container.querySelectorAll('input')).map(input => input.value);
+    container.replaceChildren();
+    for (let index = 0; index < Number(childrenInput.value || 0); index++) {
+      const label = document.createElement('label');
+      label.className = 'walkin-field';
+      const text = document.createElement('span');
+      text.textContent = `Child ${index + 1} age *`;
+      const input = document.createElement('input');
+      input.type = 'number'; input.name = 'child_ages[]'; input.min = '0'; input.max = '17'; input.required = true;
+      input.value = existing[index] ?? '';
+      input.addEventListener('input', syncSuggestedPrice);
+      label.append(text, input);
+      container.appendChild(label);
+    }
+  };
+  const refreshAvailability = async () => {
+    const request = ++availabilityRequest;
+    const status = document.getElementById('walkinAvailabilityStatus');
+    boatCatalog.forEach(boat => { boat.available = false; });
+    const completeDates = bookingDateInput.value && tourType.value && (tourType.value !== 'overnight' || bookingEndDateInput.value);
+    additionalBoats.querySelectorAll('input').forEach(input => { input.disabled = true; });
+    [boatSelect, guideSelect].forEach(select => Array.from(select.options).forEach(option => { if (option.value) option.disabled = true; }));
+    if (!completeDates) { renderAdditionalBoats(); status.textContent = 'Choose tour type and complete tour dates to check availability.'; return; }
+    status.textContent = 'Checking boat and guide availability…';
+    try {
+      const params = new URLSearchParams({ action: 'walkinAvailability', start: bookingDateInput.value, end: bookingEndDateInput.value || bookingDateInput.value });
+      const response = await fetch(`adbookings.php?${params}`, { cache: 'no-store', headers: { Accept: 'application/json' } });
+      const result = await response.json();
+      if (request !== availabilityRequest || walkinReservationLocked) return;
+      if (!response.ok || !result.success) throw new Error(result.message || 'Availability could not be checked.');
+      boatCatalog = result.boats;
+      [[boatSelect, result.boats, 'boat_id', 'name'], [guideSelect, result.guides, 'guide_id', 'fullname']].forEach(([select, rows, key, name]) => {
+        Array.from(select.options).forEach(option => {
+          if (!option.value) return;
+          const resource = rows.find(row => String(row[key]) === option.value);
+          option.disabled = !resource?.available;
+          option.textContent = resource ? `${resource[name]}${key === 'boat_id' ? ` — ${resource.total_pax} seats` : ''} · ${resource.available ? 'Available' : 'Not available for these dates'}` : 'No longer available';
+          if (option.selected && option.disabled) select.value = '';
+        });
+      });
+      renderAdditionalBoats();
+      syncCapacity();
+      status.textContent = 'Availability checked for every date of this tour. Unavailable boats remain listed.';
+      syncSuggestedPrice();
+    } catch (error) {
+      if (request !== availabilityRequest || walkinReservationLocked) return;
+      status.textContent = error.message;
+      quoteValid = false;
+    }
+  };
+  const refreshQuote = async () => {
+    clearTimeout(quoteTimer);
+    const request = ++quoteRequest;
+    quoteValid = false;
+    quoteStatus.textContent = 'Calculating current prices and fees…';
+    try {
+      const body = new FormData(form);
+      body.set('action', 'quote_walkin_booking');
+      // Optional empty destinations must not be sent as actual locations.
+      const locations = body.getAll('locations[]').filter(Boolean);
+      body.delete('locations[]');
+      locations.forEach(location => body.append('locations[]', location));
+      const response = await fetch('adbookings.php', { method: 'POST', body, headers: { Accept: 'application/json' } });
+      const result = await response.json();
+      if (request !== quoteRequest || walkinReservationLocked) return;
+      if (!response.ok || !result.success) throw new Error(result.message || 'The payment summary could not be calculated.');
+      const quote = result.quote;
+      if (Math.abs(Number(totalInput.value || 0) - Number(quote.total)) > 0.009) paymentCollected.checked = false;
+      serviceAmountInput.value = Number(quote.service_amount).toFixed(2);
+      [['expense_environmental', 'environmental'], ['expense_entrance', 'entrance'], ['expense_docking', 'docking']].forEach(([name, key]) => { form.elements[name].value = Number(quote[key]).toFixed(2); });
+      const money = value => Number(value).toLocaleString('en-PH', { style: 'currency', currency: 'PHP' });
+      document.getElementById('walkinPriceBreakdown').innerHTML = [...quote.service_rows, ...quote.fee_rows].map((row, index) => `<div class="${index >= quote.service_rows.length ? 'is-fee' : ''}"><span>${escapeHtml(row.description)}${row.quantity != null ? `<small>${row.quantity} × ${money(row.unit_price)}</small>` : ''}${row.detail ? `<small>${escapeHtml(row.detail)}</small>` : ''}</span><strong>${money(row.amount)}</strong></div>`).join('');
+      quoteStatus.textContent = 'Current prices and fees are applied. Availability and charges are checked again when you confirm.';
+      quoteValid = true;
+      syncBalance();
+    } catch (error) {
+      if (request !== quoteRequest || walkinReservationLocked) return;
+      quoteStatus.textContent = error.message;
+      document.getElementById('walkinPriceBreakdown').replaceChildren();
+      serviceAmountInput.value = '0.00';
+      ['expense_environmental', 'expense_entrance', 'expense_docking'].forEach(name => { form.elements[name].value = '0.00'; });
+      syncBalance();
+    }
   };
 
   const escapeHtml = value => String(value).replace(/[&<>"']/g, character => ({
@@ -7630,11 +7824,14 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
     const bookingType = typeSelect.value;
     const formattedDate = dateDisplay.value || 'Not selected';
     const totalGuests = Number(adultsInput.value || 0) + Number(childrenInput.value || 0);
-    const destination = bookingType === 'package' ? 'Included in package' : selectedText(locationSelect);
+    const destination = bookingType === 'package' ? 'Included in package' : [locationSelect.value, secondLocation.value].filter(Boolean).join(', ');
+    const selectedBoatIds = new Set([boatSelect.value, ...Array.from(additionalBoats.querySelectorAll('input:checked:not(:disabled)')).map(input => input.value)]);
+    const boatNames = usesBoatTransport() ? boatCatalog.filter(boat => selectedBoatIds.has(String(boat.boat_id))).map(boat => boat.name).join(', ') : '';
+    const resourceDescription = bookingType === 'boat' ? boatNames : `${selectedText(resources[bookingType])}${boatNames ? ' · Boats: ' + boatNames : ''}`;
 
     const items = [
       ['Guest', guest],
-      ['Service', `${typeLabels[bookingType] || 'Service'} · ${selectedText(resources[bookingType])}`],
+      ['Service', `${typeLabels[bookingType] || 'Service'} · ${resourceDescription || 'Not selected'}`],
       ['Schedule', `${formattedDate} · ${tourType.value === 'overnight' ? 'Overnight' : 'Day tour'}`],
       ['Trip details', `${destination} · ${totalGuests} guest${totalGuests === 1 ? '' : 's'}`]
     ];
@@ -7706,13 +7903,35 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
       : 'Review Booking<svg viewBox="0 0 24 24"><path d="m9 18 6-6-6-6"/></svg>';
     stepStatus.textContent = `Step ${currentStep} of 3 · Required fields are marked with an asterisk.`;
     if (currentStep === 3) renderReview();
+    if (currentStep === 3 && paymentMethod.value === 'qr_code') startPaymentDevicePolling();
+    else stopPaymentDevicePolling();
     modalBody.scrollTo({ top: 0, behavior: 'smooth' });
     const firstField = stepPanels[currentStep - 1]?.querySelector('input:not([disabled]), select:not([disabled])');
     setTimeout(() => firstField?.focus({ preventScroll: true }), 80);
   };
 
+  const walkinPaymentController = window.AdminWalkinPayment.create({
+    form, button: submitButton,
+    readJson: readAdminPaymentJson,
+    requirePhone: requireRegisteredAdminPaymentPhone,
+    fetchPhone: fetchRegisteredAdminPhone,
+    requestQr: (id, amount) => requestAdminPaymentQr(id, amount, true),
+    cancelQr: cancelAdminPayMongoPayment,
+    onCreated: () => {
+      walkinReservationLocked = true;
+      quoteValid = true;
+      form.querySelectorAll('input:not([type="hidden"]), select, textarea, [data-pax-action]').forEach(field => {
+        if (!['walkinPaymentMethod', 'walkinPaymentCollected'].includes(field.id)) field.disabled = true;
+      });
+      previousButton.disabled = true;
+      nextButton.disabled = true;
+      quoteStatus.textContent = 'Complete payment below to confirm and accept this booking.';
+    },
+    onSuccess: () => { closeModal(); window.location.assign('adbookings.php?tab=accepted'); }
+  });
+
   const openModal = () => {
-    showStep(1);
+    showStep(walkinPaymentController.hasBooking() ? 3 : 1);
     modal.classList.add('is-open');
     modal.setAttribute('aria-hidden', 'false');
     document.body.classList.add('walkin-modal-open');
@@ -7723,6 +7942,8 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
   };
 
   const closeModal = () => {
+    if (walkinPaymentController.isBusy()) return;
+    stopPaymentDevicePolling();
     modal.classList.remove('is-open');
     modal.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('walkin-modal-open');
@@ -7751,26 +7972,38 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
   document.getElementById('walkinChangeTourist').addEventListener('click', clearSelectedTourist);
   typeSelect.addEventListener('change', () => {
     configureDatePicker(true);
+    refreshAvailability();
     syncResources();
   });
   packageSelect.addEventListener('change', syncSuggestedPrice);
-  boatSelect.addEventListener('change', syncCapacity);
+  boatSelect.addEventListener('change', () => { renderAdditionalBoats(); syncCapacity(); syncSuggestedPrice(); });
+  guideSelect.addEventListener('change', syncSuggestedPrice);
+  includeBoats.addEventListener('change', syncResources);
+  [locationSelect, secondLocation, document.getElementById('walkinEcoCategory')].forEach(input => input.addEventListener('change', () => {
+    secondLocation.setCustomValidity(secondLocation.value && secondLocation.value === locationSelect.value ? 'Choose a different second destination.' : '');
+    syncSuggestedPrice();
+  }));
   tourType.addEventListener('change', () => {
     configureDatePicker(true);
+    filterPackages();
+    refreshAvailability();
     syncSuggestedPrice();
   });
-  [serviceAmountInput, ...expenseInputs].forEach(input => input.addEventListener('input', () => syncBalance(false)));
-  paymentOption.addEventListener('change', () => {
-    paymentManuallyEdited = false;
-    syncBalance(true);
+  [serviceAmountInput, ...expenseInputs].forEach(input => {
+    if (input.name !== 'expense_other') input.readOnly = true;
+    else input.addEventListener('input', syncSuggestedPrice);
   });
-  paymentInput.addEventListener('input', () => {
-    paymentManuallyEdited = true;
-    syncBalance(false);
+  paymentCollected.addEventListener('change', syncBalance);
+  paymentMethod.addEventListener('change', () => {
+    paymentCollected.checked = false;
+    syncBalance();
+    if (paymentMethod.value === 'qr_code') startPaymentDevicePolling();
+    else stopPaymentDevicePolling();
   });
   [adultsInput, childrenInput].forEach(input => input.addEventListener('input', () => {
     syncCapacity();
-    if (typeSelect.value === 'package') syncSuggestedPrice();
+    renderChildAges();
+    syncSuggestedPrice();
   }));
   paxButtons.forEach(button => {
     button.addEventListener('click', () => {
@@ -7783,12 +8016,19 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
       input.dispatchEvent(new Event('input', { bubbles: true }));
     });
   });
-  nextButton.addEventListener('click', () => {
+  nextButton.addEventListener('click', async () => {
     if (!validateStep(currentStep)) return;
+    if (currentStep === 2) {
+      nextButton.disabled = true;
+      try { await refreshQuote(); }
+      finally { nextButton.disabled = false; }
+      if (!quoteValid) { Swal.fire('Review Booking Details', quoteStatus.textContent, 'warning'); return; }
+    }
     showStep(currentStep + 1);
   });
   previousButton.addEventListener('click', () => showStep(currentStep - 1));
-  form.addEventListener('submit', event => {
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
     syncBalance();
     syncCapacity();
     if (currentStep < 3) {
@@ -7796,23 +8036,32 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
       if (validateStep(currentStep)) showStep(currentStep + 1);
       return;
     }
+    if (!quoteValid) {
+      event.preventDefault();
+      refreshQuote();
+      Swal.fire('Updating Payment Summary', 'Review the current charges, then confirm the booking again.', 'info');
+      return;
+    }
     if (!form.checkValidity()) {
       event.preventDefault();
       form.reportValidity();
       return;
     }
-    submitButton.disabled = true;
-    submitButton.lastChild.textContent = ' Creating…';
+    await walkinPaymentController.pay();
   });
 
   syncGuestMode();
   syncResources();
   configureDatePicker(false);
-  syncBalance(true);
+  refreshAvailability();
+  syncBalance();
   syncPaxButtons();
   showStep(1);
 })();
+
 </script>
+<script src="js/admin-booking-addons.js?v=1"></script>
+<script src="js/booking-payment-summary.js?v=3"></script>
 </body>
 </html>
 

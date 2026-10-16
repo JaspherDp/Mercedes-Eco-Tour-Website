@@ -1,0 +1,1 @@
+pdfjs-dist 6.4.299 (Mozilla PDF.js), legacy browser build. Source: https://registry.npmjs.org/pdfjs-dist/-/pdfjs-dist-6.4.299.tgz

@@ -40,6 +40,6 @@ $adminName = trim((string)($hotelAdmin['full_name'] ?: $hotelAdmin['username'] ?
     </section>
     <footer class="phone-foot">Registration enables QR notifications only. Payments are still verified by PayMongo.</footer>
   </main>
-  <script type="module" src="js/admin-push-notifications.js?v=5"></script>
+  <script type="module" src="js/admin-push-notifications.js?v=8"></script>
 </body>
 </html>

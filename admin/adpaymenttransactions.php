@@ -819,7 +819,8 @@ if ($dateTo !== '') {
 $whereSql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
 
 $transactionSelect = "
-    SELECT pt.*, t.full_name, t.email,
+    SELECT pt.*, COALESCE(t.full_name,b.walkin_guest_name,'Walk-in - No Account') AS full_name,
+           COALESCE(t.email,b.walkin_guest_email) AS email,
            COALESCE(NULLIF(b.package_name, ''), NULLIF(b.location, ''), NULLIF(b.preferred_resource, ''), 'Tour booking payment') AS service_name,
            COALESCE(GREATEST(b.grand_total, b.payment_amount + b.remaining_balance), 0) AS booking_total,
            COALESCE(b.payment_amount, 0) AS booking_paid,
@@ -1110,8 +1111,8 @@ $balanceRecords = $pdo->query("
            LOWER(b.booking_type) AS booking_domain,
            b.booking_reference,
            b.is_complete,
-           t.full_name,
-           t.email,
+           COALESCE(t.full_name,b.walkin_guest_name,'Walk-in - No Account') AS full_name,
+           COALESCE(t.email,b.walkin_guest_email) AS email,
            t.profile_picture,
            COALESCE(NULLIF(b.package_name,''), NULLIF(b.location,''), NULLIF(b.preferred_resource,''), 'Tour booking') AS service_name,
            GREATEST(b.grand_total, b.payment_amount + b.remaining_balance) AS total_amount,

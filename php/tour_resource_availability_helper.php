@@ -99,6 +99,28 @@ function tourResourceActiveRanges(PDO $pdo, string $type, ?int $resourceId = nul
         // Checkout drafts may not exist on older installations; confirmed bookings still apply.
     }
 
+    // Additional boats reserve the same inclusive dates as the primary boat.
+    // Older installations have no allocations table until the new form is used.
+    if ($meta['domain'] === 'boat') {
+        try {
+            $extra = $pdo->prepare("SELECT rb.boat_id AS resource_id, b.booking_date, b.tour_type, b.tour_range
+                FROM booking_resource_boats rb JOIN bookings b ON b.booking_id=rb.booking_id
+                WHERE LOWER(COALESCE(b.status,'')) IN ('pending','accepted')
+                  AND LOWER(COALESCE(b.is_complete,'uncomplete'))='uncomplete'
+                  AND NOT EXISTS (SELECT 1 FROM booking_cancellation_requests cr
+                    WHERE cr.booking_domain='tour' AND cr.booking_id=b.booking_id AND cr.request_status='decision_required')"
+                . ($resourceId !== null ? ' AND rb.boat_id=?' : ''));
+            $extra->execute($resourceId !== null ? [$resourceId] : []);
+            foreach ($extra->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $start = tourResourceDate((string)$row['booking_date']);
+                $end = tourResourceEndDate($row);
+                if ($start !== '' && $end !== '') $ranges[] = ['resource_id' => (int)$row['resource_id'], 'start' => $start, 'end' => $end];
+            }
+        } catch (PDOException $error) {
+            $missingTable = (string)$error->getCode() === '42S02' || str_contains($error->getMessage(), 'no such table');
+            if (!$missingTable) throw $error;
+        }
+    }
     return $ranges;
 }
 

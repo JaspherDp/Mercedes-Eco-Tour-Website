@@ -288,4 +288,4 @@ foreach ($pages as $pageIndex => $pagePassengers) {
 }
 
 $filename = 'itour_passenger_information_' . preg_replace('/[^A-Za-z0-9_-]/', '_', $reference) . '.pdf';
-$pdf->Output($filename, 'I');
+$pdf->Output($filename, ($_GET['download'] ?? '') === '1' ? 'D' : 'I');

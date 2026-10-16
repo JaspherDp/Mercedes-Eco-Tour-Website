@@ -6,6 +6,7 @@ AppSessionStart();
 }
 require_once __DIR__ . '/../php/db_connection.php';
 require_once __DIR__ . '/../php/admin_auth_helper.php';
+require_once __DIR__ . '/../php/walkin_booking_helper.php';
 
 AdminRequireLogin();
 $adminNotificationCsrf = AppCsrfToken('admin', 'notifications');
@@ -13,7 +14,7 @@ $adminNotificationCsrf = AppCsrfToken('admin', 'notifications');
 // === AJAX endpoint for unviewed notifications ===
 if (isset($_GET['get_unviewed'])) {
     header('Content-Type: application/json'); // make sure it's JSON
-    $booking_count = $pdo->query("SELECT COUNT(*) FROM bookings WHERE COALESCE(is_notif_viewed, 0)=0")->fetchColumn();
+    $booking_count = $pdo->query("SELECT COUNT(*) FROM bookings b WHERE COALESCE(b.is_notif_viewed, 0)=0 AND " . WalkinBookingVisibleSql('b'))->fetchColumn();
     $inquiry_count = $pdo->query("SELECT COUNT(*) FROM inquiries WHERE is_notif_viewed=0")->fetchColumn();
     echo json_encode(['count' => (int)$booking_count + (int)$inquiry_count]);
     exit; // stop the rest of the page from rendering
@@ -147,6 +148,7 @@ if (isset($_GET['get_pending_count'])) {
             SELECT COUNT(*)
             FROM bookings b
             WHERE b.status='pending' AND b.is_complete='uncomplete'
+              AND " . WalkinBookingVisibleSql('b') . "
               AND NOT EXISTS (
                 SELECT 1
                 FROM booking_cancellation_requests cr
@@ -160,7 +162,7 @@ if (isset($_GET['get_pending_count'])) {
             WHERE request_status IN ('pending','approved')
         ")->fetchColumn();
     } catch (Throwable $error) {
-        $pending_count = $pdo->query("SELECT COUNT(*) FROM bookings WHERE status='pending' AND is_complete='uncomplete'")->fetchColumn();
+        $pending_count = $pdo->query("SELECT COUNT(*) FROM bookings b WHERE status='pending' AND is_complete='uncomplete' AND " . WalkinBookingVisibleSql('b'))->fetchColumn();
         $cancellation_count = 0;
     }
     echo json_encode(['count' => (int)$pending_count + (int)$cancellation_count]);

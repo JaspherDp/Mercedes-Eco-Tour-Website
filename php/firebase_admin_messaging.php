@@ -346,7 +346,7 @@ function sendPaymentQrNotificationForDeviceTable(
     }
 
     $deviceQuery = $pdo->prepare(
-        "SELECT device_id, fcm_token
+        "SELECT device_id, device_name, fcm_token
          FROM {$deviceTable}
          WHERE {$ownerColumn} = ? AND revoked_at IS NULL
          ORDER BY COALESCE(last_used_at, created_at) DESC, device_id DESC
@@ -423,8 +423,10 @@ function sendPaymentQrNotificationForDeviceTable(
         $reference = trim($bookingReference) !== '' ? trim($bookingReference) : 'the booking';
         $notificationTitle = 'Payment QR Ready';
         $notificationBody = 'Tap to show the PayMongo QR for Booking ' . $reference . ' (PHP ' . number_format($amountMinor / 100, 2) . ').';
-        $notificationTag = 'itour-admin-payment-' . $transactionId;
-        $notificationIcon = PaymentHelper::publicHttpsUrl($appUrl, 'img/newlogo.png');
+        // A retry must create a fresh notification. Reusing the transaction
+        // tag can silently replace the earlier notification on the phone.
+        $notificationTag = 'itour-admin-payment-' . $transactionId . '-' . bin2hex(random_bytes(6));
+        // Urgent QR alerts must not wait for website image downloads before display.
         $payload = [
             'message' => [
                 'token' => (string)$device['fcm_token'],
@@ -449,8 +451,6 @@ function sendPaymentQrNotificationForDeviceTable(
                     'notification' => [
                         'title' => $notificationTitle,
                         'body' => $notificationBody,
-                        'icon' => $notificationIcon,
-                        'badge' => $notificationIcon,
                         'tag' => $notificationTag,
                         'data' => ['url' => $handoffUrl, 'link' => $handoffUrl],
                     ],
@@ -534,7 +534,9 @@ function sendPaymentQrNotificationForDeviceTable(
 
         $touch = $pdo->prepare("UPDATE {$deviceTable} SET last_used_at = NOW() WHERE device_id = ? AND revoked_at IS NULL");
         $touch->execute([(int)$device['device_id']]);
-        return ['sent' => true, 'registered' => true, 'message' => 'The payment QR notification was sent to the registered phone.'];
+        return ['sent' => true, 'registered' => true, 'device_name' => (string)$device['device_name'],
+            'accepted_by_firebase' => true, 'delivery_confirmed' => false,
+            'message' => 'The QR notification was submitted for the registered phone.'];
     } catch (Throwable $exception) {
         error_log($ownerLabel . ' payment QR notification failed: ' . $exception->getMessage());
         $reason = $exception->getMessage();
