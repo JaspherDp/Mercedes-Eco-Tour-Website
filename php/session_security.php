@@ -173,6 +173,10 @@ function AppMarkRoleAuthenticated(string $role, ?PDO $pdo = null): void
     $now = time();
     if ($role === 'tourist') {
         $_SESSION['auth_last_activity'][$role] = $now;
+        $_SESSION['auth_login_time'][$role] = $now;
+        $_SESSION['auth_identity'][$role] = AppRoleAccountId($role);
+        $_SESSION['auth_generation'][$role] = bin2hex(random_bytes(16));
+        unset($_SESSION['csrf_tourist_session_activity']);
         $_SESSION['last_activity'] = $now;
         return;
     }
@@ -187,16 +191,18 @@ function AppMarkRoleAuthenticated(string $role, ?PDO $pdo = null): void
 function AppRoleSessionIsActive(string $role, PDO $pdo, ?bool $touch = null): bool
 {
     $now = time();
-    // Preserve the existing public tourist policy independently of portal fixes.
+    // Tourist expiry uses the same inactivity limit; only real activity renews it.
     if ($role === 'tourist') {
         $lastActivity = (int)($_SESSION['auth_last_activity'][$role] ?? $_SESSION['last_activity'] ?? 0);
-        if ($lastActivity > 0 && ($now - $lastActivity) > AppSessionTimeoutMinutes($pdo, $role) * 60) {
+        if ($lastActivity > 0 && ($now - $lastActivity) >= AppSessionTimeoutMinutes($pdo, $role) * 60) {
             AppClearRoleAuthentication($role);
-            session_regenerate_id(true);
+            // A delayed passive response must not overwrite a newer login cookie.
             return false;
         }
-        $_SESSION['auth_last_activity'][$role] = $now;
-        $_SESSION['last_activity'] = $now;
+        if ($touch ?? AppRequestCountsAsActivity()) {
+            $_SESSION['auth_last_activity'][$role] = $now;
+            $_SESSION['last_activity'] = $now;
+        }
         return true;
     }
     $accountId = AppRoleAccountId($role);

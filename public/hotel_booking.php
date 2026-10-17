@@ -3,9 +3,12 @@ chdir(__DIR__ . '/..');
 require_once 'php/session_security.php';
 AppSessionStart();
 require_once 'php/db_connection.php';
+require_once __DIR__ . '/../php/tourist_activity_helper.php';
+TouristPreparePageActivity($pdo);
 require_once 'php/tourist_auth_helper.php';
 require_once 'php/hotel_rooms_helper.php';
 require_once 'php/input_validation.php';
+require_once 'php/booking_addon_picker.php';
 HoEnsureHotelBookingsTable($pdo);
 
 $target = (string)($_SERVER['REQUEST_URI'] ?? 'hotel_booking.php');
@@ -350,6 +353,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/zod@3.23.8/lib/index.umd.min.js"></script>
   <script src="js/booking-validation-schemas.js?v=<?= (int)@filemtime(__DIR__ . '/../js/booking-validation-schemas.js') ?>"></script>
+  <link rel="stylesheet" href="styles/booking-addon-picker.css?v=2">
+  <?php TouristRenderActivityMonitor(); ?>
 </head>
 <body>
   <header class="booking-header">
@@ -473,6 +478,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
             </label>
           </div>
 
+          <?php BookingAddonPicker($pdo, 'hotel', (int)$hotelId); ?>
           <div class="field-row">
             <label>
               Special Request <span>(Optional)</span>
@@ -506,6 +512,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
 
           <div class="totals-panel">
             <h3>Payment summary</h3>
+            <div class="booking-addon-summary" data-addon-summary hidden></div>
+            <p><span>Optional add-ons</span><strong id="hotelCatalogAddonsTotal">₱0.00</strong></p>
             <p><span>Rate per night</span><strong id="unitPriceText">₱<?= number_format($unitPrice, 2) ?></strong></p>
             <p><span>Number of nights</span><strong id="nightsText"><?= (int)$nights ?></strong></p>
             <p class="grand-total"><span>Total amount</span><strong id="totalText">₱<?= number_format($computedTotal, 2) ?></strong></p>
@@ -585,6 +593,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
     </div>
   </main>
 
+  <script src="js/booking-addon-picker.js?v=2"></script>
   <script>
     (function () {
       const bookingForm = document.getElementById("hotelBookingForm");
@@ -1052,7 +1061,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
         const hasValidStay = Boolean(checkin.value && checkout.value && Number.isFinite(nights) && nights >= 1);
         if (!hasValidStay) nights = 0;
 
-        const total = unitPrice * nights;
+        const catalogAddonsTotal = window.BookingAddonPicker.total();
+        const total = unitPrice * nights + catalogAddonsTotal;
+        document.getElementById("hotelCatalogAddonsTotal").textContent = formatMoney(catalogAddonsTotal);
         const dueNow = selectedPaymentType === "partial" ? total * depositRate : total;
         const remaining = Math.max(total - dueNow, 0);
 
@@ -1094,6 +1105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
       });
       children.addEventListener("input", () => { renderChildAgeRows(); recalc(); });
       children.addEventListener("change", () => { renderChildAgeRows(); recalc(); });
+      document.addEventListener("booking-addons-change", recalc);
       paymentTypeInputs.forEach(el => el.addEventListener("change", recalc));
 
       const revalidateTouchedField = (fieldKey) => {
@@ -1154,6 +1166,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
           payload.booking_domain = "hotel";
           payload.bookingType = "hotel";
           payload.child_ages = getChildAges();
+          payload.catalog_addons = window.BookingAddonPicker.selections();
           payload.payment_type = getPaymentType();
           payload.returnUrl = `hotel_details.php?id=${encodeURIComponent(payload.hotel_id)}`;
           const response = await fetch("payments/create-booking-checkout.php", {

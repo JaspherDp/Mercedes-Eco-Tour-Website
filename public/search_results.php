@@ -3,6 +3,8 @@ chdir(__DIR__ . '/..');
 require_once __DIR__ . '/../php/session_security.php';
 AppSessionStart();
 require_once 'php/db_connection.php';
+require_once __DIR__ . '/../php/tourist_activity_helper.php';
+TouristPreparePageActivity($pdo);
 require_once 'php/unified_search_config.php';
 require_once 'php/tour_resource_availability_helper.php';
 
@@ -813,6 +815,7 @@ if ($resultType !== 'hotels' && $searchStartDate !== '') {
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
     <link rel="stylesheet" href="styles/unified_search.css?v=<?= (int) @filemtime(__DIR__ . '/../styles/unified_search.css') ?>" />
+  <?php TouristRenderActivityMonitor(); ?>
 </head>
 
 <body class="results-page results-type-<?= htmlspecialchars($resultType) ?>">

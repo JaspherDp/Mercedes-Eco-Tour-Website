@@ -43,13 +43,14 @@ function tourResourceEndDate(array $row): string
     return $start;
 }
 
-function tourResourceActiveRanges(PDO $pdo, string $type, ?int $resourceId = null): array
+function tourResourceActiveRanges(PDO $pdo, string $type, ?int $resourceId = null, ?int $excludeBookingId = null): array
 {
     ensureBookingCancellationRequestsTable($pdo);
     $meta = tourResourceMeta($type);
     if (!$meta) return [];
 
     $whereId = $resourceId !== null ? " AND {$meta['column']} = :resource_id" : " AND {$meta['column']} IS NOT NULL";
+    $excludeSql = $excludeBookingId !== null ? " AND booking_id <> " . (int)$excludeBookingId : "";
     $stmt = $pdo->prepare("SELECT {$meta['column']} AS resource_id, booking_date, tour_type, tour_range
         FROM bookings
         WHERE LOWER(COALESCE(status, '')) IN ('pending', 'accepted')
@@ -59,7 +60,7 @@ function tourResourceActiveRanges(PDO $pdo, string $type, ?int $resourceId = nul
               WHERE cr.booking_domain='tour' AND cr.booking_id=bookings.booking_id
                 AND cr.request_status='decision_required'
           )
-          {$whereId}");
+          {$whereId}{$excludeSql}");
     $params = $resourceId !== null ? ['resource_id' => $resourceId] : [];
     $stmt->execute($params);
     $ranges = [];
@@ -72,44 +73,44 @@ function tourResourceActiveRanges(PDO $pdo, string $type, ?int $resourceId = nul
     }
 
     try {
-        $draftSql = "SELECT JSON_UNQUOTE(JSON_EXTRACT(payload, '$.{$meta['column']}')) AS resource_id,
-                            JSON_UNQUOTE(JSON_EXTRACT(payload, '$.booking_date')) AS booking_date,
-                            JSON_UNQUOTE(JSON_EXTRACT(payload, '$.booking_end_date')) AS booking_end_date,
-                            JSON_UNQUOTE(JSON_EXTRACT(payload, '$.tour_type')) AS tour_type,
-                            JSON_UNQUOTE(JSON_EXTRACT(payload, '$.tour_range')) AS tour_range
-                     FROM booking_checkout_drafts
-                     WHERE booking_domain = :domain AND status = 'pending' AND expires_at > NOW()";
-        if ($resourceId !== null) {
-            $draftSql .= " AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.{$meta['column']}')) = :draft_resource_id";
-        }
-        $draftStmt = $pdo->prepare($draftSql);
-        $draftParams = ['domain' => $meta['domain']];
-        if ($resourceId !== null) $draftParams['draft_resource_id'] = (string)$resourceId;
-        $draftStmt->execute($draftParams);
-        foreach ($draftStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $id = (int)($row['resource_id'] ?? 0);
+        $draftStmt = $pdo->query("SELECT payload FROM booking_checkout_drafts
+            WHERE booking_domain IN ('boat','tourguide') AND status='pending' AND expires_at>NOW()");
+        foreach ($draftStmt->fetchAll(PDO::FETCH_ASSOC) as $draft) {
+            $row = json_decode((string)$draft['payload'], true);
+            if (!is_array($row)) continue;
+            $ids = [(int)($row[$meta['column']] ?? 0)];
+            // Historical extra preferences did not reserve resources.
+            if ((int)($row['resource_allocation_version'] ?? 0) >= 2) {
+                $key = $meta['domain'] === 'boat' ? 'additional_boat_ids' : 'additional_guide_ids';
+                $ids = array_merge($ids, $row[$key] ?? []);
+            }
             $start = tourResourceDate((string)($row['booking_date'] ?? ''));
-            $end = tourResourceDate((string)($row['booking_end_date'] ?? ''));
-            if ($end === '') $end = tourResourceEndDate($row);
-            if ($id > 0 && $start !== '' && $end !== '') {
-                $ranges[] = ['resource_id' => $id, 'start' => $start, 'end' => $end];
+            $end = tourResourceDate((string)($row['booking_end_date'] ?? '')) ?: tourResourceEndDate($row);
+            foreach (array_unique(array_map('intval', $ids)) as $id) {
+                if ($id > 0 && ($resourceId === null || $id === $resourceId) && $start !== '' && $end !== '') {
+                    $ranges[] = ['resource_id' => $id, 'start' => $start, 'end' => $end];
+                }
             }
         }
-    } catch (Throwable $ignored) {
-        // Checkout drafts may not exist on older installations; confirmed bookings still apply.
+    } catch (PDOException $error) {
+        $missingTable = (string)$error->getCode() === '42S02' || str_contains($error->getMessage(), 'no such table');
+        if (!$missingTable) throw $error;
     }
 
     // Additional boats reserve the same inclusive dates as the primary boat.
     // Older installations have no allocations table until the new form is used.
-    if ($meta['domain'] === 'boat') {
+    if (in_array($meta['domain'], ['boat','tourguide'], true)) {
+        $allocationTable = $meta['domain'] === 'boat' ? 'booking_resource_boats' : 'booking_resource_guides';
+        $allocationColumn = $meta['column'];
         try {
-            $extra = $pdo->prepare("SELECT rb.boat_id AS resource_id, b.booking_date, b.tour_type, b.tour_range
-                FROM booking_resource_boats rb JOIN bookings b ON b.booking_id=rb.booking_id
+            $extra = $pdo->prepare("SELECT rb.{$allocationColumn} AS resource_id, b.booking_date, b.tour_type, b.tour_range
+                FROM {$allocationTable} rb JOIN bookings b ON b.booking_id=rb.booking_id
                 WHERE LOWER(COALESCE(b.status,'')) IN ('pending','accepted')
                   AND LOWER(COALESCE(b.is_complete,'uncomplete'))='uncomplete'
                   AND NOT EXISTS (SELECT 1 FROM booking_cancellation_requests cr
                     WHERE cr.booking_domain='tour' AND cr.booking_id=b.booking_id AND cr.request_status='decision_required')"
-                . ($resourceId !== null ? ' AND rb.boat_id=?' : ''));
+                . ($resourceId !== null ? ' AND rb.' . $allocationColumn . '=?' : '')
+                . ($excludeBookingId !== null ? ' AND b.booking_id<>' . (int)$excludeBookingId : ''));
             $extra->execute($resourceId !== null ? [$resourceId] : []);
             foreach ($extra->fetchAll(PDO::FETCH_ASSOC) as $row) {
                 $start = tourResourceDate((string)$row['booking_date']);
@@ -129,13 +130,13 @@ function tourResourceRangesOverlap(string $start, string $end, string $otherStar
     return $start <= $otherEnd && $end >= $otherStart;
 }
 
-function tourResourceIsAvailable(PDO $pdo, string $type, int $resourceId, string $start, string $end = ''): bool
+function tourResourceIsAvailable(PDO $pdo, string $type, int $resourceId, string $start, string $end = '', ?int $excludeBookingId = null): bool
 {
     $start = tourResourceDate($start);
     $end = tourResourceDate($end !== '' ? $end : $start);
     if (!tourResourceMeta($type) || $resourceId < 1 || $start === '' || $end === '' || $end < $start) return false;
 
-    foreach (tourResourceActiveRanges($pdo, $type, $resourceId) as $range) {
+    foreach (tourResourceActiveRanges($pdo, $type, $resourceId, $excludeBookingId) as $range) {
         if (tourResourceRangesOverlap($start, $end, $range['start'], $range['end'])) return false;
     }
     return true;
@@ -333,4 +334,23 @@ function tourResourceUnlock(PDO $pdo, string $name): void
         $stmt->execute([$name]);
     } catch (Throwable $ignored) {
     }
+}
+
+/** Load allocations without changing legacy primary-only bookings. */
+function tourBookingAssignedResources(PDO $pdo, array $booking): array
+{
+    $resources = ['boat' => [], 'tourguide' => []];
+    foreach (['boat' => 'boat_id', 'tourguide' => 'guide_id'] as $type => $column) {
+        if ((int)($booking[$column] ?? 0) > 0) $resources[$type][] = (int)$booking[$column];
+        $table = $type === 'boat' ? 'booking_resource_boats' : 'booking_resource_guides';
+        try {
+            $stmt = $pdo->prepare("SELECT {$column} FROM {$table} WHERE booking_id=?");
+            $stmt->execute([(int)$booking['booking_id']]);
+            $resources[$type] = array_values(array_unique(array_merge($resources[$type], array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN)))));
+        } catch (PDOException $error) {
+            if ((string)$error->getCode() !== '42S02' && !str_contains($error->getMessage(), 'no such table')) throw $error;
+        }
+        sort($resources[$type], SORT_NUMERIC);
+    }
+    return $resources;
 }

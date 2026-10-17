@@ -33,6 +33,7 @@ function AdminNormalizeReturnTo(?string $value): string
         'adreportsanalytics.php',
         'adreviewsfeedback.php',
         'adsystemsettings.php',
+        'adservicepricing.php',
         'adadministratorprofile.php',
         'adcomplaintsincidents.php',
         'addestination.php',

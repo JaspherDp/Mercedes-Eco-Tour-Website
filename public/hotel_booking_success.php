@@ -5,6 +5,8 @@ chdir(__DIR__ . '/..');
 require_once __DIR__ . '/../php/session_security.php';
 AppSessionStart();
 require_once 'php/db_connection.php';
+require_once __DIR__ . '/../php/tourist_activity_helper.php';
+TouristPreparePageActivity($pdo);
 
 header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 header('Pragma: no-cache');
@@ -95,6 +97,26 @@ if (!is_array($success)
     exit;
 }
 
+if (($_GET['format'] ?? '') === 'receipt') {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Referrer-Policy: no-referrer');
+    $currentTouristId = (int)($_SESSION['tourist_id'] ?? 0);
+    if ($currentTouristId > 0 && $currentTouristId !== (int)$success['tourist_id']) {
+        http_response_code(403);
+        echo json_encode(['success' => false, 'message' => 'This receipt is not available in this session.']);
+        exit;
+    }
+    try {
+        require_once __DIR__ . '/../php/booking_success_receipt.php';
+        echo json_encode(['success' => true, 'receipt' => BookingSuccessReceipt($pdo, $success)], JSON_INVALID_UTF8_SUBSTITUTE);
+    } catch (Throwable $error) {
+        error_log('Success receipt unavailable: ' . $error->getMessage());
+        http_response_code(503);
+        echo json_encode(['success' => false, 'message' => 'Your receipt could not be loaded. Please try again or view your booking.']);
+    }
+    exit;
+}
+
 $email = trim((string)($success['email'] ?? ''));
 $bookingDomain = (string)$success['booking_domain'];
 $bookingReference = trim((string)($success['booking_reference'] ?? ''));
@@ -116,8 +138,10 @@ $paymentLabel = $paymentLabels[$bookingDomain] ?? 'Reservation payment confirmed
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="referrer" content="no-referrer">
   <title>Payment Successful | iTour Mercedes</title>
+  <link rel="stylesheet" href="styles/admin_receipt.css?v=4">
   <link rel="icon" type="image/png" href="img/newlogo.png">
   <link rel="stylesheet" href="styles/hotel_booking_success.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/hotel_booking_success.css') ?>">
+  <?php TouristRenderActivityMonitor(); ?>
 </head>
 <body>
   <header class="success-header">
@@ -157,19 +181,26 @@ $paymentLabel = $paymentLabels[$bookingDomain] ?? 'Reservation payment confirmed
       <?php endif; ?>
 
       <div class="success-actions">
-        <a class="success-button success-button-primary" href="<?= htmlspecialchars($bookingsUrl, ENT_QUOTES, 'UTF-8') ?>">
-          View Bookings
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
-        </a>
         <a class="success-button success-button-secondary" href="<?= htmlspecialchars($backUrl, ENT_QUOTES, 'UTF-8') ?>">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg>
-          Go Back
+          <span>Go Back</span>
+        </a>
+        <button type="button" class="success-button success-button-secondary" id="successReceipt">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12v18l-3-2-3 2-3-2-3 2V3Z M9 7h6M9 11h6M9 15h4"/></svg>
+          <span>Receipt</span>
+        </button>
+        <a class="success-button success-button-primary" href="<?= htmlspecialchars($bookingsUrl, ENT_QUOTES, 'UTF-8') ?>">
+          <span>View Bookings</span>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
         </a>
       </div>
 
+      <p id="successReceiptError" class="success-note" role="alert" hidden></p>
       <p class="success-note">Please allow a short time for the service provider to review your reservation.</p>
     </section>
   </main>
+<script src="js/booking-payment-summary.js?v=2"></script>
+<script src="js/booking-success-receipt.js?v=1"></script>
 <script src="js/mobile-scroll.js"></script>
 </body>
 </html>

@@ -7,6 +7,7 @@ AppSessionStart();
 require_once __DIR__ . '/db_connection.php';
 require_once __DIR__ . '/operator_auth_helper.php';
 require_once __DIR__ . '/activity_logger.php';
+require_once __DIR__ . '/booking_addon_catalog_panel.php';
 
 if (($portalRole ?? '') === 'operator') {
     $account = OperatorRequireLogin($pdo);
@@ -109,6 +110,7 @@ $portalSettingsIcon = static fn(string $name): string => '<svg viewBox="0 0 24 2
   <?php if ($portalRole === 'hotel_admin'): ?><link rel="stylesheet" href="styles/Ho_panel.css?v=notifications-4"><?php endif; ?>
   <link rel="stylesheet" href="styles/admin_management.css?v=<?= (int)filemtime(__DIR__ . '/../styles/admin_management.css') ?>">
   <link rel="stylesheet" href="styles/portal_settings.css?v=2">
+  <link rel="stylesheet" href="styles/booking-addon-catalog.css?v=2">
 </head>
 <body class="portal-settings-page<?= $portalRole === 'hotel_admin' ? ' ho-body' : '' ?>">
 <div class="portal-settings-layout<?= $portalRole === 'hotel_admin' ? ' ho-layout' : '' ?>">
@@ -141,6 +143,7 @@ $portalSettingsIcon = static fn(string $name): string => '<svg viewBox="0 0 24 2
           <nav class="am-nav" aria-label="Settings sections">
             <div class="am-nav-label">Configuration</div>
             <button type="button" class="active" data-portal-panel="general"><?= $portalSettingsIcon('general') ?>General</button>
+            <button type="button" data-portal-panel="addons"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M12 8v8M8 12h8"/></svg>Add-ons</button>
             <button type="button" data-portal-panel="security"><?= $portalSettingsIcon('shield') ?>Security &amp; data</button>
             <button type="button" data-portal-panel="information"><?= $portalSettingsIcon('settings') ?>System information</button>
             <div class="am-nav-divider"></div><div class="am-nav-note"><strong>Saved to your account</strong>Your preferences follow you across browsers and devices.</div>
@@ -150,6 +153,9 @@ $portalSettingsIcon = static fn(string $name): string => '<svg viewBox="0 0 24 2
               <article class="am-card"><header class="am-card-header"><div class="am-card-heading"><span class="am-card-icon"><?= $portalSettingsIcon('general') ?></span><div><h3>Portal preferences</h3><p>Choose where you begin after signing in</p></div></div></header><div class="am-card-body">
                 <div class="am-field"><label for="landing_page">Start page after login</label><select id="landing_page" name="landing_page" required><?php foreach ($landingPages as $page => $label): ?><option value="<?= $escape($page) ?>" <?= $settings['landing_page'] === $page ? 'selected' : '' ?>><?= $escape($label) ?></option><?php endforeach; ?></select><div class="am-field-help">A session-expiry return link or payment setup link takes priority.</div></div>
               </div></article>
+            </section>
+            <section class="am-panel" data-portal-panel-content="addons">
+              <?php AddonCatalogPanel($pdo, $portalRole, $accountId, (int)($account['hotel_resort_id'] ?? 0), 'php/booking_addon_catalog_manage.php'); ?>
             </section>
             <section class="am-panel" data-portal-panel-content="security">
               <article class="am-card"><header class="am-card-header"><div class="am-card-heading"><span class="am-card-icon"><?= $portalSettingsIcon('shield') ?></span><div><h3>Security policy</h3><p>Control when your inactive session ends</p></div></div></header><div class="am-card-body">
@@ -173,6 +179,7 @@ $portalSettingsIcon = static fn(string $name): string => '<svg viewBox="0 0 24 2
     <div class="am-modal" id="portalSettingsResetModal" role="dialog" aria-modal="true" aria-labelledby="portalResetTitle" aria-hidden="true"><div class="am-modal-dialog"><header class="am-modal-header"><h3 id="portalResetTitle">Restore recommended defaults?</h3><button class="am-modal-close" type="button" data-close-portal-reset aria-label="Close">&times;</button></header><div class="am-modal-body">Your session timeout will return to 1 hour and your start page to Dashboard.</div><footer class="am-modal-footer"><button class="am-button" type="button" data-close-portal-reset>Cancel</button><form method="post" action="<?= $escape($settingsUrl) ?>"><input type="hidden" name="csrf_token" value="<?= $escape($csrfToken) ?>"><input type="hidden" name="action" value="reset_settings"><button class="am-button danger" type="submit">Restore defaults</button></form></footer></div></div>
   </main>
 </div>
-  <script src="js/portal_settings.js?v=1"></script>
+  <script src="js/portal_settings.js?v=3"></script>
+  <script src="js/booking-addon-catalog.js?v=2"></script>
 </body>
 </html>

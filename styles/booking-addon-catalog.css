@@ -1,0 +1,11 @@
+.addon-catalog-intro,.addon-catalog-help{color:#667e75;font-size:12px;line-height:1.6;margin:0 0 20px}.addon-catalog-editor{display:grid;grid-template-columns:2fr 1fr 1fr;gap:16px}.addon-catalog-actions{display:flex;gap:10px;margin:18px 0 8px}.addon-catalog-actions [hidden]{display:none}.addon-catalog-notice{display:flex;align-items:flex-start;gap:9px;margin:12px 0;padding:10px 12px;border:1px solid #d9e7e0;border-radius:9px;background:#f4f8f6;font-size:12px;line-height:1.5;color:#526f62}.addon-catalog-notice[hidden]{display:none}.addon-catalog-notice svg{width:18px;height:18px;flex:0 0 18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}.addon-catalog-notice.error{color:#a13c32;background:#fff4f2;border-color:#efcbc6}.addon-catalog-notice.success{color:#176b55;background:#edf8f2;border-color:#c9e3d5}.addon-catalog-row{display:flex;align-items:center;gap:18px;padding:17px 0;border-top:1px solid #e0ebe6;font-size:13px}.addon-catalog-row>div{flex:1;min-width:0}.addon-catalog-row strong{overflow-wrap:anywhere}.addon-catalog-state{display:block;margin-top:6px;font-size:11px;color:#1b765b}.addon-catalog-state.is-hidden{color:#81928a}.addon-catalog-price{white-space:nowrap;color:#155c48}.addon-catalog-empty{padding:20px;text-align:center;background:#f4f9f6;border:1px dashed #d0e2da;border-radius:12px;color:#61796f;font-size:13px}.addon-catalog-help{margin:16px 0 0}.addon-sr-only{position:absolute;width:1px;height:1px;padding:0;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}@media(max-width:680px){.addon-catalog-editor{grid-template-columns:1fr}.addon-catalog-row{gap:10px}}
+
+.am-save-button[hidden]{display:none}
+
+/* Keep an otherwise fitting add-on panel from overflowing due to unused spacing. */
+.addon-settings-active .admin-management-content{padding-bottom:20px}
+.addon-settings-active .addon-catalog{margin-bottom:0}
+.addon-catalog-intro{margin-bottom:16px}
+.addon-catalog input[aria-invalid="true"]{border-color:#ce7165;background:#fffaf9}
+.addon-catalog input[aria-invalid="true"]:focus{border-color:#bd5144;box-shadow:0 0 0 3px #bd51441a}
+

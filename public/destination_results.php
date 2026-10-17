@@ -97,6 +97,7 @@ $tabs = [
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles/destination_results.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/destination_results.css') ?>">
   <link rel="stylesheet" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>">
+  <?php TouristRenderActivityMonitor(); ?>
 </head>
 <body class="destination-results-page">
   <div id="header"></div>

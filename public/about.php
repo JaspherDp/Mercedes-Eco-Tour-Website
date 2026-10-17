@@ -3,6 +3,8 @@ chdir(__DIR__ . '/..');
 require_once __DIR__ . '/../php/session_security.php';
 AppSessionStart();
 require 'php/db_connection.php';
+require_once __DIR__ . '/../php/tourist_activity_helper.php';
+TouristPreparePageActivity($pdo);
 require_once __DIR__ . '/../php/office_details_helper.php';
 $officeDetails = loadPublicOfficeDetails($pdo);
 
@@ -36,6 +38,7 @@ try {
   <script>document.documentElement.classList.add('itour-page-loading');</script>
   <link rel="stylesheet" href="styles/page-loader.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/page-loader.css') ?>">
   <script src="js/page-loader.js?v=<?= (int)@filemtime(__DIR__ . '/../js/page-loader.js') ?>"></script>
+  <?php TouristRenderActivityMonitor(); ?>
 </head>
 <body class="about-page">
 <?php include __DIR__ . '/../includes/page_loader.php'; ?>

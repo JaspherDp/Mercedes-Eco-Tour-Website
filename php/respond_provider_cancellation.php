@@ -63,6 +63,7 @@ if ($requestId < 1 || !in_array($decision, ['reschedule', 'full_refund'], true))
 }
 
 $lockName = '';
+$resourceLocks = [];
 try {
     ensureBookingCancellationRequestsTable($pdo);
     $pdo->beginTransaction();
@@ -102,15 +103,13 @@ try {
     $newEnd = $date->modify('+' . $durationDays . ' days')->format('Y-m-d');
 
     if (in_array($type, ['boat','tourguide'], true)) {
-        $resourceId = $type === 'boat' ? (int)$request['boat_id'] : (int)$request['guide_id'];
-        $lockName = tourResourceLock($pdo, $type, $resourceId);
-        $column = $type === 'boat' ? 'boat_id' : 'guide_id';
-        $conflicts = $pdo->prepare("SELECT b.booking_date,b.tour_type,b.tour_range FROM bookings b
-            WHERE b.{$column}=? AND b.booking_id<>? AND b.status IN ('pending','accepted') AND b.is_complete='uncomplete'
-              AND NOT EXISTS (SELECT 1 FROM booking_cancellation_requests crx WHERE crx.booking_domain='tour' AND crx.booking_id=b.booking_id AND crx.request_status='decision_required')");
-        $conflicts->execute([$resourceId, (int)$request['booking_id']]);
-        foreach ($conflicts->fetchAll(PDO::FETCH_ASSOC) as $conflict) {
-            if (tourResourceRangesOverlap($newDate, $newEnd, (string)$conflict['booking_date'], tourResourceEndDate($conflict))) throw new RuntimeException('The selected boat or tour guide is unavailable on that date.');
+        foreach (tourBookingAssignedResources($pdo, $request) as $resourceType => $ids) {
+            foreach ($ids as $id) {
+                $resourceLocks[] = tourResourceLock($pdo, $resourceType, $id);
+                if (!tourResourceIsAvailable($pdo, $resourceType, $id, $newDate, $newEnd, (int)$request['booking_id'])) {
+                    throw new RuntimeException('A selected boat or tour guide is unavailable on that date.');
+                }
+            }
         }
     } elseif ($type === 'package') {
         $lockName = tourPackageLock($pdo, (string)$request['package_name']);
@@ -131,6 +130,8 @@ try {
     $pdo->commit();
     tourResourceUnlock($pdo, $lockName);
     $lockName = '';
+    foreach ($resourceLocks as $heldLock) tourResourceUnlock($pdo, $heldLock);
+    $resourceLocks = [];
 
     $request['original_service_date'] = $originalDate;
     $request['rescheduled_service_date'] = $newDate;
@@ -141,5 +142,6 @@ try {
 } catch (Throwable $error) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     if ($lockName !== '') tourResourceUnlock($pdo, $lockName);
+    foreach ($resourceLocks as $heldLock) tourResourceUnlock($pdo, $heldLock);
     providerDecisionResponse(400, ['success' => false, 'message' => $error->getMessage() ?: 'Your response could not be saved.']);
 }

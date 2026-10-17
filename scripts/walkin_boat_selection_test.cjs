@@ -24,7 +24,7 @@ const scope = {
   boatCatalog: [{ boat_id: 2, available: true }, { boat_id: 3, available: true }, { boat_id: 4, available: false }],
   document: { getElementById: () => field },
   additionalBoats: { querySelectorAll: selector => extra.filter(input => !selector.includes(':checked') || (input.checked && !input.disabled)) },
-  syncSuggestedPrice: () => priceUpdates++, renderChildAges() {},
+  syncSuggestedPrice: () => priceUpdates++,
   window: { requestAnimationFrame: callback => callback() },
   modalBody: { scrollTop: 100, getBoundingClientRect: () => ({ top: 100 }), scrollTo: options => scrolls.push(options) }
 };
@@ -64,11 +64,11 @@ assert.equal(field.hidden, true);
 assert.equal(extra.some(input => input.checked), false);
 assert(priceUpdates > 0);
 
-// Different boat sizes use actual seat counts rather than a fixed eight-seat limit.
+// Smaller boat sizes are retained; larger vessels remain capped at eight.
 scope.boatSelect.options[0].dataset.capacity = 12;
 extra[0].dataset.capacity = 4;
 extra[1].dataset.capacity = 12;
-changePax(18);
+changePax(16);
 extra[0].checked = true;
 scope.update();
 assert.equal(extra[1].disabled, false, 'Four extra seats cannot cover six missing seats.');

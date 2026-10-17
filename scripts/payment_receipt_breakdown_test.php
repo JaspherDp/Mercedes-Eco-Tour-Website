@@ -3,6 +3,7 @@ declare(strict_types=1);
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 require_once __DIR__ . '/../php/payment_receipt_breakdown.php';
 require_once __DIR__ . '/../php/input_validation.php';
+require_once __DIR__ . '/../php/booking_capacity_helper.php';
 function receiptCheck(bool $condition, string $message): void { if (!$condition) throw new RuntimeException($message); }
 $pdo = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 $pdo->exec('CREATE TABLE booking_checkout_drafts (booking_draft_id INTEGER PRIMARY KEY, booking_id INTEGER, booking_domain TEXT, status TEXT, total_minor INTEGER, payload TEXT, created_at TEXT)');
@@ -24,6 +25,12 @@ $insert->execute([2,29,'boat','submitted',366000,json_encode($payload),'2026-10-
 $result=PaymentReceiptTourBreakdown($pdo,$boat,3660);
 receiptCheck(count($result['rows'])===5 && abs(array_sum(array_column($result['rows'],'amount'))-3660)<0.009,'Boat, guide, environmental, entrance and docking amounts must reconcile.');
 $savedRows=$result['rows'];
+$countPayload=array_replace($payload, ['num_children'=>1, 'child_ages'=>[], 'young_children'=>1]);
+$countRows=PaymentReceiptHistoricalTourRows($pdo,$boat,$countPayload,3660.0,'2026-10-15');
+receiptCheck(is_array($countRows) && abs(array_sum(array_column($countRows,'amount'))-3660)<0.009,'Receipt recovery must preserve the aggregate child entrance exemption.');
+$newPayload=array_replace($payload, ['num_children'=>1, 'entrance_guests'=>3]);
+$newRows=PaymentReceiptHistoricalTourRows($pdo,$boat,$newPayload,3690.0,'2026-10-15');
+receiptCheck(is_array($newRows) && abs(array_sum(array_column($newRows,'amount'))-3690)<0.009,'New receipts must recover full-pax entrance charges without changing historical exemptions.');
 $adjusted=PaymentReceiptTourBreakdown($pdo,$boat,3760);
 receiptCheck(end($adjusted['rows'])['amount']===100.0,'Recorded reservation adjustments must be explicit.');
 $pdo->exec("UPDATE service_prices SET day_tour_price=9999, updated_at='2026-12-01'");
@@ -45,8 +52,9 @@ $textStart=strpos($source,'function bookingCheckoutText(');
 $textEnd=strpos($source,'function bookingCheckoutDate(',$textStart);
 eval(substr($source,$textStart,$textEnd-$textStart));
 $start=strpos($source,'        $priceRows = [];');
-$end=strpos($source,'        $rawResourceId =',$start);
-$domain='boat';$addOn='tourguide';$tourType='same-day';$rates=['boat'=>2500,'tourguide'=>700];$requiredBoats=1;$guestCount=3;$adults=2;$children=1;$rateKey='day';$serviceTotal=3200;$locations=['Malasugui Island','Apuao Grande Island'];$input=['ecoCategory'=>'local','childAges'=>[5]];
+$end=strpos($source,'        $resourceId =',$start);
+receiptCheck($start !== false && $end !== false && $end > $start, 'Checkout fixture boundaries changed.');
+$domain='boat';$addOn='tourguide';$tourType='same-day';$rates=['boat'=>2500,'tourguide'=>700];$requiredBoats=1;$requiredGuides=1;$guestCount=3;$adults=2;$children=1;$rateKey='day';$serviceTotal=3200;$locations=['Malasugui Island','Apuao Grande Island'];$input=['ecoCategory'=>'local','childAges'=>[5]];
 eval(substr($source,$start,$end-$start));
-receiptCheck($total===3660.0 && abs(array_sum(array_column($priceRows,'amount'))-$total)<0.009,'Future checkout snapshots must equal server pricing and honor child entrance exemptions.');
-echo "PASS: package itemization, boat/guide/entrance/docking/environmental charges, retained snapshots, changed-rate protection, adjustments, walk-in accounting, and checkout child exemptions.\n";
+receiptCheck($total===3690.0 && abs(array_sum(array_column($priceRows,'amount'))-$total)<0.009,'New checkout snapshots must charge environmental fees only to adults and count all entrance guests.');
+echo "PASS: package itemization, boat/guide/entrance/docking/environmental charges, retained snapshots, changed-rate protection, adjustments, walk-in accounting, and new adult-only environmental fees.\n";

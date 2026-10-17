@@ -162,7 +162,7 @@ body {
 
 .success-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
   padding: 0 clamp(30px, 7vw, 72px);
 }
@@ -176,13 +176,16 @@ body {
   padding: 12px 20px;
   border: 1px solid transparent;
   border-radius: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  line-height: 1.2;
   font-size: .88rem;
   font-weight: 800;
   text-decoration: none;
   transition: transform .18s ease, box-shadow .18s ease, background .18s ease;
 }
 
-.success-button svg { width: 18px; height: 18px; }
+.success-button svg { display: block; flex-shrink: 0; width: 18px; height: 18px; }
 .success-button:hover { transform: translateY(-2px); }
 .success-button:focus-visible { outline: 3px solid rgba(25, 113, 88, .25); outline-offset: 3px; }
 .success-button-primary { color: #fff; background: linear-gradient(135deg, #14634d, #25856a); box-shadow: 0 10px 22px rgba(20, 99, 77, .2); }
@@ -242,11 +245,29 @@ body {
   .success-actions { grid-template-columns: 1fr; gap: 7px; padding: 0 14px; }
   .success-button { min-height: 42px; padding: 9px 16px; font-size: .78rem; }
   .success-button svg { width: 15px; height: 15px; }
-  .success-button-primary { order: 1; }
-  .success-button-secondary { order: 2; }
   .success-note { margin: 9px 16px 11px; font-size: .64rem; line-height: 1.35; }
 }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+
+.success-button:disabled { opacity: .65; cursor: wait; transform: none; }
+#successReceiptError { color: #a13c32; }
+
+.success-button > span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  line-height: 20px;
+}
+.success-button svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  transform: translateY(1px);
+}
+@media (max-width: 560px) {
+  .success-button > span { min-height: 18px; line-height: 18px; }
+  .success-button svg { width: 18px; height: 18px; flex-basis: 18px; }
 }

@@ -39,6 +39,16 @@ async function run(role, login) {
     events.keydown({ isTrusted: true }); await flush();
     assert.equal(requests.at(-1).options.method, 'POST', 'Real activity was not sent promptly');
     assert.equal(requests.at(-1).options.body.get('csrf_token'), 'csrf');
+    for (const eventName of ['pointerdown', 'scroll', 'input']) {
+        events[eventName]({ isTrusted: true }); await interval(); await flush();
+        assert.equal(requests.at(-1).options.method, 'POST', eventName + ' did not register activity');
+    }
+    context.document.visibilityState = 'hidden';
+    events.keydown({ isTrusted: true }); await interval(); await flush();
+    assert.ok(!requests.at(-1).options.method, 'Hidden tab activity extended the session');
+    context.document.visibilityState = 'visible';
+    events.visibilitychange(); await flush();
+    assert.ok(!requests.at(-1).options.method, 'Tab visibility alone extended the session');
     networkFailure = true;
     await interval(); await flush();
     assert.equal(redirects.length, 0, 'Offline connection treated as expiry');
@@ -54,6 +64,7 @@ async function run(role, login) {
 }
 
 (async () => {
+    await run('tourist', '/site/?open_login=1');
     await run('admin', '/site/php/admin_login.php');
     await run('operator', '/site/php/operator_login.php');
     await run('hotel_admin', '/site/php/hotel_admin_login.php');

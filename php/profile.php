@@ -2,6 +2,8 @@
 require_once __DIR__ . '/session_security.php';
 AppSessionStart();
 require_once __DIR__ . '/db_connection.php';
+require_once __DIR__ . '/tourist_activity_helper.php';
+TouristPreparePageActivity($pdo);
 require_once __DIR__ . '/tourist_auth_helper.php';
 require_once __DIR__ . '/activity_logger.php';
 require_once __DIR__ . '/favorites_helper.php';
@@ -3692,6 +3694,7 @@ html[data-profile-tab="complaints"] .mobile-profile-nav a[data-section="complain
 @media (max-width: 760px) { .tourist-profile-pdf-modal { height: 100dvh; } }
 </style>
 <link rel="stylesheet" href="../styles/tourist-manifest-form.css?v=1">
+  <?php TouristRenderActivityMonitor(); ?>
 </head>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>

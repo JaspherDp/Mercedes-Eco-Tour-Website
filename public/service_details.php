@@ -3,6 +3,8 @@ chdir(__DIR__ . '/..');
 require_once __DIR__ . '/../php/session_security.php';
 AppSessionStart();
 require_once 'php/db_connection.php';
+require_once __DIR__ . '/../php/tourist_activity_helper.php';
+TouristPreparePageActivity($pdo);
 require_once 'php/favorites_helper.php';
 require_once 'php/service_catalog_helper.php';
 
@@ -44,6 +46,7 @@ function serviceDetailRating(array $item): string {
   <link rel="stylesheet" href="styles/favorites.css">
   <link rel="stylesheet" href="styles/service_details.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/service_details.css') ?>">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <?php TouristRenderActivityMonitor(); ?>
 </head>
 <body class="service-page service-page--<?= $type ?>">
   <div id="header"><?php include 'php/header.php'; ?></div>

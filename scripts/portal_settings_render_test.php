@@ -14,6 +14,8 @@ foreach ([
     ['operator', 'operator/opsystemsettings.php'],
     ['hotel_admin', 'Hosystemsettings.php'],
     ['admin', 'adsystemsettings.php'],
+    ['admin', 'adservicepricing.php'],
+    ['admin', 'admin/adservicepricing.php'],
 ] as [$role, $page]) {
     $accountId = $accounts[$role];
     if (!$accountId) throw new RuntimeException('No fixture account available for ' . $role);
@@ -42,6 +44,20 @@ foreach ([
         $doc->loadHTML($html);
         libxml_clear_errors();
         $xpath = new DOMXPath($doc);
+        if ($role === 'admin' && basename($page) === 'adservicepricing.php') {
+            if ($xpath->query('//nav[contains(@class,"am-nav")]//button[@data-panel]')->length !== 2
+                || $xpath->query('//form[@id="servicePricesForm"]/input[@name="csrf_token"]')->length !== 1
+                || $xpath->query('//*[@data-addon-manager]')->length !== 1
+                || $xpath->query('//form[@id="settingsForm"]')->length !== 0) {
+                throw new RuntimeException('Separate pricing page must provide independent pricing/add-on editors: ' . $page);
+            }
+            if ($xpath->query('//*[@data-addon-manager]//form')->length !== 0
+                || $xpath->query('//*[@data-addon-name and @form="addonCatalogIndependent"]')->length !== 1) {
+                throw new RuntimeException('Add-on fields must stay independent of the price form: ' . $page);
+            }
+            echo 'PASS: ', $page, ' renders separate pricing and add-on tabs with protected forms.', PHP_EOL;
+            continue;
+        }
         if ($role === 'hotel_admin') {
             $layout = '//div[contains(concat(" ",normalize-space(@class)," ")," ho-layout ")]';
             if ($xpath->query($layout . '/aside[contains(@class,"ho-sidebar")]')->length !== 1
@@ -57,6 +73,16 @@ foreach ([
         if ($role !== 'admin' && $xpath->query('//select[@name="landing_page"]/option')->length !== 5) throw new RuntimeException('Start page choices missing: ' . $page);
         if ($xpath->query('//input[@name="csrf_token"]')->length < 3) throw new RuntimeException('Settings actions missing CSRF fields: ' . $page);
         if (!str_contains($html, 'System Settings') || !str_contains($doc->textContent, 'Security & data')) throw new RuntimeException('Settings sections missing: ' . $page);
+        if ($role === 'admin') {
+            if ($xpath->query('//*[@data-addon-manager or @data-panel="prices" or @data-panel="addons"]')->length !== 0
+                || $xpath->query('//form[@id="servicePricesForm"]')->length !== 0) {
+                throw new RuntimeException('Pricing and add-ons must be separate from admin settings.');
+            }
+        } else {
+            if ($xpath->query('//*[@data-addon-manager]')->length !== 1 || $xpath->query('//*[@data-addon-save]')->length !== 1) throw new RuntimeException('Add-on editor missing: ' . $page);
+            if ($xpath->query('//*[@data-addon-manager]//form')->length !== 0) throw new RuntimeException('Add-on editor must not nest forms: ' . $page);
+            if ($xpath->query('//*[@data-addon-name and @form="addonCatalogIndependent"]')->length !== 1) throw new RuntimeException('Add-on fields must be independent of portal preferences: ' . $page);
+        }
         echo 'PASS: ', $page, ' renders settings sections, timeout dropdown and protected actions.', PHP_EOL;
     } finally {
         foreach (glob($directory . '/sess_*') ?: [] as $sessionFile) unlink($sessionFile);

@@ -3,6 +3,8 @@ chdir(__DIR__ . '/..');
 require_once __DIR__ . '/../php/session_security.php';
 AppSessionStart();
 require 'php/db_connection.php';
+require_once __DIR__ . '/../php/tourist_activity_helper.php';
+TouristPreparePageActivity($pdo);
 require_once 'php/favorites_helper.php';
 require_once 'php/input_validation.php';
 
@@ -1788,6 +1790,7 @@ body {
 
 </style>
 <link rel="stylesheet" href="styles/package_details_redesign.css?v=<?php echo (int)@filemtime(__DIR__ . '/../styles/package_details_redesign.css'); ?>">
+  <?php TouristRenderActivityMonitor(); ?>
 </head>
 <body>
 

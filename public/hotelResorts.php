@@ -3,6 +3,8 @@ chdir(__DIR__ . '/..');
 require_once __DIR__ . '/../php/session_security.php';
 AppSessionStart();
 require_once 'php/db_connection.php';
+require_once __DIR__ . '/../php/tourist_activity_helper.php';
+TouristPreparePageActivity($pdo);
 
 ?>
 
@@ -16,6 +18,7 @@ require_once 'php/db_connection.php';
   <link rel="icon" type="image/png" href="<?= is_file(__DIR__ . '/../img/favicon-64-v1.png') ? 'img/favicon-64-v1.png' : 'img/newlogo.png' ?>" />
   <link href="https://fonts.googleapis.com/css2?family=Roboto&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles/hotelResorts.css" />
+  <?php TouristRenderActivityMonitor(); ?>
 </head>
 
 <body>

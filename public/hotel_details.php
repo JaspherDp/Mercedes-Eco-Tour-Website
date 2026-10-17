@@ -3,6 +3,8 @@ chdir(__DIR__ . '/..');
 require_once __DIR__ . '/../php/session_security.php';
 AppSessionStart();
 require_once 'php/db_connection.php';
+require_once __DIR__ . '/../php/tourist_activity_helper.php';
+TouristPreparePageActivity($pdo);
 require_once 'php/admin_auth_helper.php';
 require_once 'php/hotel_reviews_helper.php';
 require_once 'php/hotel_rooms_helper.php';
@@ -1685,6 +1687,7 @@ function ratingValue($value): float {
   }
 }
   </style>
+  <?php TouristRenderActivityMonitor(); ?>
 </head>
 <body>
   <div id="header"></div>

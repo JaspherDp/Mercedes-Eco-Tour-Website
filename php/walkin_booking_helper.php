@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/additional_fees_helper.php';
 require_once __DIR__ . '/tour_resource_availability_helper.php';
 require_once __DIR__ . '/input_validation.php';
+require_once __DIR__ . '/booking_capacity_helper.php';
 require_once __DIR__ . '/payment_receipt_breakdown.php';
 require_once __DIR__ . '/booking_addons_helper.php';
 
@@ -141,6 +142,8 @@ function WalkinBookingCollectCash(PDO $pdo, int $bookingId, int $adminId, string
 function WalkinBookingCatalog(PDO $pdo, string $start = '', string $end = ''): array
 {
     $boats = $pdo->query('SELECT boat_id, name, total_pax FROM boats ORDER BY name, boat_id')->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($boats as &$boat) $boat['total_pax'] = BookingBoatCapacity((int)$boat['total_pax']);
+    unset($boat);
     $guides = $pdo->query('SELECT guide_id, fullname FROM tour_guides ORDER BY fullname, guide_id')->fetchAll(PDO::FETCH_ASSOC);
     foreach (['boat' => &$boats, 'tourguide' => &$guides] as $type => &$rows) {
         $ranges = $start !== '' ? tourResourceActiveRanges($pdo, $type) : [];
@@ -187,10 +190,6 @@ function WalkinBookingQuote(PDO $pdo, array $input, bool $checkAvailability = tr
     $children = ItourValidationInt($input['num_children'] ?? 0, 'Children', 0, 99);
     $pax = $adults + $children;
     if ($pax > 100) throw new DomainException('A maximum of 100 guests is allowed.');
-    $ages = $input['child_ages'] ?? [];
-    if (!is_array($ages) || count($ages) !== $children) throw new DomainException('Enter the age of each child to calculate entrance fees.');
-    $freeChildren = 0;
-    foreach ($ages as $age) if (ItourValidationInt($age, 'Child age', 0, 17) <= 7) $freeChildren++;
     $locations = $input['locations'] ?? [];
     if (is_array($locations)) $locations = array_values(array_filter($locations, static fn($value) => $value !== ''));
     if (!is_array($locations) || count($locations) > 2 || count($locations) !== count(array_unique($locations))) throw new DomainException('Choose up to two different destinations.');
@@ -212,23 +211,25 @@ function WalkinBookingQuote(PDO $pdo, array $input, bool $checkAvailability = tr
         $boat = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$boat) throw new DomainException('The selected boat no longer exists.');
         if ($checkAvailability && !tourResourceIsAvailable($pdo, 'boat', $id, $start, $end)) throw new DomainException($boat['name'] . ' is unavailable for the selected tour duration.');
-        $capacity += (int)$boat['total_pax'];
+        $capacity += BookingBoatCapacity((int)$boat['total_pax']);
         $boatCapacities[] = (int)$boat['total_pax'];
         if (!isset($rates['boat'])) throw new DomainException('Configure an active boat price before adding this booking.');
         $serviceRows[] = PaymentReceiptLine('Boat hire — ' . $boat['name'], $rates['boat'], $tourType === 'overnight' ? 'Overnight rate' : 'Day-tour rate', 1, $rates['boat']);
     }
-    if ($boats && $capacity < $pax) throw new DomainException($pax . ' guests need more seats. Selected boats provide ' . $capacity . ' seats; choose another available boat.');
-    foreach (array_slice($boatCapacities, 1) as $extraCapacity) {
-        if ($capacity - $extraCapacity >= $pax) throw new DomainException('Select only the additional boats needed to accommodate all guests. Remove the extra selection.');
-    }
+    if ($boats) BookingValidateBoatCapacity($pax, $boatCapacities);
+    $guideIds = [];
     if ($type === 'tourguide') {
-        $guideId = ItourValidationInt($input['guide_id'] ?? null, 'Tour guide', 1, PHP_INT_MAX);
-        $stmt = $pdo->prepare('SELECT fullname FROM tour_guides WHERE guide_id=?');
-        $stmt->execute([$guideId]);
-        $name = $stmt->fetchColumn();
-        if (!$name || ($checkAvailability && !tourResourceIsAvailable($pdo, 'tourguide', $guideId, $start, $end))) throw new DomainException('The selected tour guide is unavailable.');
+        $guideIds = BookingResourceIds($input['guide_id'] ?? null, $input['additional_guide_ids'] ?? [], 'tour guide');
+        BookingValidateGuideCapacity($pax, $guideIds);
+        if (count($guideIds) > 1) BookingResourceStorageReady($pdo);
         if (!isset($rates['tourguide'])) throw new DomainException('Configure an active tour guide price first.');
-        $serviceRows[] = PaymentReceiptLine('Tour guide — ' . $name, $rates['tourguide'], '', 1, $rates['tourguide']);
+        foreach ($guideIds as $guideId) {
+            $stmt = $pdo->prepare('SELECT fullname FROM tour_guides WHERE guide_id=?');
+            $stmt->execute([$guideId]);
+            $name = $stmt->fetchColumn();
+            if (!$name || ($checkAvailability && !tourResourceIsAvailable($pdo, 'tourguide', $guideId, $start, $end))) throw new DomainException('The selected tour guide is unavailable.');
+            $serviceRows[] = PaymentReceiptLine('Tour guide — ' . $name, $rates['tourguide'], $tourType === 'overnight' ? 'Overnight rate' : 'Day-tour rate', 1, $rates['tourguide']);
+        }
     }
     if ($type === 'package') {
         $stmt = $pdo->prepare('SELECT * FROM tour_packages WHERE package_id=?');
@@ -246,18 +247,18 @@ function WalkinBookingQuote(PDO $pdo, array $input, bool $checkAvailability = tr
     $fees = additionalFeesForBooking(getAdditionalFees($pdo));
     $category = (string)($input['eco_category'] ?? '');
     if (!array_key_exists($category, $fees['environmental'])) throw new DomainException('Choose an environmental-fee category.');
-    $environmental = round($fees['environmental'][$category] * $adults, 2);
+    $environmental = BookingEnvironmentalFee($adults, $category, $fees['environmental']);
     $feeRows = [PaymentReceiptLine('Environmental fee', $environmental, ucfirst($category) . ' category; adults only.', $adults, (float)$fees['environmental'][$category])];
     $entrance = $docking = 0.0;
     foreach ($locations as $location) {
         $entranceRate = $fees['entrance'][$location] ?? 0;
         if (is_array($entranceRate)) $entranceRate = $entranceRate[$tourType === 'overnight' ? 'overnight' : 'day'];
-        $entry = round($entranceRate * ($pax - $freeChildren), 2);
+        $entry = round($entranceRate * $pax, 2);
         $dockRate = (float)($fees['docking'][$location] ?? 0);
         $dock = round($dockRate * count($boats), 2);
         $entrance += $entry;
         $docking += $dock;
-        if ($entry > 0) $feeRows[] = PaymentReceiptLine('Entrance fee — ' . $location, $entry, $freeChildren ? $freeChildren . ' child(ren) age 7 or below exempt.' : '', $pax - $freeChildren, (float)$entranceRate);
+        if ($entry > 0) $feeRows[] = PaymentReceiptLine('Entrance fee — ' . $location, $entry, 'Per passenger, including adults and children.', $pax, (float)$entranceRate);
         if ($dock > 0) $feeRows[] = PaymentReceiptLine('Docking / landing fee — ' . $location, $dock, '', count($boats), $dockRate);
     }
     $other = ItourValidationMoney($input['expense_other'] ?? 0, 'Other fees');
@@ -265,5 +266,5 @@ function WalkinBookingQuote(PDO $pdo, array $input, bool $checkAvailability = tr
     $service = round(array_sum(array_column($serviceRows, 'amount')), 2);
     return ['service_amount' => $service, 'environmental' => $environmental, 'entrance' => $entrance, 'docking' => $docking, 'other' => $other,
         'total' => round($service + $environmental + $entrance + $docking + $other, 2), 'service_rows' => $serviceRows, 'fee_rows' => $feeRows,
-        'boat_ids' => $boats, 'capacity' => $capacity, 'locations' => $locations];
+        'entrance_guests' => $pax, 'guide_ids' => $guideIds, 'boat_ids' => $boats, 'capacity' => $capacity, 'locations' => $locations];
 }

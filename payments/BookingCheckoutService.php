@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once __DIR__ . '/../php/booking_reference_helper.php';
 require_once __DIR__ . '/../php/activity_logger.php';
+require_once __DIR__ . '/../php/booking_addon_catalog.php';
 
 final class BookingCheckoutService
 {
@@ -100,12 +101,27 @@ final class BookingCheckoutService
                 $balance <= 0 ? 1 : 0, $paymentMethod,
             ]);
             $bookingId = (int)$pdo->lastInsertId();
+            if ((int)($payload['resource_allocation_version'] ?? 0) >= 2) {
+                // Reconciliation already owns the transaction and idempotency guard.
+                foreach (['boat' => 'booking_resource_boats', 'guide' => 'booking_resource_guides'] as $resource => $table) {
+                    $column = $resource . '_id';
+                    $ids = array_merge([(int)($payload[$column] ?? 0)], $payload['additional_' . $resource . '_ids'] ?? []);
+                    $ids = array_values(array_unique(array_filter(array_map('intval', $ids))));
+                    if (!$ids) continue;
+                    $assign = $pdo->prepare("INSERT INTO {$table} (booking_id, {$column}) VALUES (?, ?)");
+                    foreach ($ids as $id) $assign->execute([$bookingId, $id]);
+                }
+            }
             $activity = 'Booking Submitted';
             $description = 'Submitted ' . $reference . ' after verified PayMongo payment.';
             $module = 'Bookings';
         } else {
             throw new UnexpectedValueException('Unsupported booking draft type.');
         }
+
+        // Saved checkout prices are immutable. This runs inside reconciliation's
+        // transaction and after the existing submitted-draft idempotency guard.
+        AddonCatalogRecordBooking($pdo, $domain, $bookingId, $payload, $balance <= 0);
 
         $update = $pdo->prepare(
             "UPDATE booking_checkout_drafts

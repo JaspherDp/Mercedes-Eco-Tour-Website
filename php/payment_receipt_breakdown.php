@@ -53,9 +53,18 @@ function PaymentReceiptHistoricalTourRows(PDO $pdo, array $booking, array $paylo
         }
     }
     $locations = array_values(array_filter(array_map('trim', explode(',', (string)($payload['location'] ?? $booking['location'] ?? '')))));
-    $childAges = $payload['child_ages'] ?? [];
-    if ($children > 0 && (!is_array($childAges) || count($childAges) !== $children)) return null;
-    $entranceGuests = $guests - count(array_filter($childAges, static fn($age) => (int)$age <= 7));
+    if (array_key_exists('entrance_guests', $payload)) {
+        if (!is_int($payload['entrance_guests']) || $payload['entrance_guests'] !== $guests) return null;
+        $young = 0;
+    } elseif (array_key_exists('young_children', $payload)) {
+        $young = $payload['young_children'];
+        if (!is_int($young) || $young < 0 || $young > $children) return null;
+    } else {
+        $childAges = $payload['child_ages'] ?? [];
+        if ($children > 0 && (!is_array($childAges) || count($childAges) !== $children)) return null;
+        $young = count(array_filter($childAges, static fn($age) => (int)$age <= 7));
+    }
+    $entranceGuests = $guests - $young;
     $entranceCodes = ['Apuao Grande Island' => 'entrance_apuao_grande', 'Caringo Island' => 'entrance_caringo', 'Canimog Island' => $overnight ? 'entrance_canimog_overnight' : 'entrance_canimog_day'];
     $dockCodes = ['Apuao Pequeña Island' => 'docking_apuao_pequena', 'Malasugui Island' => 'docking_malasugui', 'Canimog Island' => 'docking_canimog'];
     foreach ($locations as $location) {
@@ -122,7 +131,8 @@ function PaymentReceiptTourBreakdown(PDO $pdo, array $booking, float $baseTotal)
             return $fallback;
         }
         $payload = json_decode((string)$draft['payload'], true) ?: [];
-        $originalTotal = (int)$draft['total_minor'] / 100;
+        // Catalog extras are separately recorded expenses, excluded from the base fare.
+        $originalTotal = round((int)$draft['total_minor'] / 100 - (float)($payload['catalog_addons']['total'] ?? 0), 2);
         $saved = $payload['price_breakdown'] ?? null;
         $rows = is_array($saved) ? ($saved['rows'] ?? []) : [];
         $note = '';

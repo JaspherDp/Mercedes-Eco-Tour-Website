@@ -1,9 +1,10 @@
 (() => {
   const scriptUrl = document.currentScript.src;
   const root = new URL('../', scriptUrl);
-  const stylesheet = new URL('styles/admin_receipt.css?v=3', root).href;
+  const stylesheet = new URL('styles/admin_receipt.css?v=4', root).href;
   const escape = value => String(value ?? '').replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]);
   const money = value => `\u20b1${Number(value || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const statusLabel = value => String(value || '').replace(/_/g, ' ').replace(/\b[a-z]/g, character => character.toUpperCase());
   const labels = { additional_boat: 'Additional Boat', additional_tourguide: 'Additional Tour Guide', food: 'Food', others: 'Other Add-on' };
   let modal = document.getElementById('adminReceiptModal');
   if (!modal) {
@@ -17,6 +18,9 @@
   }
   modal.querySelector('h3').textContent = 'Payment Receipt';
   modal.querySelector('.admin-receipt-head span').textContent = 'ACCOUNT PAYMENT RECORD';
+  const buttonIcon = path => `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"/></svg>`;
+  document.getElementById('printAdminReceipt').innerHTML = buttonIcon('M7 8V3h10v5M7 17H4V8h16v9h-3M7 14h10v7H7zM17 11h.01') + '<span>Print</span>';
+  document.getElementById('downloadAdminReceipt').innerHTML = buttonIcon('M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5') + '<span>Download</span>';
   const paper = document.getElementById('adminReceiptPaper');
   let current;
   let previousFocus;
@@ -41,7 +45,7 @@
     const guest = booking.t_full_name || booking.guest_name || data.guest || 'Guest';
     const service = data.serviceName || booking.room_type || booking.package_name || booking.boat_name || booking.guide_name || booking.location || 'Tour service';
     const type = hotel ? 'Hotel accommodation' : String(booking.booking_type || (data.kind === 'operator' ? 'Tour package' : 'Tour')).replace(/_/g, ' ');
-    const bookingStatus = booking.is_complete === 'completed' ? 'Completed' : String(booking.booking_status || booking.status || 'Active').replace(/_/g, ' ');
+    const bookingStatus = booking.is_complete === 'completed' ? 'Completed' : statusLabel(booking.booking_status || booking.status || 'Active');
     const expenses = data.expenses || [];
     let baseRows = data.priceBreakdown?.rows || [];
     let breakdownNote = data.priceBreakdown?.note || '';
@@ -77,7 +81,7 @@
         ${rows}
         ${hotel && data.checkoutCharges > 0 ? `<tr><td>Checkout additional charges</td><td>${money(data.checkoutCharges)}</td></tr>` : ''}
         <tr class="receipt-total"><td>TOTAL</td><td>${money(data.billingTotal)}</td></tr></tbody></table>
-      <div class="receipt-summary"><div><small>AMOUNT PAID</small><strong>${money(data.amountPaid)}</strong></div><div><small>BALANCE</small><strong>${money(data.balance)}</strong></div><div><small>PAYMENT STATUS</small><strong>${escape(data.paymentStatus)}</strong></div></div>
+      <div class="receipt-summary"><div><small>AMOUNT PAID</small><strong>${money(data.amountPaid)}</strong></div><div><small>BALANCE</small><strong>${money(data.balance)}</strong></div><div><small>PAYMENT STATUS</small><strong>${escape(statusLabel(data.paymentStatus))}</strong></div></div>
       <div class="receipt-foot">${breakdownNote ? `${escape(breakdownNote)}<br><br>` : ''}This receipt shows charges, recorded payments, and the outstanding balance at the time it was generated. Please retain it for your records.<br>Generated ${escape(generated)} (Manila time).</div>`;
     previousFocus = document.activeElement;
     modal.inert = false;
@@ -116,7 +120,7 @@
     const markup = paper.innerHTML;
     let exportHolder;
     button.disabled = true;
-    button.textContent = 'Preparing...';
+    button.querySelector('span').textContent = 'Preparing...';
     try {
       toolsPromise ??= Promise.all([
         loadScript(new URL('js/vendor/payment-summary/html2canvas.min.js', root).href, () => !!window.html2canvas),
@@ -153,7 +157,7 @@
     } finally {
       exportHolder?.remove();
       button.disabled = false;
-      button.textContent = 'Download';
+      button.querySelector('span').textContent = 'Download';
     }
   }
 

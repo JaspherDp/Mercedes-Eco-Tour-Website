@@ -3,6 +3,8 @@ chdir(__DIR__ . '/..');
 require_once __DIR__ . '/../php/session_security.php';
 AppSessionStart();
 require_once 'php/db_connection.php';
+require_once __DIR__ . '/../php/tourist_activity_helper.php';
+TouristPreparePageActivity($pdo);
 require_once 'php/hotel_rooms_helper.php';
 require_once 'php/hotel_content_helper.php';
 require_once 'php/favorites_helper.php';
@@ -568,6 +570,7 @@ unset($hotel);
   <link rel="stylesheet" href="styles/page-loader.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/page-loader.css') ?>" />
   <script src="js/page-loader.js?v=<?= (int)@filemtime(__DIR__ . '/../js/page-loader.js') ?>"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <?php TouristRenderActivityMonitor(); ?>
 </head>
 
 <div id="amenityModal" class="hotel-result-modal">
@@ -833,7 +836,7 @@ unset($hotel);
 
         <div id="guestBox" class="guest-box">
           <div class="guest-row">
-            <span>Adults</span>
+            <span id="guestAdultsLabel" class="guest-classification-label">Adults</span>
             <div>
               <button onclick="changeValue('adults', -1)">-</button>
               <span id="adults">0</span>
@@ -842,7 +845,7 @@ unset($hotel);
           </div>
 
           <div class="guest-row">
-            <span>Children</span>
+            <span id="guestChildrenLabel" class="guest-classification-label">Children</span>
             <div>
               <button onclick="changeValue('children', -1)">-</button>
               <span id="children">0</span>
@@ -851,7 +854,7 @@ unset($hotel);
           </div>
 
           <div id="roomsGuestRow" class="guest-row">
-            <span>Rooms</span>
+            <span class="guest-classification-label">Rooms</span>
             <div>
               <button onclick="changeValue('rooms', -1)">-</button>
               <span id="rooms">0</span>
@@ -1446,6 +1449,8 @@ include 'footer.php';
       islandSecondary.value = "";
       clearError(islandSecondary);
     }
+    syncSearchGuestClassification();
+    renderChildAgeRows();
     applyGuestSelection(false);
     updateMobileHotelSearchSummary();
   }
@@ -1905,12 +1910,12 @@ include 'footer.php';
       date: checkin.value,
       adults: String(adults),
       children: String(children),
-      child_ages: childAges.join(","),
       pax: String(adults + children),
       tour_date_mode: tourDateMode,
       tour_type: tourTypeValue
     });
 
+    if (activeSearchTab === "hotels") params.set("child_ages", childAges.join(","));
     if (destination2) {
       params.set("destination2", destination2);
     }
@@ -2843,7 +2848,14 @@ document.querySelectorAll(".filter").forEach(cb => {
       .map(Number);
   }
 
+  function syncSearchGuestClassification() {
+    const isHotel = activeSearchTab === "hotels";
+    document.getElementById("guestAdultsLabel").innerHTML = isHotel ? "Adults" : "Adults <small>(14+ years)</small>";
+    document.getElementById("guestChildrenLabel").innerHTML = isHotel ? "Children" : "Children <small>(0–13 years)</small>";
+  }
+
   function getChildAges() {
+    if (activeSearchTab !== "hotels") return [];
     return Array.from(document.querySelectorAll(".child-age-select"))
       .map(select => select.value)
       .filter(value => value !== "")
@@ -2880,7 +2892,7 @@ document.querySelectorAll(".filter").forEach(cb => {
     }
 
     const missingAgeLabels = [];
-    document.querySelectorAll("#childAgeRows .child-age-select").forEach((select, index) => {
+    if (includeRooms) document.querySelectorAll("#childAgeRows .child-age-select").forEach((select, index) => {
       if (select.value !== "") return;
       select.setAttribute("aria-invalid", "true");
       select.closest(".child-age-row")?.classList.add("is-invalid");
@@ -2903,6 +2915,8 @@ document.querySelectorAll(".filter").forEach(cb => {
   function renderChildAgeRows(savedAges = null) {
     const container = document.getElementById("childAgeRows");
     if (!container) return;
+    // Tour searches use guest counts only. Keep hotel age choices for a tab switch.
+    if (activeSearchTab !== "hotels") { container.hidden = true; return; }
     const count = Math.max(0, Number(document.getElementById("children")?.innerText || 0));
     const previous = savedAges === null
       ? Array.from(container.querySelectorAll(".child-age-select")).map(select => select.value)

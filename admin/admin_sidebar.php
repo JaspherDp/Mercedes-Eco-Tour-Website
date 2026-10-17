@@ -781,7 +781,8 @@ if (isset($_GET['get_pending_count'])) {
         ['Tour Operators', 'adoperator.php', 'operator', 'adoperator.php'],
         ['Hotels & Resorts', 'adhotelresorts.php', 'hotel', 'adhotelresorts.php'],
       ],
-      'Service Quality' => [
+      'Services' => [
+        ['Pricing & Add-ons', 'adservicepricing.php', 'card', 'adservicepricing.php'],
         ['Reviews & Feedback', 'adreviewsfeedback.php', 'star', 'adreviewsfeedback.php'],
         ['Complaints & Incidents', 'adcomplaintsincidents.php', 'alert', 'adcomplaintsincidents.php'],
       ],
@@ -822,7 +823,7 @@ if (isset($_GET['get_pending_count'])) {
       'Operations' => '<rect x="3" y="6" width="18" height="14" rx="2"/><path d="M8 6V4h8v2M3 11h18M10 11v2h4v-2"/>',
       'Tourism Management' => '<circle cx="12" cy="12" r="9"/><path d="m15.5 8.5-2.1 4.9-4.9 2.1 2.1-4.9 4.9-2.1Z"/>',
       'Tourism Stakeholders' => $adminIcons['users'],
-      'Service Quality' => $adminIcons['approval'],
+      'Services' => $adminIcons['approval'],
       'Insights' => '<path d="M4 5h16v11H8l-4 4V5Z"/><path d="M8 9h8M8 12h5"/>',
       'System' => '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
     ];

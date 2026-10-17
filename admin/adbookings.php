@@ -880,7 +880,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
         $lockBoatIds = WalkinBookingBoatIds($_POST);
         sort($lockBoatIds, SORT_NUMERIC);
         foreach ($lockBoatIds as $id) $walkinLocks[] = tourResourceLock($pdo, 'boat', $id);
-        if ($bookingType === 'tourguide') $walkinLocks[] = tourResourceLock($pdo, 'tourguide', (int)($_POST['guide_id'] ?? 0));
+        if ($bookingType === 'tourguide') {
+            $lockGuideIds = BookingResourceIds($_POST['guide_id'] ?? null, $_POST['additional_guide_ids'] ?? [], 'tour guide');
+            sort($lockGuideIds, SORT_NUMERIC);
+            foreach ($lockGuideIds as $id) $walkinLocks[] = tourResourceLock($pdo, 'tourguide', $id);
+        }
         if ($bookingType === 'package') {
             $packageLockStmt = $pdo->prepare('SELECT package_title FROM tour_packages WHERE package_id=?');
             $packageLockStmt->execute([(int)($_POST['package_id'] ?? 0)]);
@@ -1003,6 +1007,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
 
         $reserveBoat = $pdo->prepare('INSERT INTO booking_resource_boats (booking_id, boat_id) VALUES (?, ?)');
         foreach ($walkinQuote['boat_ids'] as $reservedBoatId) $reserveBoat->execute([$bookingId, $reservedBoatId]);
+        if (count($walkinQuote['guide_ids']) > 1) {
+            $reserveGuide = $pdo->prepare('INSERT INTO booking_resource_guides (booking_id, guide_id) VALUES (?, ?)');
+            foreach ($walkinQuote['guide_ids'] as $reservedGuideId) $reserveGuide->execute([$bookingId, $reservedGuideId]);
+        }
         $saveDetails = $pdo->prepare('INSERT INTO booking_walkin_details (booking_id, details) VALUES (?, ?)');
         $saveDetails->execute([$bookingId, json_encode($walkinQuote, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)]);
 
@@ -3591,7 +3599,7 @@ $columnsCompleted = $columnsBase . "<th>Actions</th>";
             <label class="walkin-field walkin-span-2 walkin-resource-field" id="walkinBoatField" hidden><span>Primary tour boat <b>*</b></span>
               <select name="boat_id" id="walkinBoatId" disabled><option value="">Select a tour boat</option>
                 <?php foreach ($walkInBoats as $boat): ?>
-                  <option value="<?= (int)$boat['boat_id'] ?>" data-capacity="<?= (int)$boat['total_pax'] ?>"><?= htmlspecialchars($boat['name']) ?> — up to <?= (int)$boat['total_pax'] ?> guests</option>
+                  <option value="<?= (int)$boat['boat_id'] ?>" data-capacity="<?= BookingBoatCapacity((int)$boat['total_pax']) ?>"><?= htmlspecialchars($boat['name']) ?> — up to <?= BookingBoatCapacity((int)$boat['total_pax']) ?> guests</option>
                 <?php endforeach; ?>
               </select>
             </label>
@@ -3612,14 +3620,14 @@ $columnsCompleted = $columnsBase . "<th>Actions</th>";
                 <option value="Cayucyucan">Cayucyucan</option>
               </select>
             </label>
-            <label class="walkin-field"><span>Adults <b>*</b></span>
+            <label class="walkin-field"><span>Adults (14+ years) <b>*</b></span>
               <div class="walkin-pax-control">
                 <button type="button" data-pax-action="decrease" data-pax-target="walkinAdults" aria-label="Remove one adult">−</button>
                 <input type="number" name="num_adults" id="walkinAdults" min="1" max="100" value="1" required readonly aria-live="polite">
                 <button type="button" data-pax-action="increase" data-pax-target="walkinAdults" aria-label="Add one adult">+</button>
               </div>
             </label>
-            <label class="walkin-field"><span>Children</span>
+            <label class="walkin-field"><span>Children (0–13 years)</span>
               <div class="walkin-pax-control">
                 <button type="button" data-pax-action="decrease" data-pax-target="walkinChildren" aria-label="Remove one child">−</button>
                 <input type="number" name="num_children" id="walkinChildren" min="0" max="100" value="0" readonly aria-live="polite">
@@ -3628,8 +3636,8 @@ $columnsCompleted = $columnsBase . "<th>Actions</th>";
             </label>
             <p id="walkinCapacityNote" class="walkin-inline-note walkin-span-2" role="status" aria-live="polite" aria-atomic="true" hidden></p>
             <div class="walkin-field walkin-span-2" id="walkinAdditionalBoatsField" hidden><span>Additional tour boats</span><p class="walkin-tourist-help">Choose extra boats until the combined seats cover all guests. Availability applies to the entire tour duration.</p><div id="walkinAdditionalBoats" class="walkin-boat-choices"></div><p id="walkinAvailabilityStatus" class="walkin-tourist-help" role="status">Choose tour type and dates to check availability.</p></div>
-            <div id="walkinChildAges" class="walkin-grid walkin-span-2"></div>
-            <label class="walkin-field walkin-span-2"><span>Environmental-fee category <b>*</b></span><select name="eco_category" id="walkinEcoCategory" required><option value="local">Local visitor</option><option value="mercedeno">Mercedeño resident</option><option value="foreigner">Foreign visitor</option><option value="senior">Senior citizen</option></select><small>Applies to adults; children age 7 or below are exempt from entrance fees.</small></label>
+            <div id="walkinAdditionalGuides" class="walkin-field walkin-span-2" hidden></div>
+            <label class="walkin-field walkin-span-2"><span>Environmental-fee category <b>*</b></span><select name="eco_category" id="walkinEcoCategory" required><option value="local">Local visitor</option><option value="mercedeno">Mercedeño resident</option><option value="foreigner">Foreign visitor</option><option value="senior">Senior citizen</option></select><small>Children aged 0–13 pay no environmental fee and count toward total passengers.</small></label>
             <input type="hidden" name="tour_range" id="walkinTourRange">
           </div>
         </section>
@@ -7322,6 +7330,35 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
   const additionalBoats = document.getElementById('walkinAdditionalBoats');
   const quoteStatus = document.getElementById('walkinQuoteStatus');
   let boatCatalog = <?= json_encode($walkInBoats, JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT) ?>;
+  let guideCatalog = [];
+  const additionalGuides = document.getElementById('walkinAdditionalGuides');
+  const syncGuideCapacity = () => {
+    const previous = [...additionalGuides.querySelectorAll('select')].map(select => select.value);
+    additionalGuides.replaceChildren();
+    const active = typeSelect.value === 'tourguide';
+    const required = active ? Math.max(1, Math.ceil((Number(adultsInput.value || 0) + Number(childrenInput.value || 0)) / 8)) : 0;
+    additionalGuides.hidden = required <= 1;
+    const used = new Set([guideSelect.value]);
+    for (let index = 1; index < required; index++) {
+      const label = document.createElement('label');
+      label.className = 'walkin-field';
+      label.textContent = 'Tour guide ' + (index + 1) + ' *';
+      const select = document.createElement('select');
+      select.name = 'additional_guide_ids[]'; select.required = true;
+      select.add(new Option('Select an additional tour guide', ''));
+      guideCatalog.forEach(guide => {
+        const option = new Option(guide.fullname + (guide.available ? '' : ' — unavailable'), String(guide.guide_id));
+        option.disabled = !guide.available || used.has(String(guide.guide_id)); select.add(option);
+      });
+      const saved = previous[index - 1];
+      if (saved && !used.has(saved) && guideCatalog.some(guide => String(guide.guide_id) === saved && guide.available)) select.value = saved;
+      if (select.value) used.add(select.value);
+      select.addEventListener('change', () => { syncCapacity(); syncSuggestedPrice(); });
+      label.appendChild(select); additionalGuides.appendChild(label);
+    }
+    const selected = [...additionalGuides.querySelectorAll('select')];
+    guideSelect.setCustomValidity(active && (!guideSelect.value || selected.some(select => !select.value)) ? required + ' guide(s) required for all adults and children. Select each required guide.' : '');
+  };
   let availabilityRequest = 0;
   let quoteRequest = 0;
   let quoteTimer = null;
@@ -7612,10 +7649,11 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
 
   const syncCapacity = () => {
     if (walkinReservationLocked) return;
+    syncGuideCapacity();
     syncAdditionalBoatVisibility();
     const option = boatSelect.options[boatSelect.selectedIndex];
-    const extraCapacity = Array.from(additionalBoats.querySelectorAll('input:checked:not(:disabled)')).reduce((sum, input) => sum + Number(input.dataset.capacity || 0), 0);
-    const capacity = Number(option?.dataset.capacity || 0) + extraCapacity;
+    const extraCapacity = Array.from(additionalBoats.querySelectorAll('input:checked:not(:disabled)')).reduce((sum, input) => sum + Math.max(0, Math.min(8, Number(input.dataset.capacity || 0))), 0);
+    const capacity = Math.max(0, Math.min(8, Number(option?.dataset.capacity || 0))) + extraCapacity;
     if (boatSelect.disabled) {
       capacityNote.hidden = true;
       capacityNote.classList.remove('is-error');
@@ -7641,7 +7679,7 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
 
   const usesBoatTransport = () => typeSelect.value === 'boat' || (typeSelect.value === 'tourguide' && includeBoats.value === '1');
   const syncAdditionalBoatVisibility = () => {
-    const primaryCapacity = Number(boatSelect.options[boatSelect.selectedIndex]?.dataset.capacity || 0);
+    const primaryCapacity = Math.max(0, Math.min(8, Number(boatSelect.options[boatSelect.selectedIndex]?.dataset.capacity || 0)));
     const guests = Number(adultsInput.value || 0) + Number(childrenInput.value || 0);
     const needsExtraBoats = usesBoatTransport() && primaryCapacity > 0 && guests > primaryCapacity;
     document.getElementById('walkinAdditionalBoatsField').hidden = !needsExtraBoats;
@@ -7653,11 +7691,11 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
         selectionCleared = true;
       }
     });
-    let selectedCapacity = primaryCapacity + inputs.filter(input => input.checked).reduce((sum, input) => sum + Number(input.dataset.capacity || 0), 0);
+    let selectedCapacity = primaryCapacity + inputs.filter(input => input.checked).reduce((sum, input) => sum + Math.max(0, Math.min(8, Number(input.dataset.capacity || 0))), 0);
     // Keep only boats needed to cover the group, including after a pax decrease
     // or switching to a larger primary boat.
     [...inputs].reverse().forEach(input => {
-      const capacity = Number(input.dataset.capacity || 0);
+      const capacity = Math.max(0, Math.min(8, Number(input.dataset.capacity || 0)));
       if (input.checked && selectedCapacity - capacity >= guests) {
         input.checked = false;
         selectedCapacity -= capacity;
@@ -7695,14 +7733,14 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
       input.type = 'checkbox';
       input.name = 'additional_boat_ids[]';
       input.value = String(boat.boat_id);
-      input.dataset.capacity = String(boat.total_pax);
+      input.dataset.capacity = String(Math.max(0, Math.min(8, Number(boat.total_pax))));
       input.disabled = !usesBoatTransport() || !boat.available;
       input.checked = selected.has(input.value) && !input.disabled;
       const copy = document.createElement('span');
       const title = document.createElement('strong');
       title.textContent = boat.name;
       const note = document.createElement('small');
-      note.textContent = `${boat.total_pax} seats · ${boat.available ? 'Available' : (bookingDateInput.value ? 'Not available for these dates' : 'Choose tour dates first')}`;
+      note.textContent = `${Math.max(0, Math.min(8, Number(boat.total_pax)))} seats · ${boat.available ? 'Available' : (bookingDateInput.value ? 'Not available for these dates' : 'Choose tour dates first')}`;
       label.classList.toggle('is-unavailable', input.disabled);
       copy.append(title, note);
       label.append(input, copy);
@@ -7711,27 +7749,12 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
     });
     syncAdditionalBoatVisibility();
   };
-  const renderChildAges = () => {
-    const container = document.getElementById('walkinChildAges');
-    const existing = Array.from(container.querySelectorAll('input')).map(input => input.value);
-    container.replaceChildren();
-    for (let index = 0; index < Number(childrenInput.value || 0); index++) {
-      const label = document.createElement('label');
-      label.className = 'walkin-field';
-      const text = document.createElement('span');
-      text.textContent = `Child ${index + 1} age *`;
-      const input = document.createElement('input');
-      input.type = 'number'; input.name = 'child_ages[]'; input.min = '0'; input.max = '17'; input.required = true;
-      input.value = existing[index] ?? '';
-      input.addEventListener('input', syncSuggestedPrice);
-      label.append(text, input);
-      container.appendChild(label);
-    }
-  };
   const refreshAvailability = async () => {
     const request = ++availabilityRequest;
     const status = document.getElementById('walkinAvailabilityStatus');
     boatCatalog.forEach(boat => { boat.available = false; });
+    guideCatalog.forEach(guide => { guide.available = false; });
+    syncGuideCapacity();
     const completeDates = bookingDateInput.value && tourType.value && (tourType.value !== 'overnight' || bookingEndDateInput.value);
     additionalBoats.querySelectorAll('input').forEach(input => { input.disabled = true; });
     [boatSelect, guideSelect].forEach(select => Array.from(select.options).forEach(option => { if (option.value) option.disabled = true; }));
@@ -7744,6 +7767,7 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
       if (request !== availabilityRequest || walkinReservationLocked) return;
       if (!response.ok || !result.success) throw new Error(result.message || 'Availability could not be checked.');
       boatCatalog = result.boats;
+      guideCatalog = result.guides;
       [[boatSelect, result.boats, 'boat_id', 'name'], [guideSelect, result.guides, 'guide_id', 'fullname']].forEach(([select, rows, key, name]) => {
         Array.from(select.options).forEach(option => {
           if (!option.value) return;
@@ -7827,7 +7851,10 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
     const destination = bookingType === 'package' ? 'Included in package' : [locationSelect.value, secondLocation.value].filter(Boolean).join(', ');
     const selectedBoatIds = new Set([boatSelect.value, ...Array.from(additionalBoats.querySelectorAll('input:checked:not(:disabled)')).map(input => input.value)]);
     const boatNames = usesBoatTransport() ? boatCatalog.filter(boat => selectedBoatIds.has(String(boat.boat_id))).map(boat => boat.name).join(', ') : '';
-    const resourceDescription = bookingType === 'boat' ? boatNames : `${selectedText(resources[bookingType])}${boatNames ? ' · Boats: ' + boatNames : ''}`;
+    const guideNames = bookingType === 'tourguide'
+      ? [selectedText(guideSelect), ...Array.from(additionalGuides.querySelectorAll('select')).map(selectedText)].join(', ')
+      : '';
+    const resourceDescription = bookingType === 'boat' ? boatNames : `${guideNames || selectedText(resources[bookingType])}${boatNames ? ' · Boats: ' + boatNames : ''}`;
 
     const items = [
       ['Guest', guest],
@@ -7977,7 +8004,7 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
   });
   packageSelect.addEventListener('change', syncSuggestedPrice);
   boatSelect.addEventListener('change', () => { renderAdditionalBoats(); syncCapacity(); syncSuggestedPrice(); });
-  guideSelect.addEventListener('change', syncSuggestedPrice);
+  guideSelect.addEventListener('change', () => { syncCapacity(); syncSuggestedPrice(); });
   includeBoats.addEventListener('change', syncResources);
   [locationSelect, secondLocation, document.getElementById('walkinEcoCategory')].forEach(input => input.addEventListener('change', () => {
     secondLocation.setCustomValidity(secondLocation.value && secondLocation.value === locationSelect.value ? 'Choose a different second destination.' : '');
@@ -8002,7 +8029,6 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
   });
   [adultsInput, childrenInput].forEach(input => input.addEventListener('input', () => {
     syncCapacity();
-    renderChildAges();
     syncSuggestedPrice();
   }));
   paxButtons.forEach(button => {

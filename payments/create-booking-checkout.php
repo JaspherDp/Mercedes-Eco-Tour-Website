@@ -8,10 +8,13 @@ require_once __DIR__ . '/../php/tourist_auth_helper.php';
 require_once __DIR__ . '/../php/hotel_rooms_helper.php';
 require_once __DIR__ . '/../php/additional_fees_helper.php';
 require_once __DIR__ . '/../php/payment_receipt_breakdown.php';
+require_once __DIR__ . '/../php/booking_addon_catalog.php';
+require_once __DIR__ . '/../php/booking_addons_helper.php';
 require_once __DIR__ . '/../php/package_checkout_authority_helper.php';
 require_once __DIR__ . '/../php/tour_resource_availability_helper.php';
 require_once __DIR__ . '/../php/request_rate_limiter.php';
 require_once __DIR__ . '/../php/input_validation.php';
+require_once __DIR__ . '/../php/booking_capacity_helper.php';
 require_once __DIR__ . '/../php/app_url_helper.php';
 require_once __DIR__ . '/PayMongoService.php';
 require_once __DIR__ . '/BookingCheckoutService.php';
@@ -177,13 +180,59 @@ try {
         }
         $rateKey = $tourType === 'overnight' ? 'overnight' : 'day';
         $rates = ['boat' => 0.0, 'tourguide' => 0.0];
+        $activeRates = [];
         $rateStmt = $pdo->query("SELECT service_type, day_tour_price, overnight_price FROM service_prices WHERE is_active = 1");
         foreach ($rateStmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
             $key = strtolower((string)$row['service_type']);
-            if (isset($rates[$key])) $rates[$key] = (float)$row[$rateKey === 'day' ? 'day_tour_price' : 'overnight_price'];
+            if (isset($rates[$key])) {
+                $rates[$key] = (float)$row[$rateKey === 'day' ? 'day_tour_price' : 'overnight_price'];
+                $activeRates[$key] = true;
+            }
         }
         $requiredBoats = max(1, (int)ceil($guestCount / 8));
         $addOn = bookingCheckoutText($input['addOnService'] ?? '', 20);
+        $allowedAddOns = $domain === 'boat' ? ['', 'tourguide'] : ($domain === 'tourguide' ? ['', 'boat'] : ['']);
+        if (!in_array($addOn, $allowedAddOns, true)) throw new DomainException('The selected add-on does not match this booking type.');
+        $usesBoat = $domain === 'boat' || $addOn === 'boat';
+        $usesGuide = $domain === 'tourguide' || $addOn === 'tourguide';
+        $boatIds = $guideIds = $additionalBoatNames = $additionalGuideNames = [];
+        $validatedBoatId = $validatedGuideId = 0;
+        $resourceName = '';
+        if ($domain !== 'package') {
+            BookingResourceStorageReady($pdo);
+            if ($usesBoat) {
+                $boatIds = BookingResourceIds($input['boat_id'] ?? null, $input['additionalBoatIds'] ?? [], 'boat');
+                $capacities = [];
+                foreach ($boatIds as $id) {
+                    $stmt = $pdo->prepare('SELECT name, total_pax FROM boats WHERE boat_id=?');
+                    $stmt->execute([$id]);
+                    $boat = $stmt->fetch(PDO::FETCH_ASSOC);
+                    if (!$boat) throw new DomainException('The selected boat is no longer available.');
+                    $capacities[] = (int)$boat['total_pax'];
+                    $additionalBoatNames[] = (string)$boat['name'];
+                }
+                BookingValidateBoatCapacity($guestCount, $capacities);
+                $validatedBoatId = $boatIds[0];
+                $requiredBoats = count($boatIds);
+            }
+            if ($usesGuide) {
+                $guideIds = BookingResourceIds($input['guide_id'] ?? null, $input['additionalGuideIds'] ?? [], 'tour guide');
+                BookingValidateGuideCapacity($guestCount, $guideIds);
+                foreach ($guideIds as $id) {
+                    $stmt = $pdo->prepare('SELECT fullname FROM tour_guides WHERE guide_id=?');
+                    $stmt->execute([$id]);
+                    $name = $stmt->fetchColumn();
+                    if ($name === false) throw new DomainException('The selected tour guide is no longer available.');
+                    $additionalGuideNames[] = (string)$name;
+                }
+                $validatedGuideId = $guideIds[0];
+            }
+            $resourceName = $domain === 'boat' ? $additionalBoatNames[0] : $additionalGuideNames[0];
+            $additionalBoatNames = array_slice($additionalBoatNames, 1);
+            $additionalGuideNames = array_slice($additionalGuideNames, 1);
+            if (($usesBoat && !isset($activeRates['boat'])) || ($usesGuide && !isset($activeRates['tourguide']))) throw new DomainException('Configure an active service rate before booking.');
+        }
+        $requiredGuides = count($guideIds);
         $operatorId = 0;
         $packageName = '';
         $packageId = 0;
@@ -233,9 +282,9 @@ try {
             $serviceTotal = (float)$package['price'] * $guestCount;
         } elseif ($domain === 'boat') {
             $serviceTotal = $rates['boat'] * $requiredBoats;
-            if ($addOn === 'tourguide') $serviceTotal += $rates['tourguide'];
+            if ($addOn === 'tourguide') $serviceTotal += $rates['tourguide'] * $requiredGuides;
         } else {
-            $serviceTotal = $rates['tourguide'];
+            $serviceTotal = $rates['tourguide'] * $requiredGuides;
             if ($addOn === 'boat') $serviceTotal += $rates['boat'] * $requiredBoats;
         }
         $priceRows = [];
@@ -245,8 +294,8 @@ try {
         } else {
             if ($domain === 'boat' || $addOn === 'boat') $priceRows[] = PaymentReceiptLine('Boat hire', $rates['boat'] * $requiredBoats,
                 $tourType === 'overnight' ? 'Overnight rate' : 'Day-tour rate', $requiredBoats, $rates['boat']);
-            if ($domain === 'tourguide' || $addOn === 'tourguide') $priceRows[] = PaymentReceiptLine('Tour guide fee', $rates['tourguide'],
-                $tourType === 'overnight' ? 'Overnight rate' : 'Day-tour rate', 1, $rates['tourguide']);
+            if ($domain === 'tourguide' || $addOn === 'tourguide') $priceRows[] = PaymentReceiptLine('Tour guide fee', $rates['tourguide'] * $requiredGuides,
+                $tourType === 'overnight' ? 'Overnight rate' : 'Day-tour rate', $requiredGuides, $rates['tourguide']);
         }
         $configuredFees = additionalFeesForBooking(getAdditionalFees($pdo));
         $ecoRates = $configuredFees['environmental'];
@@ -254,18 +303,9 @@ try {
         if (!array_key_exists($eco, $ecoRates)) {
             throw new DomainException('Select a valid environmental-fee category.');
         }
-        $environmental = $ecoRates[$eco] * $adults;
+        $environmental = BookingEnvironmentalFee($adults, $eco, $ecoRates);
         $priceRows[] = PaymentReceiptLine('Environmental fee', $environmental, ucfirst($eco) . ' category', $adults, $ecoRates[$eco]);
-        $childAgesInput = $input['childAges'] ?? [];
-        if (!is_array($childAgesInput) || count($childAgesInput) !== $children) {
-            throw new DomainException('Provide one valid age for every child.');
-        }
-        $childAges = [];
-        foreach ($childAgesInput as $index => $age) {
-            $childAges[] = ItourValidationInt($age, 'Child age ' . ($index + 1), 0, 17);
-        }
-        $freeChildren = count(array_filter($childAges, static fn(int $age): bool => $age <= 7));
-        $entranceGuests = max(0, $guestCount - $freeChildren);
+        $entranceGuests = $guestCount;
         $entrance = $configuredFees['entrance'];
         $docking = $configuredFees['docking'];
         $usesBoat = $domain === 'boat' || $addOn === 'boat';
@@ -276,7 +316,7 @@ try {
                 : ($entrance[$location] ?? 0);
             $fees += $entranceRate * $entranceGuests;
             if ($entranceRate > 0) $priceRows[] = PaymentReceiptLine('Entrance fee — ' . $location, $entranceRate * $entranceGuests,
-                $freeChildren > 0 ? $freeChildren . ' child(ren) age 7 or below exempt.' : '', $entranceGuests, (float)$entranceRate);
+                'Per passenger, including adults and children.', $entranceGuests, (float)$entranceRate);
             if ($usesBoat) {
                 $dockingRate = (float)($docking[$location] ?? 0);
                 $fees += $dockingRate * $requiredBoats;
@@ -284,47 +324,9 @@ try {
             }
         }
         $total = round($serviceTotal + $fees, 2);
-        $rawResourceId = $domain === 'boat' ? ($input['boat_id'] ?? 0)
-            : ($domain === 'tourguide' ? ($input['guide_id'] ?? 0) : 0);
-        $resourceId = ($rawResourceId === 0 || $rawResourceId === '0' || $rawResourceId === '')
-            ? 0 : ItourValidationInt($rawResourceId, 'Preferred service ID', 1, PHP_INT_MAX);
-        $resourceName = '';
-        if ($resourceId > 0) {
-            $resourceTable = $domain === 'boat' ? 'boats' : 'tour_guides';
-            $resourceColumn = $domain === 'boat' ? 'boat_id' : 'guide_id';
-            $resourceNameColumn = $domain === 'boat' ? 'name' : 'fullname';
-            $resourceStmt = $pdo->prepare("SELECT {$resourceNameColumn} FROM {$resourceTable} WHERE {$resourceColumn} = ? LIMIT 1");
-            $resourceStmt->execute([$resourceId]);
-            $resourceName = bookingCheckoutText($resourceStmt->fetchColumn(), 160);
-            if ($resourceName === '') {
-                throw new DomainException('The selected boat or tour guide is no longer available.');
-            }
-        }
-        $allowedAddOns = $domain === 'boat' ? ['', 'tourguide']
-            : ($domain === 'tourguide' ? ['', 'boat'] : ['']);
-        if (!in_array($addOn, $allowedAddOns, true)) {
-            throw new DomainException('The selected add-on does not match this booking type.');
-        }
-        $validatedBoatId = $domain === 'boat' ? $resourceId : 0;
-        $validatedGuideId = $domain === 'tourguide' ? $resourceId : 0;
-        $additionalBoatIds = $input['additionalBoatIds'] ?? [];
-        if (!is_array($additionalBoatIds) || count($additionalBoatIds) > ($domain === 'boat' ? $requiredBoats - 1 : 0)) {
-            throw new DomainException('The additional boat preferences do not match the passenger count.');
-        }
-        $additionalBoatNames = [];
-        $validatedAdditionalBoatIds = [];
-        foreach ($additionalBoatIds as $additionalBoatId) {
-            $additionalBoatId = ItourValidationInt($additionalBoatId, 'Additional preferred boat', 1, PHP_INT_MAX);
-            if ($additionalBoatId === $validatedBoatId || in_array($additionalBoatId, $validatedAdditionalBoatIds, true)) {
-                throw new DomainException('Please choose a different boat for each additional preference.');
-            }
-            $extraBoat = $pdo->prepare('SELECT name FROM boats WHERE boat_id = ? LIMIT 1');
-            $extraBoat->execute([$additionalBoatId]);
-            $extraName = $extraBoat->fetchColumn();
-            if ($extraName === false) throw new DomainException('An additional preferred boat is no longer available.');
-            $validatedAdditionalBoatIds[] = $additionalBoatId;
-            $additionalBoatNames[] = (string)$extraName;
-        }
+        $resourceId = $domain === 'boat' ? $validatedBoatId : ($domain === 'tourguide' ? $validatedGuideId : 0);
+        $validatedAdditionalBoatIds = array_slice($boatIds, 1);
+        $validatedAdditionalGuideIds = array_slice($guideIds, 1);
         $resourceBookingEnd = $tourType === 'overnight' ? $bookingEndDate : $bookingDate;
         $preferredParts = [];
         if ($domain === 'package') {
@@ -337,6 +339,7 @@ try {
         if ($addOn === 'boat') $preferredParts[] = 'Add-on: Tour Boat';
         if ($addOn === 'tourguide') $preferredParts[] = 'Add-on: Tour Guide';
         if ($additionalBoatNames) $preferredParts[] = 'Additional preferred boats: ' . implode(', ', $additionalBoatNames);
+        if ($additionalGuideNames) $preferredParts[] = 'Additional guides: ' . implode(', ', $additionalGuideNames);
         $preferredParts[] = 'Payment Option: ' . ($paymentType === 'full' ? 'Full' : '20% Partial');
         $preferred = bookingCheckoutText(implode(' | ', $preferredParts), 255);
         $payload = [
@@ -351,12 +354,28 @@ try {
             'guide_id' => $validatedGuideId, 'num_adults' => $adults,
             'num_children' => $children,
             'additional_boat_ids' => $validatedAdditionalBoatIds,
+            'additional_guide_ids' => $validatedAdditionalGuideIds,
+            'additional_guide_names' => $additionalGuideNames,
+            'resource_allocation_version' => 2,
             'additional_boat_names' => $additionalBoatNames,
-            'child_ages' => $childAges,
+            'entrance_guests' => $entranceGuests,
             'price_breakdown' => ['version' => 1, 'rows' => $priceRows],
         ];
         $serviceName = $packageName !== '' ? $packageName : ucfirst($domain) . ' booking';
         $lineDescription = $bookingDate . ' | ' . $guestCount . ' guest(s)';
+    }
+
+    $selectedAddons = AddonCatalogResolve($pdo, $domain, (int)($payload['hotel_resort_id'] ?? 0), $input['catalog_addons'] ?? []);
+    if ($selectedAddons['rows']) {
+        // Upgrade optional expense columns before opening any payment transaction.
+        if ($domain !== 'hotel') {
+            BookingAddonsEnsureSchema($pdo);
+        } else {
+            // Fail before taking payment if itemized hotel expense storage is unavailable.
+            $pdo->query('SELECT expense_name, quantity, unit_price, total_amount, notes, payment_status FROM hotel_booking_expenses LIMIT 0');
+        }
+        $payload['catalog_addons'] = $selectedAddons;
+        $total = round($total + $selectedAddons['total'], 2);
     }
 
     if ($total <= 0) throw new DomainException('This booking has no payable amount.');
@@ -374,16 +393,22 @@ try {
     $idempotencyKey = 'booking_' . bin2hex(random_bytes(24));
     $returnToken = bin2hex(random_bytes(32));
 
+    $resourceLocks = [];
     $resourceLock = '';
     if ($domain === 'package' && isset($packageName, $resourceBookingEnd)) {
         $resourceLock = tourPackageLock($pdo, $packageName);
         if (!tourPackageIsAvailable($pdo, $packageName, $bookingDate, $resourceBookingEnd, max(1, (int)$guestCount), (int)$operatorId, (int)$packageId)) {
             throw new DomainException('This tour package does not have enough open guest slots for the selected date.');
         }
-    } elseif (isset($resourceId, $resourceBookingEnd) && $resourceId > 0 && in_array($domain, ['boat', 'tourguide'], true)) {
-        $resourceLock = tourResourceLock($pdo, $domain, $resourceId);
-        if (!tourResourceIsAvailable($pdo, $domain, $resourceId, $bookingDate, $resourceBookingEnd)) {
-            throw new DomainException('This boat or tour guide is unavailable for the selected date.');
+    } elseif ($domain !== 'hotel' && $domain !== 'package') {
+        foreach (['boat' => $boatIds, 'tourguide' => $guideIds] as $resourceType => $ids) {
+            sort($ids, SORT_NUMERIC);
+            foreach ($ids as $id) {
+                $resourceLocks[] = tourResourceLock($pdo, $resourceType, $id);
+                if (!tourResourceIsAvailable($pdo, $resourceType, $id, $bookingDate, $resourceBookingEnd)) {
+                    throw new DomainException('A selected boat or tour guide is unavailable for the selected dates. Choose another resource.');
+                }
+            }
         }
     }
 
@@ -413,6 +438,7 @@ try {
     $transactionId = (int)$pdo->lastInsertId();
     $pdo->commit();
     tourResourceUnlock($pdo, $resourceLock ?? '');
+    foreach ($resourceLocks ?? [] as $heldLock) tourResourceUnlock($pdo, $heldLock);
 
     session_write_close();
     $publicAppUrl = ItourAppIsProduction() ? ItourPaymentPhoneAppUrl() : PaymentHelper::env('PUBLIC_APP_URL');
@@ -450,10 +476,12 @@ try {
 } catch (DomainException|InvalidArgumentException $exception) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     tourResourceUnlock($pdo, $resourceLock ?? '');
+    foreach ($resourceLocks ?? [] as $heldLock) tourResourceUnlock($pdo, $heldLock);
     bookingCheckoutResponse(400, ['success' => false, 'message' => $exception->getMessage()]);
 } catch (PayMongoException $exception) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     tourResourceUnlock($pdo, $resourceLock ?? '');
+    foreach ($resourceLocks ?? [] as $heldLock) tourResourceUnlock($pdo, $heldLock);
     if (isset($transactionId)) {
         $pdo->prepare("UPDATE payment_transactions SET status='failed', failed_at=NOW(), failure_message=? WHERE payment_transaction_id=? AND status='pending'")->execute([mb_substr($exception->getMessage(), 0, 1000), $transactionId]);
         $pdo->prepare("UPDATE booking_checkout_drafts SET status='failed' WHERE booking_draft_id=? AND status='pending'")->execute([$draftId]);
@@ -463,6 +491,7 @@ try {
 } catch (Throwable $exception) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     tourResourceUnlock($pdo, $resourceLock ?? '');
+    foreach ($resourceLocks ?? [] as $heldLock) tourResourceUnlock($pdo, $heldLock);
     if (isset($transactionId, $draftId)) {
         try {
             $pdo->prepare("UPDATE payment_transactions SET status='failed', failed_at=NOW(), failure_message=? WHERE payment_transaction_id=? AND status='pending'")

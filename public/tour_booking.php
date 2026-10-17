@@ -3,8 +3,12 @@ chdir(__DIR__ . '/..');
 require_once 'php/session_security.php';
 AppSessionStart();
 require_once 'php/db_connection.php';
+require_once __DIR__ . '/../php/tourist_activity_helper.php';
+TouristPreparePageActivity($pdo);
 require_once 'php/tourist_auth_helper.php';
 require_once 'php/additional_fees_helper.php';
+require_once 'php/booking_capacity_helper.php';
+require_once 'php/booking_addon_picker.php';
 
 $tourAvailabilityBase = rtrim(str_replace('\\', '/', dirname((string)($_SERVER['SCRIPT_NAME'] ?? ''))), '/');
 if (str_ends_with(strtolower($tourAvailabilityBase), '/public')) {
@@ -187,7 +191,7 @@ foreach ($boatsRaw as $row) {
     $boats[] = [
         'id' => (int)$row['boat_id'],
         'name' => (string)$row['name'],
-        'capacity' => (string)$row['total_pax'],
+        'capacity' => (string)BookingBoatCapacity((int)$row['total_pax']),
         'size' => (string)$row['size'],
         'boat_number' => (string)$row['boat_number'],
         'image' => resolveAssetImage($row['image1'] ?? ''),
@@ -329,10 +333,6 @@ if ($prefillTourType === 'same-day') {
 
 $prefillAdults = max(0, (int)($_GET['adults'] ?? 0));
 $prefillChildren = max(0, (int)($_GET['children'] ?? 0));
-$prefillChildAges = array_values(array_slice(array_filter(
-    array_map('trim', explode(',', (string)($_GET['child_ages'] ?? ''))),
-    static fn($age) => preg_match('/^\d{1,2}$/', $age) === 1 && (int)$age >= 0 && (int)$age <= 17
-), 0, $prefillChildren));
 
 $backLink = sanitizeReturnUrl($_GET['return'] ?? 'hotel_resorts.php?tab=tours');
 $locations = [
@@ -379,6 +379,8 @@ $locations = [
   #durationHint.needs-tour-type { color: #9a5b10; font-weight: 650; }
   #tourDuration.needs-tour-type { border-color: #d49a50 !important; box-shadow: 0 0 0 3px rgba(212,154,80,.14) !important; }
 </style>
+  <link rel="stylesheet" href="styles/booking-addon-picker.css?v=2">
+  <?php TouristRenderActivityMonitor(); ?>
 </head>
 <body>
   <header class="booking-header">
@@ -467,23 +469,22 @@ $locations = [
 
           <div class="field-row" id="preferredWrapper">
             <label>
-              Preferred Tour Guide / Boat
+              Primary Tour Guide / Boat
               <select id="preferredSelection" name="preferred_selection">
-                <option value="">No specific preference</option>
+                <option value="">Select a boat or tour guide</option>
               </select>
             </label>
-            <p class="helper-text">Your preferred selection is subject to availability and may be changed by the office.</p>
+            <p class="helper-text">Select the primary resource for your booking. All selected resources must be available for the entire tour.</p>
           </div>
 
           <input type="hidden" id="selectedBoatId" name="boat_id">
           <input type="hidden" id="selectedGuideId" name="guide_id">
 
-          <div id="additionalBoatPreferences" class="additional-boat-preferences" hidden></div>
+
           <div class="field-row two passenger-fields" id="passengerFields">
-            <label>Adults<input type="number" id="numAdults" name="num_adults" min="0" max="100" value="1" required /></label>
-            <label>Children<input type="number" id="numChildren" name="num_children" min="0" max="100" value="0" required /></label>
+            <label>Adults (14+ years)<input type="number" id="numAdults" name="num_adults" min="0" max="100" value="1" required /></label>
+            <label>Children (0–13 years)<input type="number" id="numChildren" name="num_children" min="0" max="100" value="0" required /></label>
           </div>
-          <div id="tourChildAgeRows" class="tour-child-age-list" tabindex="-1" aria-live="polite" hidden></div>
           <p class="helper-text" id="boatPassengerHint" hidden>Each boat accommodates a maximum of 8 passengers, including adults and children.</p>
 
           <div class="field-row two">
@@ -561,7 +562,7 @@ $locations = [
                 <option value="senior">Senior Citizen (20% discount)</option>
               </select>
             </label>
-            <p class="helper-text">Children 12 years old and below are free for environmental fee.</p>
+            <p class="helper-text">Children are excluded from the environmental fee. All guests count toward passenger capacity.</p>
           </div>
 
           <div class="field-row">
@@ -575,6 +576,7 @@ $locations = [
             <p class="helper-text">Choose how much to pay now. Booking confirmation is still manual for now.</p>
           </div>
 
+          <?php BookingAddonPicker($pdo, 'package'); ?>
           <div id="addonWrapper" class="checkbox-box addon-box">
             <label>
               <input type="checkbox" id="includeAddonService" />
@@ -582,6 +584,7 @@ $locations = [
             </label>
             <p class="helper-text" id="addonServiceHint"></p>
           </div>
+          <div id="additionalBoatPreferences" tabindex="-1" class="additional-boat-preferences" hidden></div>
           </section>
 
           <section class="booking-step-panel" data-booking-step="3" hidden>
@@ -605,6 +608,8 @@ $locations = [
             </details>
             <p><span>Service Subtotal</span><strong id="previewServiceTotal">-</strong></p>
             <p><span>Other Fees Subtotal</span><strong id="previewOtherFeesTotal">-</strong></p>
+            <div class="booking-addon-summary" data-addon-summary hidden></div>
+            <p><span>Optional add-ons</span><strong id="previewCatalogAddonsTotal">₱0.00</strong></p>
             <p class="grand-total-row"><span>Estimated total</span><strong id="previewEstimatedTotal">-</strong></p>
             <p><span>Payment Option</span><strong id="previewPaymentOption">20% Partial</strong></p>
             <p class="pay-now-row"><span>Amount to pay now</span><strong id="previewAmountPayable">-</strong></p>
@@ -714,7 +719,9 @@ $locations = [
     </div>
   </main>
 
-  <script>
+  <script src="js/booking-addon-picker.js?v=2"></script>
+  <script src="js/booking-resource-picker.js"></script>
+<script>
     const BOOKING_DATA = <?= json_encode([
       'servicePrices' => $servicePrices,
       'packages' => $packages,
@@ -730,7 +737,6 @@ $locations = [
       'prefillCheckout' => $prefillCheckout,
       'prefillAdults' => $prefillAdults,
       'prefillChildren' => $prefillChildren,
-      'prefillChildAges' => array_map('intval', $prefillChildAges),
       'returnUrl' => $backLink,
     ], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
 
@@ -875,7 +881,6 @@ $locations = [
       const prefillCheckout = String(BOOKING_DATA.prefillCheckout || "");
       const prefillAdults = Math.max(0, Number(BOOKING_DATA.prefillAdults || 0));
       const prefillChildren = Math.max(0, Number(BOOKING_DATA.prefillChildren || 0));
-      const prefillChildAges = Array.isArray(BOOKING_DATA.prefillChildAges) ? BOOKING_DATA.prefillChildAges : [];
       let prefillPreferredApplied = false;
       let overnightRangePicker = null;
       let sameDayPicker = null;
@@ -897,7 +902,7 @@ $locations = [
         "contact_number",
         "num_adults",
         "num_children",
-        "child_ages",
+        "selected_resources",
         "eco_category",
         "payment_option",
         "agree_privacy",
@@ -915,7 +920,7 @@ $locations = [
         contact_number: contactNumber,
         num_adults: numAdults,
         num_children: numChildren,
-        child_ages: document.getElementById('tourChildAgeRows'),
+        selected_resources: document.getElementById('additionalBoatPreferences'),
         eco_category: ecoCategory,
         payment_option: paymentOption,
         agree_privacy: agreePrivacy,
@@ -1361,33 +1366,6 @@ $locations = [
       const getSelectedLocations = () => locationInputs.filter((item) => item.checked).map((item) => item.value);
       const getAdultCount = () => Math.max(0, Number(numAdults.value || 0));
       const getChildCount = () => Math.max(0, Number(numChildren.value || 0));
-      const tourChildAgeRows = document.getElementById('tourChildAgeRows');
-      const getChildAges = () => [...tourChildAgeRows.querySelectorAll('select')]
-        .map(select => select.value).filter(value => value !== '').map(Number);
-      const renderTourChildAges = (savedAges = null) => {
-        const previous = savedAges ?? [...tourChildAgeRows.querySelectorAll('select')].map(select => select.value);
-        const count = Math.min(100, Math.max(0, Math.floor(getChildCount())));
-        tourChildAgeRows.replaceChildren();
-        tourChildAgeRows.hidden = count === 0;
-        for (let index = 0; index < count; index++) {
-          const label = document.createElement('label');
-          label.textContent = `Child ${index + 1} age`;
-          const select = document.createElement('select');
-          select.name = 'child_ages[]';
-          select.required = true;
-          select.setAttribute('aria-label', `Age of child ${index + 1}`);
-          select.add(new Option('Select age', ''));
-          for (let age = 0; age <= 17; age++) select.add(new Option(`${age} year${age === 1 ? '' : 's'} old`, String(age)));
-          const saved = previous[index];
-          select.value = saved !== undefined && saved !== null ? String(saved) : '';
-          select.addEventListener('change', () => { updatePreview(); revalidateFieldErrors(['child_ages']); });
-          label.appendChild(select);
-          tourChildAgeRows.appendChild(label);
-        }
-      };
-      const getFreeYoungChildCount = () => getChildAges()
-        .slice(0, getChildCount())
-        .filter(age => Number(age) >= 0 && Number(age) <= 7).length;
       const getTotalGuests = () => getAdultCount() + getChildCount();
 
       const getAddOnType = () => {
@@ -1402,7 +1380,7 @@ $locations = [
       const populatePreferredOptions = (type) => {
 
     preferredSelect.innerHTML =
-      '<option value="">No specific preference</option>';
+      '<option value="">Select a boat or tour guide</option>';
 
     const list =
       type === "boat"
@@ -1596,7 +1574,7 @@ preferredSelect.addEventListener("change", function () {
           addonWrapper.style.display = "grid";
           addonServiceLabel.textContent = "Include Tour Guide with this boat booking";
           const addOnRate = getServiceRate("tourguide", rateKey);
-          addonServiceHint.textContent = `Adds Tour Guide ${rateKey === "overnight" ? "Overnight" : "Day Tour"} rate: ${formatMoney(addOnRate)}.`;
+          addonServiceHint.textContent = `Tour Guide ${rateKey === "overnight" ? "Overnight" : "Day Tour"} rate: ${formatMoney(addOnRate)} per selected guide, up to 8 passengers each.`;
           return;
         }
 
@@ -1630,12 +1608,12 @@ preferredSelect.addEventListener("change", function () {
         const adults = getAdultCount();
         const children = getChildCount();
         const totalGuests = adults + children;
-        const freeYoungChildren = getFreeYoungChildCount();
-        const entrancePayingGuests = Math.max(0, totalGuests - freeYoungChildren);
+        const entrancePayingGuests = totalGuests;
         const rateKey = getRateKey();
         const addOnType = getAddOnType();
         const usesBoat = type === "boat" || addOnType === "boat";
-        const requiredBoats = usesBoat ? Math.max(1, Math.ceil(Math.max(totalGuests, 1) / MAX_BOAT_PAX)) : 0;
+        const requiredBoats = usesBoat ? resourcePicker.boatCount : 0;
+        const requiredGuides = resourcePicker.guideCount;
 
         let primarySubtotal = 0;
         if (type === "package" && packageTitle !== "") {
@@ -1643,7 +1621,7 @@ preferredSelect.addEventListener("change", function () {
         } else if (type === "boat") {
           primarySubtotal = getServiceRate("boat", rateKey) * requiredBoats;
         } else if (type === "tourguide") {
-          primarySubtotal = getServiceRate("tourguide", rateKey);
+          primarySubtotal = getServiceRate("tourguide", rateKey) * requiredGuides;
         }
 
         let addOnSubtotal = 0;
@@ -1652,8 +1630,8 @@ preferredSelect.addEventListener("change", function () {
           addOnSubtotal = getServiceRate("boat", rateKey) * requiredBoats;
           addOnLabel = `Boat (${requiredBoats} required)`;
         } else if (addOnType === "tourguide") {
-          addOnSubtotal = getServiceRate("tourguide", rateKey);
-          addOnLabel = "Tour Guide";
+          addOnSubtotal = getServiceRate("tourguide", rateKey) * requiredGuides;
+          addOnLabel = `Tour Guide (${requiredGuides} required)`;
         }
         const boatBillTotal = (type === "boat" ? primarySubtotal : 0) + (addOnType === "boat" ? addOnSubtotal : 0);
 
@@ -1679,10 +1657,11 @@ preferredSelect.addEventListener("change", function () {
 
         const serviceTotal = primarySubtotal + addOnSubtotal;
         const otherFeesTotal = environmentalFee + entranceFee + dockingFee;
-        const grandTotal = serviceTotal + otherFeesTotal;
+        const catalogAddonsTotal = window.BookingAddonPicker.total();
+        const grandTotal = serviceTotal + otherFeesTotal + catalogAddonsTotal;
         const selectedPaymentOption = paymentOption.value === "full" ? "full" : "partial";
         const paymentPercent = selectedPaymentOption === "full" ? 1 : 0.2;
-        const payableNow = grandTotal * paymentPercent;
+        const payableNow = Math.round((grandTotal * paymentPercent + Number.EPSILON) * 100) / 100;
 
         return {
           type,
@@ -1690,7 +1669,6 @@ preferredSelect.addEventListener("change", function () {
           selectedLocations,
           adults,
           children,
-          freeYoungChildren,
           entrancePayingGuests,
           totalGuests,
           rateKey,
@@ -1705,6 +1683,7 @@ preferredSelect.addEventListener("change", function () {
           dockingFee,
           serviceTotal,
           otherFeesTotal,
+          catalogAddonsTotal,
           grandTotal,
           selectedPaymentOption,
           paymentPercent,
@@ -1713,6 +1692,7 @@ preferredSelect.addEventListener("change", function () {
       };
 
       const updateSectionsByType = () => {
+        window.BookingAddonPicker.setDomain(bookingType.value);
         const type = bookingType.value;
         const isPackage = type === "package";
         const isService = type === "boat" || type === "tourguide";
@@ -1726,7 +1706,7 @@ preferredSelect.addEventListener("change", function () {
           addonWrapper.style.display = "none";
           tourType.disabled = true;
           tourDuration.readOnly = true;
-          preferredSelect.innerHTML = '<option value="">No specific preference</option>';
+          preferredSelect.innerHTML = '<option value="">Select a boat or tour guide</option>';
           preferredSelect.value = "";
           syncPackageDerivedFields();
         } else if (isService) {
@@ -1739,7 +1719,7 @@ preferredSelect.addEventListener("change", function () {
           includeAddonService.checked = false;
           addonWrapper.style.display = "none";
           packageSelect.value = "";
-          preferredSelect.innerHTML = '<option value="">No specific preference</option>';
+          preferredSelect.innerHTML = '<option value="">Select a boat or tour guide</option>';
           preferredSelect.value = "";
           tourType.value = "";
           tourDuration.value = "";
@@ -1817,79 +1797,17 @@ preferredSelect.addEventListener("change", function () {
       };
 
       const additionalBoatPreferences = document.getElementById('additionalBoatPreferences');
-      let acknowledgedBoatCount = 1;
-      let boatCapacityTimer;
-      let capacityAlertOpen = false;
-      const additionalBoatSelections = () => [...additionalBoatPreferences.querySelectorAll('select')];
-      const selectedAdditionalBoats = () => additionalBoatSelections().map(select => Number(select.value)).filter(id => id > 0);
-      const renderAdditionalBoatPreferences = (count) => {
-        const previous = additionalBoatSelections().map(select => select.value);
-        additionalBoatPreferences.replaceChildren();
-        additionalBoatPreferences.hidden = count <= 1 || bookingType.value !== 'boat';
-        if (additionalBoatPreferences.hidden) return;
-        const heading = document.createElement('h3');
-        heading.textContent = 'Additional preferred boats';
-        additionalBoatPreferences.appendChild(heading);
-        const used = new Set([Number(selectedBoatId.value)]);
-        for (let index = 0; index < count - 1; index++) {
-          const label = document.createElement('label');
-          label.textContent = `Preferred boat ${index + 2}`;
-          const select = document.createElement('select');
-          select.name = 'additional_boat_ids[]';
-          select.add(new Option('No specific preference', ''));
-          boats.forEach(boat => select.add(new Option(boat.name, String(boat.id))));
-          if (previous[index] && !used.has(Number(previous[index]))) select.value = previous[index];
-          if (select.value) used.add(Number(select.value));
-          label.appendChild(select);
-          additionalBoatPreferences.appendChild(label);
-        }
-        const note = document.createElement('p');
-        note.className = 'helper-text';
-        note.textContent = 'Additional boats are preferences, subject to availability and confirmation by the office.';
-        additionalBoatPreferences.appendChild(note);
-        syncAdditionalBoatOptions();
-      };
-      const syncAdditionalBoatOptions = () => {
-        const selected = new Set([Number(selectedBoatId.value), ...selectedAdditionalBoats()]);
-        additionalBoatSelections().forEach(select => {
-          [...select.options].forEach(option => {
-            option.disabled = Boolean(option.value && option.value !== select.value && selected.has(Number(option.value)));
-          });
-        });
-      };
+      const resourcePicker = new BookingResourcePicker({
+        container: additionalBoatPreferences, boats, guides,
+        type: () => bookingType.value, addon: getAddOnType, pax: getTotalGuests,
+        primaryBoat: () => selectedBoatId.value, primaryGuide: () => selectedGuideId.value,
+        change: () => { updatePreview(); refreshResourceAvailability(); }
+      });
+      const selectedAdditionalBoats = () => resourcePicker.boatIds.slice(1);
       const syncBoatPassengers = () => {
-        clearTimeout(boatCapacityTimer);
-        document.getElementById('boatPassengerHint').hidden = bookingType.value !== 'boat';
-        if (bookingType.value !== 'boat') {
-          acknowledgedBoatCount = 1;
-          renderAdditionalBoatPreferences(1);
-          return;
-        }
-        const count = Math.max(1, Math.ceil(getTotalGuests() / MAX_BOAT_PAX));
-        if (count <= acknowledgedBoatCount) {
-          acknowledgedBoatCount = count;
-          additionalBoatPreferences.hidden = count <= 1;
-          if (additionalBoatSelections().length !== count - 1 || selectedAdditionalBoats().includes(Number(selectedBoatId.value))) renderAdditionalBoatPreferences(count);
-          syncAdditionalBoatOptions();
-          return;
-        }
-        if (capacityAlertOpen) return;
-        additionalBoatPreferences.hidden = true;
-        boatCapacityTimer = setTimeout(async () => {
-          capacityAlertOpen = true;
-          try {
-            await Swal.fire({ icon: 'info', title: 'Another boat is required',
-              text: `1 boat accommodates a maximum of ${MAX_BOAT_PAX} passengers. Your ${getTotalGuests()} passengers need ${count} boats. Choose another preferred boat after this message.`,
-              confirmButtonText: 'Done', confirmButtonColor: '#2b7a66', allowOutsideClick: false, allowEscapeKey: false });
-            acknowledgedBoatCount = count;
-            renderAdditionalBoatPreferences(count);
-          } finally {
-            capacityAlertOpen = false;
-            syncBoatPassengers();
-          }
-        }, 350);
+        document.getElementById('boatPassengerHint').hidden = bookingType.value === 'package';
+        resourcePicker.sync();
       };
-      additionalBoatPreferences.addEventListener('change', () => { syncAdditionalBoatOptions(); updatePreview(); });
 
       const updatePreview = () => {
         syncBoatPassengers();
@@ -1901,8 +1819,11 @@ preferredSelect.addEventListener("change", function () {
 
         previewType.textContent = getTypeLabel(pricing.type);
         previewPackage.textContent = pricing.packageTitle || "-";
-        const extraNames = selectedAdditionalBoats().map(id => boats.find(boat => Number(boat.id) === id)?.name).filter(Boolean);
-        previewPreferred.textContent = [preferred, ...extraNames].join(', ');
+        const assignedNames = [
+          ...resourcePicker.boatIds.map(id => boats.find(boat => Number(boat.id) === id)?.name),
+          ...resourcePicker.guideIds.map(id => guides.find(guide => Number(guide.id) === id)?.name)
+        ].filter(Boolean);
+        previewPreferred.textContent = assignedNames.length ? assignedNames.join(', ') : preferred;
         previewAddon.textContent = pricing.addOnType ? pricing.addOnLabel : "-";
         previewTourType.textContent = tourType.value ? (tourType.value === "same-day" ? "Same Day" : "Overnight") : "-";
         previewDuration.textContent = tourDuration.value.trim() || "-";
@@ -1926,6 +1847,7 @@ preferredSelect.addEventListener("change", function () {
         previewBoatBill.textContent = pricing.boatBillTotal > 0 ? formatMoney(pricing.boatBillTotal) : "₱0.00";
         previewServiceTotal.textContent = pricing.serviceTotal > 0 ? formatMoney(pricing.serviceTotal) : "₱0.00";
         previewOtherFeesTotal.textContent = pricing.otherFeesTotal > 0 ? formatMoney(pricing.otherFeesTotal) : "₱0.00";
+        document.getElementById("previewCatalogAddonsTotal").textContent = formatMoney(pricing.catalogAddonsTotal);
         previewEstimatedTotal.textContent = pricing.grandTotal > 0 ? formatMoney(pricing.grandTotal) : "₱0.00";
         previewPaymentOption.textContent = pricing.selectedPaymentOption === "full" ? "Full Payment (100%)" : "20% Partial Payment";
         previewAmountPayable.textContent = pricing.payableNow > 0 ? formatMoney(pricing.payableNow) : "₱0.00";
@@ -1936,9 +1858,6 @@ preferredSelect.addEventListener("change", function () {
         if (pricing.usesBoat && pricing.totalGuests > MAX_BOAT_PAX) {
           previewFeesNote.textContent = `Passenger count exceeds ${MAX_BOAT_PAX}. Estimated docking and boat rates use ${pricing.requiredBoats} boats.`;
           previewPricingNote.textContent = `Boat capacity is ${MAX_BOAT_PAX} passengers per boat. This booking needs ${pricing.requiredBoats} boats for ${pricing.totalGuests} passengers.`;
-        } else if (pricing.freeYoungChildren > 0) {
-          previewFeesNote.textContent = `${pricing.freeYoungChildren} child${pricing.freeYoungChildren === 1 ? "" : "ren"} age 7 or below exempted from entrance fees.`;
-          previewPricingNote.textContent = "Hotel stays remain priced per room/night; boat capacity and other service fees still use the full guest count.";
         } else if (pricing.discountTotal > 0) {
           previewFeesNote.textContent = `Discount applied: -${formatMoney(pricing.discountTotal)} on environmental fee.`;
           previewPricingNote.textContent = "Environmental, entrance, and docking fees are estimates based on your selections.";
@@ -2034,7 +1953,8 @@ preferredSelect.addEventListener("change", function () {
     : { success: true, errors: {} };
 
   const errors = result.success ? {} : (result.errors || {});
-  if (getChildCount() > 0 && getChildAges().length !== getChildCount()) errors.child_ages = 'Please select an age for every child.';
+  const resourceError = resourcePicker.validate();
+  if (resourceError) errors.selected_resources = resourceError;
   return errors;
 };
       const renderValidationErrors = (errors) => {
@@ -2050,10 +1970,6 @@ preferredSelect.addEventListener("change", function () {
         const targetKey = fieldOrder.find((fieldKey) => !!errors[fieldKey]);
         if (!targetKey) return;
         const target = fieldTargets[targetKey];
-        if (targetKey === 'child_ages') {
-          const missingAge = [...tourChildAgeRows.querySelectorAll('select')].find(select => select.value === '');
-          if (missingAge) { missingAge.focus(); return; }
-        }
         if (target instanceof HTMLElement) {
           target.focus({ preventScroll: false });
         }
@@ -2101,26 +2017,35 @@ preferredSelect.addEventListener("change", function () {
         unavailableResourceDates = new Set();
         resourceAvailabilityNote.textContent = "";
         syncAvailabilityCalendars();
-        const resource = selectedResource();
-        if (!resource) return;
+        resourcePicker.sync();
+        const primaryResource = selectedResource();
+        const resources = primaryResource?.type === 'package' ? [primaryResource] : [
+          ...resourcePicker.boatIds.filter(Boolean).map(id => ({ type: 'boat', id })),
+          ...resourcePicker.guideIds.filter(Boolean).map(id => ({ type: 'tourguide', id }))
+        ];
+        if (!resources.length) return;
 
         resourceAvailabilityNote.textContent = "Checking booked dates...";
         const today = new Date();
         const limit = new Date(today.getFullYear() + 2, today.getMonth(), today.getDate());
         const formatLocalDate = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
         try {
-          const params = new URLSearchParams({ type: resource.type, from: formatLocalDate(today), to: formatLocalDate(limit) });
-          if (resource.type === "package") {
-            params.set("package_id", String(resource.packageId));
-            params.set("package_name", resource.packageName);
-            if (resource.operatorId > 0) params.set("operator_id", String(resource.operatorId));
-            params.set("guests", String(Math.max(1, getAdultCount() + getChildCount())));
-          }
-          else params.set("resource_id", String(resource.id));
-          const response = await fetch(`${availabilityEndpoint}?${params}`, { headers: { "Accept": "application/json" }, signal: availabilityRequestController.signal });
-          const result = await response.json();
-          if (!response.ok || !result.success) throw new Error(result.message || "Availability could not be loaded.");
-          unavailableResourceDates = new Set(result.unavailable_dates || []);
+          const signal = availabilityRequestController.signal;
+          const results = await Promise.all(resources.map(async resource => {
+            const params = new URLSearchParams({ type: resource.type, from: formatLocalDate(today), to: formatLocalDate(limit) });
+            if (resource.type === 'package') {
+              params.set('package_id', String(resource.packageId));
+              params.set('package_name', resource.packageName);
+              if (resource.operatorId > 0) params.set('operator_id', String(resource.operatorId));
+              params.set('guests', String(Math.max(1, getTotalGuests())));
+            } else params.set('resource_id', String(resource.id));
+            const response = await fetch(`${availabilityEndpoint}?${params}`, { headers: { Accept: 'application/json' }, signal });
+            const result = await response.json();
+            if (!response.ok || !result.success) throw new Error(result.message || 'Availability could not be loaded.');
+            return result.unavailable_dates || [];
+          }));
+          if (signal.aborted) return;
+          unavailableResourceDates = new Set(results.flat());
           syncAvailabilityCalendars();
           resourceAvailabilityNote.textContent = unavailableResourceDates.size ? "Booked dates are disabled in the calendar." : "No booked dates for this selection.";
           if (rangeHasUnavailableDate(bookingDate.value, tourType.value === "overnight" ? bookingEndDate.value : bookingDate.value)) {
@@ -2177,8 +2102,8 @@ preferredSelect.addEventListener("change", function () {
       const nextStepButton = document.getElementById("tourNextStep");
       const stepStatus = document.getElementById("tourStepStatus");
       const stepFieldKeys = {
-        1: ["booking_type", "package_name", "selected_locations", "tour_type", "jump_off_port", "booking_date", "booking_end_date", "tour_duration", "num_adults", "num_children", "child_ages"],
-        2: ["contact_number", "eco_category", "payment_option"],
+        1: ["booking_type", "package_name", "selected_locations", "tour_type", "jump_off_port", "booking_date", "booking_end_date", "tour_duration", "num_adults", "num_children"],
+        2: ["contact_number", "eco_category", "payment_option", "selected_resources"],
         3: ["agree_privacy", "agree_other_fees"]
       };
       let currentStep = 1;
@@ -2229,10 +2154,6 @@ preferredSelect.addEventListener("change", function () {
       };
 
       const validateCurrentStep = () => {
-        if (currentStep === 1 && bookingType.value === 'boat' && Math.ceil(getTotalGuests() / MAX_BOAT_PAX) > acknowledgedBoatCount) {
-          syncBoatPassengers();
-          return false;
-        }
         const allErrors = validateForm();
         const allowed = new Set(stepFieldKeys[currentStep] || []);
         const stepErrors = Object.fromEntries(Object.entries(allErrors).filter(([key]) => allowed.has(key)));
@@ -2290,13 +2211,14 @@ preferredSelect.addEventListener("change", function () {
           preferredSelection: bookingMetaSummary,
 
           // ADD THESE
-          boat_id: selectedBoatId.value || null,
-          additionalBoatIds: bookingType.value === 'boat' ? selectedAdditionalBoats() : [],
-          guide_id: selectedGuideId.value || null,
+          boat_id: resourcePicker.boatIds[0] || null,
+          additionalBoatIds: resourcePicker.boatIds.slice(1),
+          additionalGuideIds: resourcePicker.guideIds.slice(1),
+          guide_id: resourcePicker.guideIds[0] || null,
 
+          catalog_addons: window.BookingAddonPicker.selections(),
           addOnService: pricing.addOnType,
           ecoCategory: ecoCategory.value,
-          childAges: getChildAges(),
           paymentOption: pricing.selectedPaymentOption,
 
           paymentAmount: pricing.payableNow,
@@ -2367,7 +2289,8 @@ preferredSelect.addEventListener("change", function () {
       });
 
       preferredSelect.addEventListener("change", updatePreview);
-      includeAddonService.addEventListener("change", updatePreview);
+      document.addEventListener("booking-addons-change", updatePreview);
+      includeAddonService.addEventListener("change", () => { updatePreview(); refreshResourceAvailability(); });
       ecoCategory.addEventListener("change", () => {
         updatePreview();
         revalidateFieldErrors(["eco_category"]);
@@ -2476,14 +2399,12 @@ preferredSelect.addEventListener("change", function () {
         guestAvailabilityTimer = setTimeout(refreshResourceAvailability, 250);
       });
       numChildren.addEventListener("input", () => {
-        renderTourChildAges();
         updatePreview();
-        revalidateFieldErrors(["num_adults", "num_children", "child_ages"]);
+        revalidateFieldErrors(["num_adults", "num_children"]);
         clearTimeout(guestAvailabilityTimer);
         guestAvailabilityTimer = setTimeout(refreshResourceAvailability, 250);
       });
       agreePrivacy.addEventListener("change", () => revalidateFieldErrors(["agree_privacy"]));
-      numChildren.addEventListener('change', () => { renderTourChildAges(); updatePreview(); revalidateFieldErrors(['child_ages']); });
       agreeOtherFees.addEventListener("change", () => revalidateFieldErrors(["agree_other_fees"]));
 
       locationInputs.forEach((input) => {
@@ -2506,11 +2427,6 @@ preferredSelect.addEventListener("change", function () {
       bookingForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         if (isOpeningPayment) return;
-        if (bookingType.value === 'boat' && Math.ceil(getTotalGuests() / MAX_BOAT_PAX) > acknowledgedBoatCount) {
-          showBookingStep(1);
-          syncBoatPassengers();
-          return;
-        }
         const errors = validateForm();
         if (Object.keys(errors).length > 0) {
           const firstErrorKey = fieldOrder.find((key) => errors[key]);
@@ -2579,7 +2495,6 @@ preferredSelect.addEventListener("change", function () {
 
       updateSectionsByType();
       applySearchPrefill();
-      renderTourChildAges(prefillChildAges);
       refreshResourceAvailability();
       updatePreview();
       const bookingSnapshot = () => new URLSearchParams(new FormData(bookingForm)).toString();

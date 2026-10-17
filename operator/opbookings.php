@@ -9,12 +9,15 @@ require_once __DIR__ . '/../php/booking_reference_helper.php';
 require_once __DIR__ . '/../php/tour_resource_availability_helper.php';
 require_once __DIR__ . '/../php/firebase_config.php';
 require_once __DIR__ . '/../php/input_validation.php';
+require_once __DIR__ . '/../php/additional_fees_helper.php';
+require_once __DIR__ . '/../php/booking_capacity_helper.php';
 require_once __DIR__ . '/../php/payment_receipt_breakdown.php';
 require_once __DIR__ . '/../payments/PayMongoService.php';
 require_once __DIR__ . '/../payments/PaymentReconciler.php';
 
 $operatorAccount = OperatorRequireLogin($pdo);
 
+$opEnvironmentalRates = additionalFeesForBooking(getAdditionalFees($pdo))['environmental'];
 $operator_id = (int)$_SESSION['operator_id'];
 $operatorName = $_SESSION['operator_name'] ?? 'Operator';
 $opProfilePicFile = trim((string)($_SESSION['operator_profile'] ?? ''));
@@ -657,7 +660,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
         }
 
         $expenseAmounts = [
-            'Environmental Fee' => ItourValidationMoney($_POST['expense_environmental'] ?? 0, 'Environmental fee'),
+            'Environmental Fee' => BookingEnvironmentalFee($adults, ItourValidationText($_POST['eco_category'] ?? '', 'Environmental-fee category', 20, true), $opEnvironmentalRates),
             'Entrance Fee' => ItourValidationMoney($_POST['expense_entrance'] ?? 0, 'Entrance fee'),
             'Docking / Landing Fee' => ItourValidationMoney($_POST['expense_docking'] ?? 0, 'Docking fee'),
             'Other Fee' => ItourValidationMoney($_POST['expense_other'] ?? 0, 'Other fee'),
@@ -2118,14 +2121,14 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
               </label>
             </div>
             <div class="ho-checkin-fields two">
-              <label>Adults
+              <label>Adults (14+ years)
                 <div class="walkin-pax-control">
                   <button type="button" data-op-pax-action="decrease" data-op-pax-target="opWalkinAdults" aria-label="Remove one adult">−</button>
                   <input type="number" name="num_adults" id="opWalkinAdults" min="1" max="100" value="<?= max(1, (int)($walkinForm['num_adults'] ?? 1)) ?>" required readonly />
                   <button type="button" data-op-pax-action="increase" data-op-pax-target="opWalkinAdults" aria-label="Add one adult">+</button>
                 </div>
               </label>
-              <label>Children
+              <label>Children (0–13 years)
                 <div class="walkin-pax-control">
                   <button type="button" data-op-pax-action="decrease" data-op-pax-target="opWalkinChildren" aria-label="Remove one child">−</button>
                   <input type="number" name="num_children" id="opWalkinChildren" min="0" max="99" value="<?= max(0, (int)($walkinForm['num_children'] ?? 0)) ?>" readonly />
@@ -2164,8 +2167,15 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
           </div>
 
           <div class="ho-checkin-fields two">
-            <label>Environmental fee
-              <div class="ho-checkin-money-input"><span>₱</span><input type="number" name="expense_environmental" class="op-walkin-expense" min="0" step="0.01" value="<?= htmlspecialchars((string)($walkinForm['expense_environmental'] ?? '0.00')) ?>" /></div>
+            <label>Environmental-fee category
+              <select name="eco_category" id="opWalkinEcoCategory" required>
+                <?php foreach (['local'=>'Local visitor','mercedeno'=>'Mercedeño resident','foreigner'=>'Foreign visitor','senior'=>'Senior citizen'] as $category=>$label): ?>
+                  <option value="<?= $category ?>" <?= ($walkinForm['eco_category'] ?? 'local') === $category ? 'selected' : '' ?>><?= htmlspecialchars($label) ?></option>
+                <?php endforeach; ?>
+              </select>
+            </label>
+            <label>Environmental fee — adults only
+              <div class="ho-checkin-money-input"><span>₱</span><input type="number" name="expense_environmental" id="opWalkinEnvironmentalFee" class="op-walkin-expense" min="0" step="0.01" value="0.00" readonly /></div>
             </label>
             <label>Entrance fee
               <div class="ho-checkin-money-input"><span>₱</span><input type="number" name="expense_entrance" class="op-walkin-expense" min="0" step="0.01" value="<?= htmlspecialchars((string)($walkinForm['expense_entrance'] ?? '0.00')) ?>" /></div>
@@ -2464,6 +2474,9 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
         const endDateField = document.getElementById('opWalkinEndDateField');
         const adultsInput = document.getElementById('opWalkinAdults');
         const childrenInput = document.getElementById('opWalkinChildren');
+        const environmentalRates = <?= json_encode($opEnvironmentalRates, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+        const ecoCategory = document.getElementById('opWalkinEcoCategory');
+        const environmentalInput = document.getElementById('opWalkinEnvironmentalFee');
         const expenseInputs = [...opWalkinForm.querySelectorAll('.op-walkin-expense')];
         const paymentAmount = document.getElementById('opWalkinPaymentAmount');
         const paymentMethod = document.getElementById('opWalkinPaymentMethod');
@@ -2658,6 +2671,7 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
           if (bookingEndDate.value && bookingEndDate.value < minimum) bookingEndDate.value = '';
         };
         const syncFinancials = () => {
+          environmentalInput.value = (Number(adultsInput.value || 0) * Number(environmentalRates[ecoCategory.value] || 0)).toFixed(2);
           const subtotal = packageSubtotal();
           const fees = feesTotal();
           const total = subtotal + fees;
@@ -2758,6 +2772,7 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
             syncFinancials();
           });
         });
+        ecoCategory.addEventListener('change', syncFinancials);
         expenseInputs.forEach(input => input.addEventListener('input', syncFinancials));
         opWalkinForm.querySelectorAll('[name="payment_option"]').forEach(radio => radio.addEventListener('change', () => {
           paymentManuallyEdited = false;

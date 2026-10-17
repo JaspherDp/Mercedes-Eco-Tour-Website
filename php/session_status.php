@@ -10,6 +10,7 @@ header('Cache-Control: no-store, private');
 
 $role = (string)($_GET['role'] ?? '');
 $accounts = [
+    'tourist' => ['tourist', 'tourist_id', ''],
     'admin' => ['admin_users', 'admin_id', 'admin_login.php'],
     'operator' => ['operators', 'operator_id', 'operator_login.php'],
     'hotel_admin' => ['hotel_admin_accounts', 'hotel_admin_id', 'hotel_admin_login.php'],
@@ -20,9 +21,11 @@ if (!isset($accounts[$role])) {
     exit;
 }
 [$table, $idColumn, $loginPage] = $accounts[$role];
-$loginUrl = operatorPortalBaseUrl() . '/php/' . $loginPage;
+$loginUrl = $role === 'tourist'
+    ? operatorPortalBaseUrl() . '/?open_login=1'
+    : operatorPortalBaseUrl() . '/php/' . $loginPage;
 $accountId = AppRoleAccountId($role);
-$active = ($_SESSION[$role . '_logged_in'] ?? false) === true && $accountId > 0;
+$active = $accountId > 0 && ($role === 'tourist' || ($_SESSION[$role . '_logged_in'] ?? false) === true);
 // An old page cannot renew or invalidate a different/newly authenticated session.
 $generation = (string)($_GET['generation'] ?? '');
 if ($active && ($generation === '' || !hash_equals((string)($_SESSION['auth_generation'][$role] ?? ''), $generation))) {
@@ -34,7 +37,9 @@ if ($active) {
     $stmt = $pdo->prepare("SELECT $idColumn" . ($role === 'admin' ? '' : ', status') . " FROM $table WHERE $idColumn=?");
     $stmt->execute([$accountId]);
     $account = $stmt->fetch(PDO::FETCH_ASSOC);
-    $active = $account && ($role === 'admin' || strtolower((string)$account['status']) === 'active');
+    $active = $account && ($role === 'admin' || ($role === 'tourist'
+        ? strtolower((string)($account['status'] ?? 'active')) !== 'banned'
+        : strtolower((string)$account['status']) === 'active'));
 }
 if ($active) $active = AppRoleSessionIsActive($role, $pdo, false);
 if (!$active) {
@@ -55,6 +60,6 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
     AppRoleSessionIsActive($role, $pdo, true);
 }
 $minutes = AppSessionTimeoutMinutes($pdo, $role);
-$remaining = max(0, (int)$_SESSION['auth_last_activity'][$role] + $minutes * 60 - time());
+$remaining = max(0, (int)($_SESSION['auth_last_activity'][$role] ?? $_SESSION['last_activity'] ?? 0) + $minutes * 60 - time());
 session_write_close();
 echo json_encode(['active' => true, 'timeout_minutes' => $minutes, 'remaining_seconds' => $remaining]);

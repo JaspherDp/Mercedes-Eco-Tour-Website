@@ -6,6 +6,8 @@
   const save = document.getElementById('portalSettingsSave');
   const storageKey = `itour-portal-settings-panel:${window.location.pathname}`;
   const activate = name => {
+    document.body.classList.toggle('addon-settings-active', name === 'addons');
+    if (save) save.hidden = name === 'addons';
     tabs.forEach(tab => { const active = tab.dataset.portalPanel === name; tab.classList.toggle('active', active); tab.setAttribute('aria-pressed', String(active)); });
     panels.forEach(panel => panel.classList.toggle('active', panel.dataset.portalPanelContent === name));
     try { sessionStorage.setItem(storageKey, name); } catch (_) {}
@@ -13,7 +15,7 @@
   tabs.forEach(tab => tab.addEventListener('click', () => activate(tab.dataset.portalPanel)));
   try { const saved = sessionStorage.getItem(storageKey); activate(tabs.some(tab => tab.dataset.portalPanel === saved) ? saved : 'general'); } catch (_) { activate('general'); }
   let dirty = false;
-  form?.addEventListener('change', () => { dirty = true; });
+  form?.addEventListener('change', event => { if (!event.target.closest('[data-addon-manager]')) dirty = true; });
   form?.addEventListener('submit', event => {
     if (event.submitter?.value === 'export_settings') return;
     dirty = false;
