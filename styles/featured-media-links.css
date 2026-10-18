@@ -1,0 +1,28 @@
+#featured-video-preview{width:100%;min-width:0}
+#featured-video-preview video,#featured-video-preview iframe{display:block;width:100%;aspect-ratio:16/9;height:auto;border:0;border-radius:10px;background:#10281f}
+#af-media-modal .af-source-tabs{display:flex;gap:4px;align-self:flex-start;margin:16px 24px 0;padding:4px;border:1px solid #d9e7df;border-radius:9px;background:#f0f6f2}
+#af-media-modal .af-source-tabs button{padding:8px 15px;border:0;border-radius:6px;background:transparent;color:#6a8374;font:650 11px Poppins,sans-serif;cursor:pointer}
+#af-media-modal .af-source-tabs button.active{background:#fff;color:#246f50;box-shadow:0 1px 4px #193f251a}
+#af-media-modal .af-source-tabs button:disabled{opacity:.65;cursor:wait}
+#af-media-modal .af-modal.is-crop-step .af-source-tabs{display:none}
+#af-link-panel[hidden]{display:none!important}
+#af-link-panel{min-height:240px;padding:22px 18px;border:1px solid #d7e5dd;border-radius:12px;background:#f8fbf9;box-sizing:border-box}
+#af-link-panel>label{display:block;margin-bottom:9px;color:#3c604a;font-size:12px;font-weight:650}
+#af-media-url{width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #cfded4;border-radius:8px;background:#fff;color:#375c44;font:400 12px Poppins,sans-serif;outline:0}
+#af-media-url:focus{border-color:#72a48a;box-shadow:0 0 0 3px #e8f3ec}
+#af-link-panel p{display:block;margin:10px 0 14px;color:#7c9182;font-size:11px;line-height:1.6;overflow-wrap:anywhere}
+#af-link-status{margin-bottom:0!important}
+#af-link-status.is-error{color:#ac423b}
+#af-media-modal #af-preview-area iframe{display:block;width:100%;height:100%;border:0;background:#10281f}
+@media(max-width:600px){#af-media-modal .af-source-tabs{margin:12px 16px 0}#af-link-panel{min-height:190px}}
+
+#af-media-modal .af-modal-header{gap:16px}#af-media-modal .af-modal-title-group{flex:1;min-width:0}#af-media-modal .af-modal-header .af-source-tabs{flex:0 0 auto;align-self:center;margin:0 0 0 auto}#af-media-modal #af-media-close{position:static!important;flex:0 0 30px;width:30px;height:30px;display:grid;place-items:center;margin:0!important;padding:0!important}#af-media-modal .af-source-tabs button:focus-visible{outline:2px solid #3b8064;outline-offset:2px}@media(max-width:560px){#af-media-modal .af-modal-header{gap:8px;padding-left:14px!important;padding-right:14px!important}#af-media-modal .af-modal-title-icon{display:none}#af-media-modal .af-modal-header .af-source-tabs{margin:0 0 0 auto}#af-media-modal .af-source-tabs button{padding:7px 9px;font-size:10px}#af-media-modal #af-media-modal-title{font-size:15px!important}}
+
+#af-media-modal[data-featured-source="link"] .af-step-indicator,#af-media-modal[data-featured-type="video"] .af-step-indicator{display:none!important}
+
+/* Give the embedded player its full viewport, including Drive's controls. */
+#af-media-modal[data-featured-type="video"] #af-preview-area{position:relative;height:auto!important;min-height:0;aspect-ratio:16/9;flex-shrink:0;padding:0}
+#af-media-modal[data-featured-type="video"] #af-preview-area[data-provider="google_drive"]{aspect-ratio:4/3}
+#af-media-modal[data-featured-type="video"] #af-preview-area iframe,#af-media-modal[data-featured-type="video"] #af-preview-area video{position:absolute;inset:0;width:100%!important;height:100%!important;max-height:none;aspect-ratio:auto;object-fit:contain}
+#featured-video-preview video{object-fit:contain}
+#featured-video-preview iframe[data-media-provider="google_drive"]{aspect-ratio:4/3}

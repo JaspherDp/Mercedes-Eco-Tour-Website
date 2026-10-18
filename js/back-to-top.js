@@ -143,14 +143,14 @@
   const launcher = document.createElement('button');
   launcher.type = 'button';
   launcher.className = 'itour-ai-launcher';
-  launcher.setAttribute('aria-label', 'Open iTour AI Assistant');
+  launcher.setAttribute('aria-label', 'Open Mira, iTour AI Assistant');
   launcher.setAttribute('aria-expanded', 'false');
   launcher.setAttribute('aria-controls', 'itourAiPanel');
   launcher.innerHTML = `
     <span class="itour-ai-launcher__assistant" aria-hidden="true">
       <svg viewBox="0 0 24 24"><path d="M5 13v-2a7 7 0 0 1 14 0v2"></path><path d="M5 12H4a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2v-6H5Zm14 0h1a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-2v-6h1Z"></path><path d="M18 18c0 2-2 3-5 3"></path><circle cx="11.5" cy="21" r="1"></circle></svg>
     </span>
-    <span class="itour-ai-launcher__label">Ask iTour AI</span>
+    <span class="itour-ai-launcher__label">Ask Mira</span>
     <span class="itour-ai-launcher__close" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"></path></svg></span>`;
 
   const panel = document.createElement('section');
@@ -165,7 +165,7 @@
       <span class="itour-ai-panel__avatar" aria-hidden="true">
         <svg viewBox="0 0 24 24"><path d="M5 13v-2a7 7 0 0 1 14 0v2"></path><path d="M5 12H4a2 2 0 0 0-2 2v2a2 2 0 0 0 2 2h2v-6H5Zm14 0h1a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-2v-6h1Z"></path><path d="M18 18c0 2-2 3-5 3"></path><circle cx="11.5" cy="21" r="1"></circle></svg>
       </span>
-      <div><h2 id="itourAiTitle">iTour AI Assistant</h2><p><i></i>Your virtual tourism guide</p></div>
+      <div><h2 id="itourAiTitle">Mira</h2><p><i></i>iTour Mercedes AI Assistant</p></div>
       <span class="itour-ai-panel__powered">
         <svg class="itour-ai-gemini-logo" viewBox="0 0 24 24" aria-hidden="true">
           <defs><linearGradient id="itourAiGeminiGradient" x1="3" y1="21" x2="21" y2="3" gradientUnits="userSpaceOnUse"><stop stop-color="#4285f4"></stop><stop offset=".48" stop-color="#9b72cb"></stop><stop offset="1" stop-color="#d96570"></stop></linearGradient></defs>
@@ -197,7 +197,7 @@
 
   const welcomeMarkup = `
     <article class="itour-ai-welcome">
-      <strong>Hello! Welcome to iTour Mercedes! <span aria-hidden="true">👋</span></strong>
+      <strong>Hello, I'm Mira! <span aria-hidden="true">👋</span></strong>
       <p>I'm your iTour Mercedes website guide. Ask me about destinations, Hotels &amp; Resorts, tours, guides, boats, bookings, or where to find something.</p>
     </article>
     <div class="itour-ai-suggestions" data-itour-ai-suggestions>
@@ -222,7 +222,7 @@
     document.body.classList.toggle('itour-ai-chat-open', open);
     launcher.classList.toggle('is-open', open);
     launcher.setAttribute('aria-expanded', open ? 'true' : 'false');
-    launcher.setAttribute('aria-label', open ? 'Close iTour AI Assistant' : 'Open iTour AI Assistant');
+    launcher.setAttribute('aria-label', open ? 'Close Mira, iTour AI Assistant' : 'Open Mira, iTour AI Assistant');
     panel.hidden = !open;
     panel.classList.toggle('is-open', open);
     if (open) {

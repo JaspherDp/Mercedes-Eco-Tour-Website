@@ -2310,3 +2310,16 @@ img { max-width: 100%; }
   .homepage .hero-mobile-nav-icon svg .icon-accent { fill: none; stroke: currentColor; }
   .homepage .hero-mobile-nav a:active .hero-mobile-nav-icon { transform: translateY(2px); }
 }
+
+.fe-video .featured-video-embed{position:absolute;inset:0;width:100%;height:100%;border:0}
+
+/* Fit the homepage video to a compact widescreen container. */
+.homepage .fe-video{min-height:0;height:auto;aspect-ratio:16/9;align-self:center;background:#10251e}
+.homepage .fe-video video{object-fit:cover}
+.homepage .fe-video .fe-video-label{top:16px;bottom:auto;left:16px}
+
+.homepage .fe-video iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+.homepage .fe-video-play-sound{position:absolute;z-index:2;left:50%;top:50%;transform:translate(-50%,-50%);padding:12px 20px;border:1px solid #ffffff80;border-radius:999px;background:#176e56;color:#fff;font-family:inherit;font-size:14px;font-weight:600;line-height:1.3;box-shadow:0 4px 20px #0005;cursor:pointer}
+.homepage .fe-video-play-sound[hidden]{display:none}
+.homepage .fe-video-play-sound:hover{background:#10533f}
+.homepage .fe-video-play-sound:focus-visible{outline:3px solid #fff;outline-offset:4px}

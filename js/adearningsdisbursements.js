@@ -39,6 +39,9 @@
   const ledgerEmptyRow=document.getElementById('ledgerEmptyRow');
   const ledgerResultCount=document.getElementById('ledgerResultCount');
   const ledgerFilteredTotal=document.getElementById('ledgerFilteredTotal');
+  const ledgerPagination=document.getElementById('ledgerPagination');
+  const ledgerPageSize=15;
+  let ledgerPage=Math.max(1,parseInt(new URLSearchParams(window.location.search).get('page'),10)||1);
   const ledgerReset=document.querySelector('[data-ledger-reset]');
   const ledgerTabs=[...document.querySelectorAll('[data-ledger-status]')];
   const payoutExport=document.getElementById('payoutExport');
@@ -49,6 +52,33 @@
   const pageScopeReset=document.getElementById('pageScopeReset');
   const pageRecords=Array.isArray(data.records)?data.records:[];
   const providerBalanceBody=document.getElementById('providerBalanceBody');
+  const providerBalancesModal=document.getElementById('providerBalancesModal');
+  const expandProviderBalances=document.getElementById('expandProviderBalances');
+  function closeProviderBalances(){
+    if(!providerBalancesModal||providerBalancesModal.hidden)return;
+    providerBalancesModal.hidden=true;
+    if(!document.querySelector('.payout-modal.open,.payout-drawer.open,.fee-modal:not([hidden])'))document.body.style.overflow='';
+    expandProviderBalances?.focus();
+  }
+  expandProviderBalances?.addEventListener('click',()=>{
+    if(!providerBalancesModal)return;
+    closeActionMenus();providerBalancesModal.hidden=false;document.body.style.overflow='hidden';
+    providerBalancesModal.querySelector('[data-provider-balances-close]')?.focus();
+  });
+  providerBalancesModal?.querySelectorAll('[data-provider-balance-type]').forEach(button=>button.addEventListener('click',()=>{
+    providerBalanceType=button.dataset.providerBalanceType||'all';renderProviderBalanceTable();
+  }));
+  providerBalancesModal?.querySelectorAll('[data-provider-balances-close]').forEach(button=>button.addEventListener('click',closeProviderBalances));
+  document.addEventListener('keydown',event=>{
+    if(!providerBalancesModal||providerBalancesModal.hidden)return;
+    if(event.key==='Escape'){event.preventDefault();closeProviderBalances();return;}
+    if(event.key==='Tab'){
+      const buttons=[...providerBalancesModal.querySelectorAll('button,[tabindex="0"]')].filter(button=>!button.disabled&&button.getClientRects().length);
+      const first=buttons[0],last=buttons.at(-1);
+      if(event.shiftKey&&document.activeElement===first){event.preventDefault();last?.focus();}
+      else if(!event.shiftKey&&document.activeElement===last){event.preventDefault();first?.focus();}
+    }
+  });
   const exposureList=document.getElementById('exposureList');
   const exposureTotal=document.getElementById('exposureTotal');
   const exposureProviderCount=document.getElementById('exposureProviderCount');
@@ -83,14 +113,31 @@
     });
     return [...grouped.values()].sort((a,b)=>(b.pending+b.available)-(a.pending+a.available)||a.name.localeCompare(b.name));
   }
+  let currentProviderBalances=[];
+  let providerBalanceType='all';
+  function renderProviderBalanceTable(){
+    const providers=currentProviderBalances.filter(provider=>providerBalanceType==='all'||provider.type===providerBalanceType);
+    const outstanding=providers.reduce((sum,provider)=>sum+provider.pending+provider.available,0);
+    if(providerBalanceBody)providerBalanceBody.innerHTML=providers.length?providers.map(provider=>{
+      const providerOutstanding=provider.pending+provider.available;
+      const share=outstanding>0?Math.min(100,(providerOutstanding/outstanding)*100):0;
+      return `<tr><td><div class="provider-cell"><div class="exposure-ring ${escapeHtml(provider.type)}" style="--exposure-progress:${share.toFixed(1)}%" role="img" aria-label="${share.toFixed(0)}% of total outstanding"><div><strong>${share.toFixed(0)}%</strong><span>of total</span></div></div><div><strong>${escapeHtml(provider.name)}</strong><small>${escapeHtml(stakeholderLabels[provider.type]||provider.type)}</small></div></div></td><td class="right muted-money">${escapeHtml(totalLabel(provider.pending,provider.unknown.pending))}</td><td class="right available-money">${escapeHtml(totalLabel(provider.available,provider.unknown.available))}</td><td class="right settled-money">${escapeHtml(totalLabel(provider.settled,provider.unknown.settled))}</td><td class="right"><strong>${escapeHtml(totalLabel(providerOutstanding,provider.unknown.pending+provider.unknown.available))}</strong></td></tr>`;
+    }).join(''):'<tr><td colspan="5"><div class="table-empty">No providers match this category and workspace filter.</div></td></tr>';
+    if(typeof document!=='undefined'){
+      const total=document.getElementById('providerBalancesTotal');
+      if(total)total.textContent=totalLabel(outstanding,providers.reduce((sum,provider)=>sum+provider.unknown.pending+provider.unknown.available,0));
+      document.querySelectorAll('[data-provider-balance-type]').forEach(button=>{
+        const active=button.dataset.providerBalanceType===providerBalanceType;
+        button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active));
+      });
+    }
+  }
   function renderProviderScope(records){
     const providers=aggregateProviders(records);
-    if(providerBalanceBody)providerBalanceBody.innerHTML=providers.length?providers.map(provider=>{
-      const outstanding=provider.pending+provider.available;
-      return `<tr><td><div class="provider-cell"><span class="provider-mark ${escapeHtml(provider.type)}">${escapeHtml(String(provider.name||'?').charAt(0).toUpperCase())}</span><div><strong>${escapeHtml(provider.name)}</strong><small>${escapeHtml(stakeholderLabels[provider.type]||provider.type)}</small></div></div></td><td class="right muted-money">${escapeHtml(totalLabel(provider.pending,provider.unknown.pending))}</td><td class="right available-money">${escapeHtml(totalLabel(provider.available,provider.unknown.available))}</td><td class="right settled-money">${escapeHtml(totalLabel(provider.settled,provider.unknown.settled))}</td><td class="right"><strong>${escapeHtml(totalLabel(outstanding,provider.unknown.pending+provider.unknown.available))}</strong></td></tr>`;
-    }).join(''):'<tr><td colspan="5"><div class="table-empty">No provider payout balances match this workspace filter.</div></td></tr>';
-    const exposed=providers.filter(provider=>provider.pending+provider.available>0||provider.unknown.pending+provider.unknown.available>0).slice(0,5);
     const outstanding=providers.reduce((sum,provider)=>sum+provider.pending+provider.available,0);
+    currentProviderBalances=providers;renderProviderBalanceTable();
+    const exposed=providers.filter(provider=>provider.pending+provider.available>0||provider.unknown.pending+provider.unknown.available>0).slice(0,5);
+
     if(exposureTotal)exposureTotal.textContent=totalLabel(outstanding,providers.reduce((n,p)=>n+p.unknown.pending+p.unknown.available,0));
     const exposedCount=providers.filter(provider=>provider.pending+provider.available>0||provider.unknown.pending+provider.unknown.available>0).length;
     if(exposureProviderCount)exposureProviderCount.textContent=`Across ${exposedCount.toLocaleString()} provider${exposedCount===1?'':'s'}`;
@@ -100,13 +147,36 @@
       return `<div class="exposure-row"><div class="exposure-ring ${escapeHtml(provider.type)}" style="--exposure-progress:${share.toFixed(1)}%"><div><strong>${share.toFixed(0)}%</strong><span>of total</span></div></div><div class="exposure-provider"><strong>${escapeHtml(provider.name)}</strong><small>${escapeHtml(stakeholderLabels[provider.type]||provider.type)} &middot; ${provider.bookings.toLocaleString()} booking${provider.bookings===1?'':'s'}</small></div><div class="exposure-amount"><strong>${escapeHtml(totalLabel(due,provider.unknown.pending+provider.unknown.available))}</strong></div></div>`;
     }).join(''):'<div class="compact-empty">No outstanding provider balances match this filter.</div>';}
   }
+  function thirdPartyStatSummary(records,pools,monthKeys){
+    const scope=new Map(records.map(record=>[record.booking_key,record]));
+    const result={available:0,settled:0,availableSeries:monthKeys.map(()=>0),settledSeries:monthKeys.map(()=>0)};
+    pools.forEach(pool=>{
+      let collected=0,settled=0;
+      Object.entries(pool.collected||{}).forEach(([key,amount])=>{if(scope.has(key))collected+=Number(amount);});
+      Object.entries(pool.settled||{}).forEach(([key,amount])=>{if(scope.has(key))settled+=Number(amount);});
+      let remaining=Math.max(0,collected-settled);result.available+=remaining;result.settled+=settled;
+      Object.entries(pool.collected||{}).forEach(([key,amount])=>{
+        if(!scope.has(key)||remaining<=0)return;
+        const part=Math.min(remaining,Math.max(0,Number(amount)-Number(pool.settled?.[key]||0)));remaining-=part;
+        const index=monthKeys.indexOf(scope.get(key).booking_month);if(index>=0)result.availableSeries[index]+=part/100;
+      });
+      (pool.history||[]).forEach(payment=>{
+        const amount=Object.entries(payment.allocations||{}).reduce((sum,[key,value])=>sum+(scope.has(key)?Number(value):0),0);
+        const index=monthKeys.indexOf(String(payment.settled_at||'').slice(0,7));if(index>=0)result.settledSeries[index]+=amount/100;
+      });
+    });
+    result.available/=100;result.settled/=100;return result;
+  }
   function updatePageSummary(records){
     const unknown={pending:0,available:0,settled:0},totals={collected:0,pending:0,available:0,settled:0},counts={pending:0,available:0,settled:0};
     records.forEach(record=>{if(record.payout===null&&unknown[record.state]!==undefined)unknown[record.state]++;totals.collected+=Number(record.collected||0);if(totals[record.state]!==undefined&&record.state!=='collected')totals[record.state]+=Number(record.payout||0);if(counts[record.state]!==undefined)counts[record.state]++;});
-    const notes={collected:'Customer payments received',pending:'Awaiting completion or review',available:'Net funds ready for payout',settled:'Provider payouts recorded'};
+    const thirdParty=thirdPartyStatSummary(records,Array.isArray(data.thirdParty?.pools)?data.thirdParty.pools:[],Array.isArray(data.monthKeys)?data.monthKeys:[]);
+    totals.available+=thirdParty.available;totals.settled+=thirdParty.settled;
+    const notes={collected:'Customer payments received',pending:'Awaiting completion or review',available:'Provider and third-party payouts',settled:'Provider and third-party payouts recorded'};
     Object.keys(totals).forEach(key=>{const card=document.querySelector(`[data-page-metric="${key}"]`);if(!card)return;card.querySelector('strong').textContent=totalLabel(totals[key],unknown[key]||0);card.querySelector('small').textContent=notes[key];});
     const monthKeys=Array.isArray(data.monthKeys)?data.monthKeys:[];const collections=monthKeys.map(()=>0),settled=monthKeys.map(()=>0),pending=monthKeys.map(()=>0),available=monthKeys.map(()=>0);
     records.forEach(record=>{const bookingIndex=monthKeys.indexOf(record.booking_month);if(bookingIndex>=0){collections[bookingIndex]+=Number(record.collected||0);if(record.state==='pending')pending[bookingIndex]+=Number(record.payout||0);if(record.state==='available')available[bookingIndex]+=Number(record.payout||0);}if(record.state==='settled'){const settledIndex=monthKeys.indexOf(record.settled_month);if(settledIndex>=0)settled[settledIndex]+=Number(record.payout||0);}});
+    available.forEach((_,index)=>{available[index]+=thirdParty.availableSeries[index]||0;settled[index]+=thirdParty.settledSeries[index]||0;});
     const metricSeries={collected:collections,pending,available,settled};
     Object.entries(metricSeries).forEach(([key,series])=>{
       const card=document.querySelector(`[data-page-metric="${key}"]`);if(!card)return;
@@ -136,47 +206,78 @@
     if(filters.search)params.set('search',filters.search);
     if(filters.status!=='all')params.set('status',filters.status);
     if(filters.type!=='all')params.set('type',filters.type);
+    const exportParams=new URLSearchParams(params);
+    if(ledgerPage>1)params.set('page',String(ledgerPage));
     const query=params.toString();
     const next=`${window.location.pathname}${query?`?${query}`:''}`;
     if(mode==='push')window.history.pushState({},'',next);
     else if(mode==='replace')window.history.replaceState({},'',next);
-    if(payoutExport){const exportParams=new URLSearchParams(params);exportParams.set('export','csv');payoutExport.href=`?${exportParams.toString()}`;}
+    if(payoutExport){exportParams.set('export','csv');payoutExport.href=`?${exportParams.toString()}`;}
   }
-  function applyLedgerFilters(historyMode='none'){
+  function renderFeeCollections(rows){window.thirdPartyFees?.setScope(rows);}
+  function renderLedgerPagination(pageCount){
+    if(!ledgerPagination)return;
+    const pages=new Set([1,pageCount]);
+    for(let page=Math.max(1,ledgerPage-1);page<=Math.min(pageCount,ledgerPage+1);page++)pages.add(page);
+    const button=(page,label,disabled=false,current=false)=>`<button type="button" data-ledger-page="${page}" aria-label="${label}" ${disabled?'disabled':''} ${current?'aria-current="page"':''}>${label==='Previous page'?'‹':label==='Next page'?'›':page}</button>`;
+    let previous=0;
+    ledgerPagination.innerHTML=button(ledgerPage-1,'Previous page',ledgerPage===1)+[...pages].sort((a,b)=>a-b).map(page=>{
+      const gap=previous&&page-previous>1?'<span aria-hidden="true">…</span>':'';previous=page;
+      return gap+button(page,`Page ${page}`,false,page===ledgerPage);
+    }).join('')+button(ledgerPage+1,'Next page',ledgerPage===pageCount);
+  }
+  function applyLedgerFilters(historyMode='none',keepPage=false){
+    window.providerBulkSettlement?.clear();
     if(!ledgerFilters)return;
-    const filters=currentLedgerFilters(),scope=pageScope();let shown=0,total=0,unknown=0;
+    if(!keepPage)ledgerPage=1;
+    const filters=currentLedgerFilters(),scope=pageScope();let total=0,unknown=0;
+    const matchingRows=[],feeScopeRows=[];
     ledgerRows.forEach(row=>{
       const matchesSearch=!filters.search||String(row.dataset.search||'').includes(filters.search);
       const matchesStatus=filters.status==='all'||row.dataset.state===filters.status;
       const matchesType=filters.type==='all'||row.dataset.providerType===filters.type;
       const matchesScope=(scope.stakeholder==='all'||row.dataset.providerType===scope.stakeholder)&&(scope.provider==='all'||row.dataset.providerKey===scope.provider);
+      if(matchesScope)feeScopeRows.push(row);
       const visible=matchesSearch&&matchesStatus&&matchesType&&matchesScope;
-      row.hidden=!visible;
-      if(visible){shown++;if(row.dataset.payoutUnknown==='1')unknown++;total+=Number(row.dataset.payoutAmount||0);}
+      row.hidden=true;
+      if(visible){matchingRows.push(row);if(row.dataset.payoutUnknown==='1')unknown++;total+=Number(row.dataset.payoutAmount||0);}
     });
+    const shown=matchingRows.length,pageCount=Math.max(1,Math.ceil(shown/ledgerPageSize));
+    ledgerPage=Math.min(ledgerPage,pageCount);
+    const start=(ledgerPage-1)*ledgerPageSize,end=Math.min(start+ledgerPageSize,shown);
+    matchingRows.slice(start,end).forEach(row=>{row.hidden=false;});
+    window.providerBulkSettlement?.refresh(filters.status);
     if(ledgerEmptyRow)ledgerEmptyRow.hidden=shown!==0;
-    if(ledgerResultCount)ledgerResultCount.textContent=`Showing ${shown.toLocaleString()} of ${ledgerRows.length.toLocaleString()} booking payment records`;
+    const emptyCell=ledgerEmptyRow?.querySelector('td');if(emptyCell)emptyCell.colSpan=filters.status==='available'?10:9;
+    if(ledgerResultCount)ledgerResultCount.textContent=`Showing ${shown?start+1:0}–${end} of ${shown.toLocaleString()}`;
+    renderLedgerPagination(pageCount);
+    renderFeeCollections(feeScopeRows);
     if(ledgerFilteredTotal)ledgerFilteredTotal.textContent=totalLabel(total,unknown);
     ledgerTabs.forEach(tab=>{const active=tab.dataset.ledgerStatus===filters.status;tab.classList.toggle('active',active);tab.setAttribute('aria-current',active?'page':'false');});
     if(ledgerReset)ledgerReset.hidden=!filters.search&&filters.status==='all'&&filters.type==='all';
     closeActionMenus();syncLedgerUrl(filters,historyMode);
   }
+  ledgerPagination?.addEventListener('click',event=>{
+    const button=event.target.closest('[data-ledger-page]');
+    if(!button||button.disabled)return;
+    ledgerPage=Number(button.dataset.ledgerPage);applyLedgerFilters('push',true);
+  });
   ledgerFilters?.addEventListener('submit',event=>{event.preventDefault();applyLedgerFilters('push');});
   ledgerTabs.forEach(tab=>tab.addEventListener('click',event=>{event.preventDefault();if(ledgerFilters?.elements.status)ledgerFilters.elements.status.value=tab.dataset.ledgerStatus||'all';applyLedgerFilters('push');}));
   ledgerReset?.addEventListener('click',event=>{event.preventDefault();ledgerFilters.reset();ledgerFilters.elements.search.value='';ledgerFilters.elements.status.value='all';ledgerFilters.elements.type.value='all';applyLedgerFilters('push');});
-  function applyPageScope(historyMode='push'){const scoped=pageRecords.filter(record=>recordMatchesPageScope(record));updatePageSummary(scoped);if(pageScopeReset){const scope=pageScope();pageScopeReset.hidden=scope.stakeholder==='all'&&scope.provider==='all';}applyLedgerFilters(historyMode);}
+  function applyPageScope(historyMode='push',keepPage=false){const scoped=pageRecords.filter(record=>recordMatchesPageScope(record));updatePageSummary(scoped);if(pageScopeReset){const scope=pageScope();pageScopeReset.hidden=scope.stakeholder==='all'&&scope.provider==='all';}applyLedgerFilters(historyMode,keepPage);}
   stakeholderFilter?.addEventListener('change',()=>{configureProviderFilter();providerFilter.value='all';applyPageScope('push');});
   providerFilter?.addEventListener('change',()=>applyPageScope('push'));
   pageScopeReset?.addEventListener('click',()=>{stakeholderFilter.value='all';providerFilter.value='all';configureProviderFilter();applyPageScope('push');});
-  window.addEventListener('popstate',()=>{if(!ledgerFilters)return;const params=new URLSearchParams(window.location.search);if(stakeholderFilter)stakeholderFilter.value=params.get('stakeholder')||'all';configureProviderFilter();if(providerFilter&&params.get('provider')&&[...providerFilter.options].some(option=>!option.disabled&&option.value===params.get('provider')))providerFilter.value=params.get('provider');ledgerFilters.elements.search.value=params.get('search')||'';ledgerFilters.elements.status.value=params.get('status')||'all';ledgerFilters.elements.type.value=params.get('type')||'all';applyPageScope('none');});
-  configureProviderFilter(false);applyPageScope('replace');
+  window.addEventListener('popstate',()=>{if(!ledgerFilters)return;const params=new URLSearchParams(window.location.search);if(stakeholderFilter)stakeholderFilter.value=params.get('stakeholder')||'all';configureProviderFilter();if(providerFilter&&params.get('provider')&&[...providerFilter.options].some(option=>!option.disabled&&option.value===params.get('provider')))providerFilter.value=params.get('provider');ledgerFilters.elements.search.value=params.get('search')||'';ledgerFilters.elements.status.value=params.get('status')||'all';ledgerFilters.elements.type.value=params.get('type')||'all';ledgerPage=Math.max(1,parseInt(params.get('page'),10)||1);applyPageScope('none',true);});
+  configureProviderFilter(false);applyPageScope('replace',true);
 
   const detailDrawer=document.getElementById('payoutDetailDrawer');
   document.querySelectorAll('[data-payout-details]').forEach(button=>button.addEventListener('click',()=>{
     let record={};try{record=JSON.parse(button.dataset.payoutDetails||'{}');}catch(_error){return;}
     closeActionMenus();
     const bookingRows=[['Guest',record.guest],['Service',record.service],['Service date',record.service_date],['Booking status',record.booking_status],['Completion',record.completion_status]];
-    const financialRows=[['Provider',record.provider],['Provider type',record.provider_type],['Payment method',record.payment_method],['Gross customer payment',record.gross||record.amount_paid],['PayMongo fee',record.fee],['Expected net payout',record.net],['Refund amount',record.refund_amount],...(record.retention_applicable?[['Non-refundable retained',record.retained_amount]]:[]),[record.payout_status==='Settled'?'Amount settled':'Net payout',record.amount],['Payout status',record.payout_status],['Settlement reference',record.settlement_reference||'Not settled']];
+    const financialRows=[['Provider',record.provider],['Provider type',record.provider_type],['Payment method',record.payment_method],['Gross customer payment',record.gross||record.amount_paid],['PayMongo fee',record.fee],['Environmental fees',record.fee_categories?.environmental||'Pending review'],['Entrance fees',record.fee_categories?.entrance||'Pending review'],['Docking / landing fees',record.fee_categories?.docking||'Pending review'],['Other fees',record.fee_categories?.other||'Pending review'],['Third-party fees excluded',record.booking_fees||'Pending review'],['Expected provider payout',record.net],['Refund amount',record.refund_amount],...(record.retention_applicable?[['Non-refundable retained',record.retained_amount]]:[]),[record.payout_status==='Settled'?'Amount settled':'Net payout',record.amount],['Payout status',record.payout_status],['Settlement reference',record.settlement_reference||'Not settled']];
     const refundTone=String(record.refund_status||'').toLowerCase().includes('fail')?'danger':(String(record.refund_status||'').toLowerCase()==='refunded'?'success':'');
     const refundNote=record.payout_note||(record.payout_status==='Not payable'
       ? `This booking is not payable because its completion status is ${record.completion_status||'not completed'}. Review the refund state before taking further action.`
@@ -195,7 +296,7 @@
     const statusRows=[['Current status',record.status],['Booking decision',record.booking_status],['Completion',record.completion],['Refund status',record.refund_status],['Payout status',record.payout_status]];
     const rows=list=>'<div class="drawer-detail-grid">'+list.map(([label,value])=>`<div><span>${escapeHtml(label)}</span><strong>${escapeHtml(value||'—')}</strong></div>`).join('')+'</div>';
     const retentionNote=record.payout_note?`<div class="drawer-retention-note"><strong>Late-cancellation payout</strong><p>${escapeHtml(record.payout_note)}</p></div>`:'';
-    document.getElementById('bookingDetailBody').innerHTML=`<div class="drawer-hero"><div><small>BOOKING REFERENCE</small><strong>${escapeHtml(record.reference)}</strong><span>${escapeHtml(record.service)}</span></div><b>${escapeHtml(record.status)}</b></div><section class="drawer-section"><h4>Guest information</h4>${rows(contactRows)}</section><section class="drawer-section"><h4>Reservation information</h4>${rows(serviceRows)}</section><section class="drawer-section"><h4>Status and workflow</h4>${rows(statusRows)}</section><section class="drawer-payment-card"><small>PAYMENT SUMMARY</small><div><span>Booking total</span><strong>${escapeHtml(record.total)}</strong></div><div><span>Gross customer payment</span><strong>${escapeHtml(record.paid)}</strong></div><div><span>PayMongo fee</span><strong>${escapeHtml(record.fee)}</strong></div><div><span>Refund amount</span><strong>${escapeHtml(record.refund_amount)}</strong></div><div><span>Remaining balance</span><strong>${escapeHtml(record.balance)}</strong></div><div class="balance"><span>Net payout / amount settled</span><strong>${escapeHtml(record.provider_payout)}</strong></div><p>${escapeHtml(record.payment_method)}</p></section>${retentionNote}`;
+    document.getElementById('bookingDetailBody').innerHTML=`<div class="drawer-hero"><div><small>BOOKING REFERENCE</small><strong>${escapeHtml(record.reference)}</strong><span>${escapeHtml(record.service)}</span></div><b>${escapeHtml(record.status)}</b></div><section class="drawer-section"><h4>Guest information</h4>${rows(contactRows)}</section><section class="drawer-section"><h4>Reservation information</h4>${rows(serviceRows)}</section><section class="drawer-section"><h4>Status and workflow</h4>${rows(statusRows)}</section><section class="drawer-payment-card"><small>PAYMENT SUMMARY</small><div><span>Booking total</span><strong>${escapeHtml(record.total)}</strong></div><div><span>Gross customer payment</span><strong>${escapeHtml(record.paid)}</strong></div><div><span>PayMongo fee</span><strong>${escapeHtml(record.fee)}</strong></div><div><span>Third-party fees excluded</span><strong>${escapeHtml(record.booking_fees||'Pending review')}</strong></div><div><span>Refund amount</span><strong>${escapeHtml(record.refund_amount)}</strong></div><div><span>Remaining balance</span><strong>${escapeHtml(record.balance)}</strong></div><div class="balance"><span>Net payout / amount settled</span><strong>${escapeHtml(record.provider_payout)}</strong></div><p>${escapeHtml(record.payment_method)}</p></section>${retentionNote}`;
     openDrawer(bookingDrawer);
   }));
 
@@ -225,9 +326,39 @@
   document.getElementById('useSavedDestination')?.addEventListener('click',()=>applySaved(savedDestinations.find(item=>item.id===Number(savedDestinationPanel.dataset.destinationId))));
   document.getElementById('enterDifferentDestination')?.addEventListener('click',()=>{clearElectronic(true);savedDestinationPanel.hidden=true;settlementAccountName.focus();});
   document.getElementById('toggleAccountIdentifier')?.addEventListener('click',event=>{const show=settlementAccountIdentifier.type==='password';settlementAccountIdentifier.type=show?'text':'password';event.currentTarget.textContent=show?'Hide':'Show';});
+  let settlementItems=[];
+  const settlementMoney=minor=>window.providerBulkSettlement.money(minor);
+  const settlementItemHtml=()=>settlementItems.map(item=>`<tr><td>${escapeHtml(item.reference)}</td><td>${escapeHtml(settlementMoney(item.amount_minor))}</td></tr>`).join('');
+  const settlementListHtml=()=>`<p><strong>${settlementItems.length} selected booking(s)</strong></p><table class="bulk-settlement-items"><thead><tr><th>Booking ID</th><th>Net payout</th></tr></thead><tbody>${settlementItemHtml()}</tbody></table>`;
+  document.addEventListener('provider-bulk-settlement',event=>{
+    const items=event.detail;
+    if(!Array.isArray(items)||!items.length)return;
+    const first=items[0];if(items.some(item=>item.provider_key!==first.provider_key))return;
+    const sum=field=>items.reduce((total,item)=>total+item[field],0);
+    openSettlement({...first,items,reference:items.length+' selected bookings',amount:settlementMoney(sum('amount_minor')),gross:settlementMoney(sum('gross_minor')),fee:settlementMoney(sum('fee_minor')),refunded:settlementMoney(sum('refunded_minor')),booking_fees:settlementMoney(sum('booking_fees_minor'))});
+  });
   async function openSettlement(details){
+    document.getElementById('settlementBookingFees').textContent=details.booking_fees||'Unavailable';
     document.getElementById('settlementGross').textContent=details.gross||'Unavailable';document.getElementById('settlementFee').textContent=details.fee||'Unavailable';document.getElementById('settlementRefunded').textContent=details.refunded||'Unavailable';
-    settlementForm.reset();settlementForm.dataset.confirmed='false';savedDestinations=[];showSaved(null);document.getElementById('settlementPayoutId').value=details.id||'';document.getElementById('settlementContext').value=details.context||'';document.getElementById('settlementBooking').textContent=details.reference||'—';document.getElementById('settlementProvider').textContent=details.provider||'—';document.getElementById('settlementAmount').textContent=details.amount||'—';
+    settlementForm.reset();
+    settlementItems=details.items||[];
+    settlementForm.elements.action.value=settlementItems.length?'settle_bulk':'settle';
+    document.getElementById('bulkPayoutIds').value=JSON.stringify(settlementItems.map(item=>item.id));
+    document.getElementById('bulkSettlementContexts').value=JSON.stringify(Object.fromEntries(settlementItems.map(item=>[item.id,item.context])));
+    const review=document.getElementById('bulkSettlementReview');
+    review.hidden=!settlementItems.length;
+    review.innerHTML=settlementItems.length?settlementListHtml():'';
+    document.getElementById('settlementModalTitle').textContent=settlementItems.length?'Settle selected bookings':'Settle provider payout';
+    const submitButton=settlementForm.querySelector('[type="submit"]');
+    submitButton.disabled=false;
+    submitButton.textContent=settlementItems.length?'Confirm Settlement':'Record as settled';
+    settlementForm.dataset.confirmed='false';
+    savedDestinations=[];showSaved(null);
+    document.getElementById('settlementPayoutId').value=details.id||'';
+    document.getElementById('settlementContext').value=details.context||'';
+    document.getElementById('settlementBooking').textContent=details.reference||'?';
+    document.getElementById('settlementProvider').textContent=details.provider||'?';
+    document.getElementById('settlementAmount').textContent=details.amount||'?';
     try{const csrf=settlementForm.elements.csrf_token.value,response=await fetch(`adearningsdisbursements.php?destination_for=${encodeURIComponent(details.id)}`,{headers:{Accept:'application/json','X-Requested-With':'XMLHttpRequest','X-CSRF-Token':csrf},credentials:'same-origin',cache:'no-store'}),result=await response.json();if(!response.ok||!result.success)throw new Error(result.message||'Payout details could not be loaded.');savedDestinations=Array.isArray(result.destinations)?result.destinations:[];const preferred=savedDestinations.find(item=>item.is_default)||savedDestinations[0];preferred?applySaved(preferred):configureMethod(false);openModal(settlementModal);}catch(error){window.Swal?Swal.fire({icon:'error',title:'Unable to open payout',text:error.message,confirmButtonColor:'#1d6851'}):window.alert(error.message);}
   }
   document.querySelectorAll('[data-settle]').forEach(button=>button.addEventListener('click',()=>{let details={};try{details=JSON.parse(button.dataset.settle||'{}');}catch(_error){return;}closeActionMenus();const proceed=()=>openSettlement(details);if(!window.Swal){if(window.confirm(`Review the manual settlement for ${details.amount||'this payout'} to ${details.provider||'this provider'}?`))proceed();return;}Swal.fire({icon:'warning',title:'Review provider payout',text:`Confirm ${details.amount||'this payout'} for ${details.provider||'the provider'}. iTour will record—but will not send—the money.`,showCancelButton:true,confirmButtonText:'Continue',cancelButtonText:'Cancel',confirmButtonColor:'#1d6851',cancelButtonColor:'#6f7f79',reverseButtons:true,focusCancel:true}).then(result=>{if(result.isConfirmed)proceed();});}));
@@ -236,8 +367,8 @@
     const amount=document.getElementById('settlementAmount').textContent,provider=document.getElementById('settlementProvider').textContent,method=settlementMethod.value,institution=method==='e_wallet'?walletInstitution.value:settlementInstitution.value;
     const methodLabel=method==='cash'?'Cash':method==='other'?document.getElementById('otherChannelName').value:(institution||settlementMethod.options[settlementMethod.selectedIndex].text),rawDestination=method==='cash'?document.getElementById('cashReceivedBy').value:method==='other'?document.getElementById('otherDestination').value:settlementAccountIdentifier.value,destination=['bank_transfer','e_wallet'].includes(method)?`•••• ${rawDestination.replace(/\s+/g,'').slice(-4)}`:rawDestination,reference=document.getElementById('settlementReference').value.trim();
     const submit=()=>{settlementForm.dataset.confirmed='true';const button=settlementForm.querySelector('[type="submit"]');button.disabled=true;button.textContent='Recording…';settlementForm.requestSubmit();};
-    if(!window.Swal){if(window.confirm(`Provider: ${provider}\nAmount: ${amount}\nMethod: ${methodLabel}\nDestination: ${destination}\nReference: ${reference}\n\nRecord this payout as settled? Only continue if the manual transfer has already been completed.`))submit();return;}
-    Swal.fire({icon:'warning',title:'Record this payout as settled?',html:`<div class="settlement-confirm"><span>Provider</span><strong>${escapeHtml(provider)}</strong><span>Amount</span><strong>${escapeHtml(amount)}</strong><span>Method</span><strong>${escapeHtml(methodLabel)}</strong><span>Destination</span><strong>${escapeHtml(destination)}</strong><span>Reference</span><strong>${escapeHtml(reference)}</strong></div><p class="settlement-confirm-warning">Only continue if the manual transfer has already been completed.</p>`,showCancelButton:true,confirmButtonText:'Record as settled',cancelButtonText:'Cancel',confirmButtonColor:'#1d6851',cancelButtonColor:'#6f7f79',reverseButtons:true,focusCancel:true}).then(result=>{if(result.isConfirmed)submit();});
+    if(!window.Swal){if(window.confirm(`Provider: ${provider}\nAmount: ${amount}\nMethod: ${methodLabel}\nDestination: ${destination}\nReference: ${reference}\n${settlementItems.map(item=>item.reference+': '+settlementMoney(item.amount_minor)).join('\n')}\n\nRecord this payout as settled? Only continue if the manual transfer has already been completed.`))submit();return;}
+    Swal.fire({icon:'warning',title:settlementItems.length?'Confirm bulk settlement':'Record this payout as settled?',html:`${settlementItems.length?settlementListHtml():''}<div class="settlement-confirm"><span>Provider</span><strong>${escapeHtml(provider)}</strong><span>Amount</span><strong>${escapeHtml(amount)}</strong><span>Method</span><strong>${escapeHtml(methodLabel)}</strong><span>Destination</span><strong>${escapeHtml(destination)}</strong><span>Reference</span><strong>${escapeHtml(reference)}</strong></div><p class="settlement-confirm-warning">Only continue if the manual transfer has already been completed.</p>`,showCancelButton:true,confirmButtonText:settlementItems.length?'Confirm Settlement':'Record as settled',cancelButtonText:'Cancel',confirmButtonColor:'#1d6851',cancelButtonColor:'#6f7f79',reverseButtons:true,focusCancel:true}).then(result=>{if(result.isConfirmed)submit();});
   });
 
   const receiptDrawer=document.getElementById('settlementRecordDrawer');

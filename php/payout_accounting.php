@@ -1,5 +1,6 @@
 <?php
 declare(strict_types=1);
+require_once __DIR__ . '/payout_booking_fees.php';
 
 /** Accounting only: never confirms payments, changes booking balances, or sends money. */
 final class PayoutAccounting
@@ -203,7 +204,7 @@ final class PayoutAccounting
         foreach ($bookings as $b) {
             $domain = strtolower((string)$b['booking_domain']); $id = (int)$b['booking_id'];
             $groups[$domain][$id] = $id;
-            $result[$domain . ':' . $id] = ['transactions' => [], 'refunds' => []];
+            $result[$domain . ':' . $id] = ['transactions' => [], 'refunds' => [], 'booking_fees' => PayoutBookingFees::load($pdo, $domain, $id, $lock)];
         }
         $hasPayments = self::tableExists($pdo, 'payment_transactions');
         $hasRefunds = self::tableExists($pdo, 'booking_refunds');
@@ -229,19 +230,22 @@ final class PayoutAccounting
     public static function forBooking(array $ledger, string $domain, int $id, string|int|float $paid, ?int $cap = null): array
     {
         $data = $ledger[strtolower($domain) . ':' . $id] ?? ['transactions' => [], 'refunds' => []];
-        return self::calculate($data['transactions'], $data['refunds'], self::minor($paid), $cap);
+        return PayoutBookingFees::apply(self::calculate($data['transactions'], $data['refunds'], self::minor($paid), $cap),
+            $data['booking_fees'] ?? ['categories'=>[], 'total_minor'=>0, 'booking_total_minor'=>0, 'verified'=>false], $cap);
     }
 
     public static function summary(array $rows): string
     {
-        $gross = 0; $fees = 0; $refunds = 0; $net = 0; $unknown = 0;
+        $gross = 0; $fees = 0; $refunds = 0; $net = 0; $unknown = 0; $bookingFees = 0;
         foreach ($rows as $row) {
             $a = $row['accounting']; $gross += $a['gross_minor']; $fees += $a['known_fee_minor'];
             $refunds += $a['refund_minor']; $net += $a['net_minor'] ?? 0;
+            $bookingFees += $a['booking_fee_total_minor'] ?? 0;
             if ($a['net_minor'] === null) $unknown++;
         }
         return '<p class="accounting-summary"><span>All bookings in this account</span> Gross customer payments: <strong>' . self::money($gross)
             . '</strong> · ' . ($unknown ? 'Known ' : '') . 'PayMongo fees: <strong>' . self::money($fees)
+            . '</strong> · Third-party booking fees excluded: <strong>' . self::money($bookingFees)
             . '</strong> · Refunded: <strong>' . self::money($refunds) . '</strong> · '
             . ($unknown ? 'Known net payout subtotal' : 'Net payout') . ': <strong>' . self::money($net)
             . '</strong>' . ($unknown ? ' · ' . $unknown . ' booking(s) have unavailable fees or unreconciled receipts; excluded from net totals.' : '')

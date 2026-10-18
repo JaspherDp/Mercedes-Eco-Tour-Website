@@ -90,6 +90,11 @@ PayoutAccounting::capture($pdo,$full,resource(500000,15000),false);
 check((int)$pdo->query('SELECT COUNT(*) FROM payment_transactions')->fetchColumn()===1 && PayoutAccounting::fee($pdo->query('SELECT * FROM payment_transactions')->fetch())===15000,'Duplicate fee capture does not duplicate charges');
 $insert->execute([2,'hotel',1,'cash',null,100000,'PHP','paid','{}']);
 $pdo->exec("INSERT INTO booking_refunds VALUES ('tour',1,100000,'PHP','succeeded')");
+$pdo->exec('CREATE TABLE bookings (booking_id INTEGER,operator_id INTEGER,booking_type TEXT,grand_total DECIMAL DEFAULT 0,preferred_resource TEXT)');
+$pdo->exec('CREATE TABLE hotel_room_bookings (hotel_booking_id INTEGER,hotel_resort_id INTEGER,total_amount DECIMAL DEFAULT 0)');
+$pdo->exec('CREATE TABLE booking_checkout_drafts (booking_draft_id INTEGER,booking_id INTEGER,booking_domain TEXT,status TEXT,payload TEXT,total_minor INTEGER,created_at TEXT)');
+$pdo->exec("INSERT INTO bookings VALUES (1,1,'package',5000,'Walk-in booking')");
+$pdo->exec('INSERT INTO hotel_room_bookings VALUES (1,1,1000)');
 $ledger=PayoutAccounting::load($pdo,[['booking_domain'=>'package','booking_id'=>1],['booking_domain'=>'hotel','booking_id'=>1]],true);
 $tour=PayoutAccounting::forBooking($ledger,'package',1,'5000.00');$hotel=PayoutAccounting::forBooking($ledger,'hotel',1,'1000.00');
 check($tour['net_minor']===385000 && $hotel['net_minor']===100000,'Hotel and tour IDs stay isolated and tour refunds map correctly');
@@ -118,10 +123,10 @@ check(PayoutAccounting::calculate([$unknown],[],500000,0)['net_minor']===0,'Excl
 check(PayoutFeeSync::modeMatches(['metadata'=>'{}'],true),'Untagged historical live payment may be retrieved');
 check(!PayoutFeeSync::modeMatches(['metadata'=>'{"paymongo_mode":"test"}'],true),'Explicit other-mode payment not fetched');
 $pdo->sqliteCreateFunction('JSON_UNQUOTE',static fn($v)=>$v);
-$pdo->exec('CREATE TABLE bookings (booking_id INTEGER,operator_id INTEGER)');
-$pdo->exec('CREATE TABLE hotel_room_bookings (hotel_booking_id INTEGER,hotel_resort_id INTEGER)');
-$pdo->exec('INSERT INTO bookings VALUES (101,10),(102,20)');
-$pdo->exec('INSERT INTO hotel_room_bookings VALUES (103,30),(104,40)');
+
+
+$pdo->exec('INSERT INTO bookings (booking_id,operator_id) VALUES (101,10),(102,20)');
+$pdo->exec('INSERT INTO hotel_room_bookings (hotel_booking_id,hotel_resort_id) VALUES (103,30),(104,40)');
 foreach([101=>'package',102=>'package',103=>'hotel',104=>'hotel'] as $id=>$domain)$insert->execute([$id,$domain,$id,'paymongo','pay_sync'.$id,100000,'PHP','paid','{}']);
 $remote=new class {
     public int $calls=0;

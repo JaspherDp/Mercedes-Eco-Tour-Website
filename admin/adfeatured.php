@@ -7,6 +7,7 @@ require_once __DIR__ . '/../php/admin_auth_helper.php';
 require_once __DIR__ . '/../php/session_security.php';
 require_once __DIR__ . '/../php/input_validation.php';
 require_once __DIR__ . '/../php/secure_upload_helper.php';
+require_once __DIR__ . '/../php/featured_media_helper.php';
 AppSessionStart();
 
 // --- Logout action
@@ -71,6 +72,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         exit;
     }
     $action = $_POST['action'];
+
+    if ($action === 'preview_media_link') {
+        try {
+            $type=is_string($_POST['media_type']??null)?$_POST['media_type']:'';
+            $url=FeaturedMediaValidateLink($_POST['media_url']??'', $type);
+            echo json_encode(['success'=>true,'path'=>$url,'media'=>$type==='video'?FeaturedMediaVideoDescriptor($url):['kind'=>'image','url'=>$url]]);
+        } catch (InvalidArgumentException $exception) {
+            http_response_code(422);echo json_encode(['success'=>false,'message'=>$exception->getMessage()]);
+        }
+        exit;
+    }
 
     // --- FAQ Handling
     if ($action === 'update_faq') {
@@ -195,13 +207,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                 ($media_type==='video' && in_array($media_slot,$allowed_video_slots))) {
 
                 $fileField = 'file';
-                if (!isset($_FILES[$fileField]) || !is_array($_FILES[$fileField])) {
-                    echo json_encode(['success'=>false,'message'=>'No file uploaded.']);
-                    exit;
-                }
-
                 try {
-                    $targetFile = saveFeaturedMedia($fileField, $media_type);
+                    $mediaSource=$_POST['media_source']??'file';
+                    if($mediaSource==='link')$targetFile=FeaturedMediaValidateLink($_POST['media_url']??'', $media_type);
+                    elseif($mediaSource==='file')$targetFile=saveFeaturedMedia($fileField, $media_type);
+                    else throw new InvalidArgumentException('Choose upload file or use link.');
                 } catch (Throwable $exception) {
                     http_response_code($exception instanceof InvalidArgumentException ? 422 : 500);
                     echo json_encode(['success'=>false,'message'=>$exception->getMessage()]);
@@ -234,7 +244,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
                     );
                 }
 
-                echo json_encode(['success'=>$success,'message'=>($media_type==='image')?'Image updated.':'Video updated.','path'=>$targetFile]);
+                echo json_encode(['success'=>$success,'message'=>($media_type==='image')?'Image updated.':'Video updated.','path'=>$targetFile,'media'=>$media_type==='video'?FeaturedMediaVideoDescriptor($targetFile):['kind'=>'image','url'=>$targetFile]]);
                 exit;
 
             } else {
@@ -1952,6 +1962,7 @@ body.about-gallery-modal-open { overflow: hidden; }
   .about-gallery-modal-footer .btn-cancel-unique { flex: 1; }
 }
 </style>
+<link rel="stylesheet" href="styles/featured-media-links.css?v=4">
 </head>
 <body>
 <div class="featured-admin-container">
@@ -2004,7 +2015,7 @@ body.about-gallery-modal-open { overflow: hidden; }
         <div class="featured-box featured-preview">
           <h3>Video and descriptions</h3>
           <p class="cm-block-hint">Preview the current video and maintain the text displayed with it.</p>
-          <video src="<?= htmlspecialchars($featured['video_path'] ?? 'img/samplevideo.mp4') ?>" controls muted></video>
+          <div id="featured-video-preview" data-media-url="<?= htmlspecialchars((string)($featured['video_path'] ?? ''),ENT_QUOTES,'UTF-8') ?>"><?= FeaturedMediaVideoHtml((string)($featured['video_path'] ?? 'img/samplevideo.mp4')) ?></div>
           <div class="af-control-row">
             <button class="af-btn" data-open-media="video" data-media-slot="video">Replace video</button>
           </div>
@@ -2129,8 +2140,10 @@ body.about-gallery-modal-open { overflow: hidden; }
         <span class="af-modal-title-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 16.5V19a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-2.5M12 4v11M7.5 8.5 12 4l4.5 4.5"/></svg></span>
         <div class="af-modal-title-copy"><small>Featured content</small><strong id="af-media-modal-title">Upload Media</strong></div>
       </div>
+      <div class="af-source-tabs" role="group" aria-label="Media source"><button type="button" data-featured-source="file" aria-pressed="true" class="active">Upload file</button><button type="button" data-featured-source="link" aria-pressed="false">Use link</button></div>
       <button id="af-media-close" style="position:absolute; top:8px; right:8px; border:none; background:none; font-size:1.2rem; cursor:pointer; color:#666;">×</button>
     </div>
+
 
     <!-- Step Indicator -->
     <div class="af-step-indicator">
@@ -2149,7 +2162,7 @@ body.about-gallery-modal-open { overflow: hidden; }
     <div class="af-modal-body">
       <!-- Upload Column -->
       <div class="af-media-pane af-upload-pane">
-        <div class="af-media-pane-head"><h3>Choose a media file</h3><p>Select a file from your device or drag it into the upload area.</p></div>
+        <div class="af-media-pane-head"><h3>Choose your media</h3><p>Upload from your device or use a public media link.</p></div>
         <label class="custum-file-upload" for="af-file-input" id="af-drop-area">
           <div class="icon">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" style="height:80px; fill:#4B5563;">
@@ -2162,6 +2175,7 @@ body.about-gallery-modal-open { overflow: hidden; }
           </div>
           <input type="file" id="af-file-input">
         </label>
+        <div id="af-link-panel" hidden><label for="af-media-url">Media URL</label><input type="url" id="af-media-url" placeholder="https://…" maxlength="255" autocomplete="off"><p id="af-link-hint">Use a public image link.</p><button type="button" class="af-btn secondary" id="af-preview-link">Preview link</button><p id="af-link-status" role="status" aria-live="polite"></p></div>
       </div>
 
       <!-- Crop / Preview Column -->
@@ -2434,6 +2448,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             resetModalSize();
+            window.FeaturedMediaLinks?.reset(currentMediaType,currentMediaSlot);
         });
     });
 
@@ -2591,7 +2606,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
             const handleResponse = (j, path) => {
                 if (j.success) {
-                    if (currentMediaType === 'image') {
+                    if(window.FeaturedMediaLinks){window.FeaturedMediaLinks.updateMedia(currentMediaType,currentMediaSlot,j,path);}
+                    else if (currentMediaType === 'image') {
                     const imgEl = document.querySelector(`img[data-media-slot="${currentMediaSlot}"]`);
                     if (imgEl) imgEl.src = path + '?t=' + Date.now(); // reload image immediately
                     } else if (currentMediaType === 'video') {
@@ -2928,6 +2944,8 @@ cmfAddBtn.addEventListener('click',()=>{
 
 
 
+<script>window.FeaturedMediaCsrf=<?= json_encode($adminContentCsrf,JSON_HEX_TAG|JSON_HEX_AMP|JSON_HEX_APOS|JSON_HEX_QUOT) ?>;</script>
+<script src="js/featured-media-links.js?v=6"></script>
 </body>
 </html>
 

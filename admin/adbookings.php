@@ -2821,12 +2821,12 @@ if(isset($_GET['action']) && $_GET['action'] === 'fetchBookings') {
       <button class="tab-btn <?= $activeTab==='all'?'active':'' ?>" data-tab="all">All</button>
       <button class="tab-btn <?= $activeTab==='pending'?'active':'' ?>" data-tab="pending">Pending</button>
       <button class="tab-btn <?= $activeTab==='accepted'?'active':'' ?>" data-tab="accepted">Accepted</button>
-      <button class="tab-btn <?= $activeTab==='completed'?'active':'' ?>" data-tab="completed">Completed</button>
       <button class="tab-btn <?= $activeTab==='cancellations'?'active':'' ?>" data-tab="cancellations">
         Cancellation Requests
           <?php if ($cancellationSummary['pending'] > 0): ?><span class="tab-count"><?= $cancellationSummary['pending'] ?></span><?php endif; ?>
         </button>
       <button class="tab-btn <?= $activeTab==='walkin'?'active':'' ?>" data-tab="walkin">Walk-in</button>
+      <button class="tab-btn <?= $activeTab==='completed'?'active':'' ?>" data-tab="completed">Completed</button>
     </div>
     <button type="button" class="add-booking-btn payment-phone-btn" id="openAdminPaymentPhoneModal">
       <svg aria-hidden="true" viewBox="0 0 24 24">

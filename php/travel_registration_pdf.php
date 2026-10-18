@@ -100,24 +100,8 @@ function travelFormDate($value): string
 
 function travelFormDisplayFont(): string
 {
-    static $fontName = null;
-    if ($fontName !== null) {
-        return $fontName;
-    }
-    $fontName = 'dejavusanscondensed';
-    $windowsDirectory = trim((string)getenv('WINDIR'));
-    $impactPath = ($windowsDirectory !== '' ? $windowsDirectory : 'C:/Windows') . '/Fonts/impact.ttf';
-    if (is_file($impactPath)) {
-        try {
-            $registeredFont = TCPDF_FONTS::addTTFfont($impactPath, 'TrueTypeUnicode', '', 32);
-            if (is_string($registeredFont) && $registeredFont !== '') {
-                $fontName = $registeredFont;
-            }
-        } catch (Throwable $error) {
-            // The bundled condensed font below remains a portable fallback.
-        }
-    }
-    return $fontName;
+    // Use the bundled TCPDF font so every server embeds the same heading font.
+    return 'impact';
 }
 
 function travelFormLine(TCPDF $pdf, float $x, float $y, string $label, string $value, float $labelWidth, float $lineWidth): void
@@ -160,9 +144,6 @@ function travelFormHeader(TCPDF $pdf): void
     $pdf->SetTextColor(0, 0, 0);
     $titleFont = travelFormDisplayFont();
     $pdf->SetFont($titleFont, '', 19.5);
-    if ($titleFont === 'dejavusanscondensed') {
-        $pdf->SetFontStretching(78);
-    }
     $pdf->Cell(190, 12, 'TRAVEL REGISTRATION FORM', 0, 1, 'C');
     $pdf->SetFontStretching(100);
 }
