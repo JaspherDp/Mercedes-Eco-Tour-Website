@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 header('Content-Type: application/json');
+header('Cache-Control: no-store');
 
 require_once __DIR__ . '/db_connection.php';
 require_once __DIR__ . '/hotel_rooms_helper.php';

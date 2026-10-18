@@ -347,9 +347,23 @@ function HoRoomCapacityTotal(array $room): int
     return max(1, (int)($room['capacity_adults'] ?? 0) + (int)($room['capacity_children'] ?? 0));
 }
 
+/** Unfinished check-ins reserve tonight, not every future stay indefinitely. */
+function HoRoomReservationEndSql(string $prefix = ''): string
+{
+    if (!in_array($prefix, ['', 'b.'], true)) throw new InvalidArgumentException('Invalid booking alias.');
+    return "CASE WHEN {$prefix}checked_in_at IS NOT NULL AND {$prefix}checked_out_at IS NULL
+        THEN GREATEST({$prefix}checkout_date, :occupied_until) ELSE {$prefix}checkout_date END";
+}
+
+function HoRoomOccupiedUntil(): string
+{
+    return (new DateTimeImmutable('tomorrow', new DateTimeZone('Asia/Manila')))->format('Y-m-d');
+}
+
 function HoGetUnavailableRoomLookup(PDO $pdo, int $hotelResortId, string $checkin, string $checkout): array
 {
     HoEnsureHotelBookingsTable($pdo);
+    $reservationEnd = HoRoomReservationEndSql('b.');
     $stmt = $pdo->prepare("
         SELECT DISTINCT
           b.hotel_room_id,
@@ -357,15 +371,13 @@ function HoGetUnavailableRoomLookup(PDO $pdo, int $hotelResortId, string $checki
         FROM hotel_room_bookings b
         WHERE b.hotel_resort_id = :hotel_resort_id
           AND b.booking_status IN ('pending', 'confirmed')
-          AND (
-            (:checkin <= b.checkout_date AND :checkout >= b.checkin_date)
-            OR (b.checked_in_at IS NOT NULL AND b.checked_out_at IS NULL)
-          )
+          AND :checkin < ($reservationEnd) AND :checkout > b.checkin_date
     ");
     $stmt->execute([
         ':hotel_resort_id' => $hotelResortId,
         ':checkin' => $checkin,
         ':checkout' => $checkout,
+        ':occupied_until' => HoRoomOccupiedUntil(),
     ]);
 
     $ids = [];
@@ -376,7 +388,7 @@ function HoGetUnavailableRoomLookup(PDO $pdo, int $hotelResortId, string $checki
             $ids[$roomId] = true;
         }
         $roomType = mb_strtolower(trim((string)($row['room_type'] ?? '')));
-        if ($roomType !== '') {
+        if ($roomId <= 0 && $roomType !== '') {
             $names[$roomType] = true;
         }
     }
@@ -393,8 +405,8 @@ function HoGetUnavailableRoomLookup(PDO $pdo, int $hotelResortId, string $checki
                  FROM booking_checkout_drafts
                  WHERE booking_domain = 'hotel' AND status = 'pending' AND expires_at > NOW()
                    AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.hotel_resort_id')) = :hotel_resort_id
-                   AND :checkin <= JSON_UNQUOTE(JSON_EXTRACT(payload, '$.checkout_date'))
-                   AND :checkout >= JSON_UNQUOTE(JSON_EXTRACT(payload, '$.checkin_date'))"
+                   AND :checkin < JSON_UNQUOTE(JSON_EXTRACT(payload, '$.checkout_date'))
+                   AND :checkout > JSON_UNQUOTE(JSON_EXTRACT(payload, '$.checkin_date'))"
             );
             $draftStmt->execute([
                 ':hotel_resort_id' => (string)$hotelResortId,
@@ -405,7 +417,7 @@ function HoGetUnavailableRoomLookup(PDO $pdo, int $hotelResortId, string $checki
                 $roomId = (int)($row['hotel_room_id'] ?? 0);
                 if ($roomId > 0) $ids[$roomId] = true;
                 $roomType = mb_strtolower(trim((string)($row['room_type'] ?? '')));
-                if ($roomType !== '') $names[$roomType] = true;
+                if ($roomId <= 0 && $roomType !== '') $names[$roomType] = true;
             }
         }
     } catch (Throwable $ignored) {
@@ -465,6 +477,7 @@ function HoGetAvailableHotelRooms(PDO $pdo, int $hotelResortId, string $checkin,
 function HoIsHotelRoomAvailable(PDO $pdo, int $hotelResortId, int $hotelRoomId, string $roomName, string $checkin, string $checkout): bool
 {
     HoEnsureHotelBookingsTable($pdo);
+    $reservationEnd = HoRoomReservationEndSql();
     $stmt = $pdo->prepare("
         SELECT COUNT(*)
         FROM hotel_room_bookings
@@ -472,12 +485,9 @@ function HoIsHotelRoomAvailable(PDO $pdo, int $hotelResortId, int $hotelRoomId, 
           AND booking_status IN ('pending', 'confirmed')
           AND (
             hotel_room_id = :hotel_room_id
-            OR (hotel_room_id IS NULL AND room_type = :room_type)
+            OR (COALESCE(hotel_room_id, 0) = 0 AND LOWER(TRIM(room_type)) = LOWER(TRIM(:room_type)))
           )
-          AND (
-            (:checkin <= checkout_date AND :checkout >= checkin_date)
-            OR (checked_in_at IS NOT NULL AND checked_out_at IS NULL)
-          )
+          AND :checkin < ($reservationEnd) AND :checkout > checkin_date
     ");
     $stmt->execute([
         ':hotel_resort_id' => $hotelResortId,
@@ -485,6 +495,7 @@ function HoIsHotelRoomAvailable(PDO $pdo, int $hotelResortId, int $hotelRoomId, 
         ':room_type' => $roomName,
         ':checkin' => $checkin,
         ':checkout' => $checkout,
+        ':occupied_until' => HoRoomOccupiedUntil(),
     ]);
     if ((int)$stmt->fetchColumn() !== 0) {
         return false;
@@ -496,9 +507,10 @@ function HoIsHotelRoomAvailable(PDO $pdo, int $hotelResortId, int $hotelRoomId, 
                  WHERE booking_domain = 'hotel' AND status = 'pending' AND expires_at > NOW()
                    AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.hotel_resort_id')) = ?
                    AND (JSON_UNQUOTE(JSON_EXTRACT(payload, '$.hotel_room_id')) = ?
-                        OR JSON_UNQUOTE(JSON_EXTRACT(payload, '$.room_type')) = ?)
-                   AND ? <= JSON_UNQUOTE(JSON_EXTRACT(payload, '$.checkout_date'))
-                   AND ? >= JSON_UNQUOTE(JSON_EXTRACT(payload, '$.checkin_date'))"
+                        OR (COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.hotel_room_id')) AS UNSIGNED), 0) = 0
+                            AND LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.room_type')))) = LOWER(TRIM(?))))
+                   AND ? < JSON_UNQUOTE(JSON_EXTRACT(payload, '$.checkout_date'))
+                   AND ? > JSON_UNQUOTE(JSON_EXTRACT(payload, '$.checkin_date'))"
             );
             $draftStmt->execute([(string)$hotelResortId, (string)$hotelRoomId, $roomName, $checkin, $checkout]);
             if ((int)$draftStmt->fetchColumn() > 0) return false;
@@ -521,19 +533,21 @@ function HoGetRoomUnavailableDates(
     $toDate = DateTimeImmutable::createFromFormat('!Y-m-d', $to);
     if (!$fromDate || !$toDate || $toDate < $fromDate) return [];
 
-    $stmt = $pdo->prepare("SELECT checkin_date, checkout_date
+    $reservationEnd = HoRoomReservationEndSql();
+    $stmt = $pdo->prepare("SELECT checkin_date, ($reservationEnd) AS checkout_date
         FROM hotel_room_bookings
         WHERE hotel_resort_id = :hotel_resort_id
           AND booking_status IN ('pending', 'confirmed')
-          AND (hotel_room_id = :hotel_room_id OR (hotel_room_id IS NULL AND room_type = :room_type))
+          AND (hotel_room_id = :hotel_room_id OR (COALESCE(hotel_room_id, 0) = 0 AND LOWER(TRIM(room_type)) = LOWER(TRIM(:room_type))))
           AND checkin_date <= :range_end
-          AND checkout_date >= :range_start");
+          AND (checkout_date > :range_start OR (checked_in_at IS NOT NULL AND checked_out_at IS NULL))");
     $stmt->execute([
         ':hotel_resort_id' => $hotelResortId,
         ':hotel_room_id' => $hotelRoomId,
         ':room_type' => $roomName,
-        ':range_start' => $from,
         ':range_end' => $to,
+        ':range_start' => $from,
+        ':occupied_until' => HoRoomOccupiedUntil(),
     ]);
     $ranges = $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
 
@@ -546,9 +560,10 @@ function HoGetRoomUnavailableDates(
                 WHERE booking_domain = 'hotel' AND status = 'pending' AND expires_at > NOW()
                   AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.hotel_resort_id')) = :hotel_resort_id
                   AND (JSON_UNQUOTE(JSON_EXTRACT(payload, '$.hotel_room_id')) = :hotel_room_id
-                       OR JSON_UNQUOTE(JSON_EXTRACT(payload, '$.room_type')) = :room_type)
+                       OR (COALESCE(CAST(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.hotel_room_id')) AS UNSIGNED), 0) = 0
+                           AND LOWER(TRIM(JSON_UNQUOTE(JSON_EXTRACT(payload, '$.room_type')))) = LOWER(TRIM(:room_type))))
                   AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.checkin_date')) <= :range_end
-                  AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.checkout_date')) >= :range_start");
+                  AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.checkout_date')) > :range_start");
             $draftStmt->execute([
                 ':hotel_resort_id' => (string)$hotelResortId,
                 ':hotel_room_id' => (string)$hotelRoomId,
@@ -567,7 +582,9 @@ function HoGetRoomUnavailableDates(
         $checkout = DateTimeImmutable::createFromFormat('!Y-m-d', (string)($range['checkout_date'] ?? ''));
         if (!$start || !$checkout || $checkout <= $start) continue;
         $start = $start < $fromDate ? $fromDate : $start;
-        $lastReservedDate = $checkout > $toDate ? $toDate : $checkout;
+        // Check-out is exclusive: a new guest can arrive on that date.
+        $lastNight = $checkout->modify('-1 day');
+        $lastReservedDate = $lastNight > $toDate ? $toDate : $lastNight;
         for ($date = $start; $date <= $lastReservedDate; $date = $date->modify('+1 day')) {
             $dates[$date->format('Y-m-d')] = true;
         }

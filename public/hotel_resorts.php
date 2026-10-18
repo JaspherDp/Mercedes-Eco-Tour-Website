@@ -543,6 +543,13 @@ foreach ($hotelsFromDb as &$hotel) {
 }
 unset($hotel);
 
+// Default search bounds must include every listed property's rate, including
+// properties whose room rates have not been published yet.
+$hotelSearchPriceMax = 6000;
+foreach ($hotelsFromDb as $hotel) {
+    $hotelSearchPriceMax = max($hotelSearchPriceMax, (int)(ceil(max(0, (float)$hotel['price']) / 200) * 200));
+}
+
 ?>
 
 <!DOCTYPE html>
@@ -1077,14 +1084,14 @@ unset($hotel);
         </div>
         <p class="price-filter-help">Set your preferred nightly budget.</p>
         <div class="price-value-fields" aria-live="polite">
-          <div><span>Minimum</span><strong>₱<span id="minPrice">200</span></strong></div>
+          <div><span>Minimum</span><strong>₱<span id="minPrice">0</span></strong></div>
           <span class="price-value-separator">—</span>
-          <div><span>Maximum</span><strong>₱<span id="maxPrice">6000</span></strong></div>
+          <div><span>Maximum</span><strong>₱<span id="maxPrice"><?= number_format($hotelSearchPriceMax) ?></span></strong></div>
         </div>
         <div class="price-slider">
           <div class="price-track" aria-hidden="true"></div>
-          <input type="range" id="rangeMin" min="200" max="6000" value="200" step="200" aria-label="Minimum nightly price">
-          <input type="range" id="rangeMax" min="200" max="6000" value="6000" step="200" aria-label="Maximum nightly price">
+          <input type="range" id="rangeMin" min="0" max="<?= $hotelSearchPriceMax ?>" value="0" step="200" aria-label="Minimum nightly price">
+          <input type="range" id="rangeMax" min="0" max="<?= $hotelSearchPriceMax ?>" value="<?= $hotelSearchPriceMax ?>" step="200" aria-label="Maximum nightly price">
         </div>
       </div>
     </div>
@@ -2571,8 +2578,7 @@ include 'footer.php';
           <div class="hotel-result-price-wrap">
             <span class="hotel-result-price-label">as low as</span>
             <div class="hotel-result-price" style="font-size: 25px; font-weight: bold;">
-              ₱${Number(h.price || 0).toLocaleString('en-US')}
-              <span>/night</span>
+              ${Number(h.price || 0) > 0 ? `₱${Number(h.price).toLocaleString('en-PH')} <span>/night</span>` : 'See rates'}
             </div>
           </div>
           <button class="hotel-result-btn" type="button" data-details-id="${hotelId}">Check Availability</button>
@@ -2731,9 +2737,7 @@ include 'footer.php';
       hotelMain.classList.add("search-active");
     }
 
-    filtered = hotels.filter(h => {
-      return !island.value || h.island === island.value;
-    });
+    filtered = hotels.filter(h => hotelMatchesSearchIsland(h, island.value));
 
     applyCheckboxFilters();
     requestAnimationFrame(() => {
@@ -2760,6 +2764,16 @@ include 'footer.php';
     persistHotelSearchUrl(currentSearchData);
   }
 
+function hotelMatchesSearchIsland(hotel, island) {
+  const normalize = value => {
+    const key = String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase().replace(/\bislands?\b/g, '').replace(/\s+/g, ' ').trim();
+    // The destination dropdown groups both Apuao islands under Apuao.
+    return /^apuao\b/.test(key) ? 'apuao' : key;
+  };
+  return !normalize(island) || normalize(hotel.island) === normalize(island);
+}
+
 function applySearchWithoutValidation(data) {
   document.getElementById("featuredSection").style.display = "none";
   document.getElementById("carouselSection").style.display = "none";
@@ -2780,9 +2794,7 @@ function applySearchWithoutValidation(data) {
     updateMobileHotelSearchSummary();
   }
 
-  filtered = hotels.filter(h => {
-    return !data.island || h.island === data.island;
-  });
+  filtered = hotels.filter(h => hotelMatchesSearchIsland(h, data.island));
 
   persistHotelSearchUrl(data);
   applyCheckboxFilters();
@@ -2813,7 +2825,7 @@ document.querySelectorAll(".filter").forEach(cb => {
 
     const selectedTypes = checked.filter(value => value === "hotel" || value === "resort");
     if (selectedTypes.length) {
-      temp = temp.filter(h => selectedTypes.includes(String(h.type).toLowerCase()));
+      temp = temp.filter(h => selectedTypes.includes(String(h.type).trim().toLowerCase()));
     }
 
     displayHotels(temp);
@@ -3093,8 +3105,7 @@ document.querySelectorAll(".filter").forEach(cb => {
           <div class="hotel-featured-price-wrap">
             <span class="hotel-featured-price-label">as low as</span>
             <div class="hotel-featured-price">
-              ₱${Number(h.price || 0).toLocaleString('en-PH')}
-              <span>/night</span>
+              ${Number(h.price || 0) > 0 ? `₱${Number(h.price).toLocaleString('en-PH')} <span>/night</span>` : 'See rates'}
             </div>
           </div>
           <button class="hotel-featured-btn" onclick="event.stopPropagation(); openHotelDetails(${hotelId}, 'featured')">Check Availability</button>

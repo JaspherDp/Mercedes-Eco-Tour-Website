@@ -5,7 +5,7 @@ require 'db_connection.php';
 require_once __DIR__ . '/activity_logger.php';
 require_once __DIR__ . '/operator_auth_helper.php';
 require_once __DIR__ . '/input_validation.php';
-require_once __DIR__ . '/secure_upload_helper.php';
+require_once __DIR__ . '/operator_package_media.php';
 
 header('Content-Type: application/json');
 
@@ -24,36 +24,6 @@ if (!AppVerifyCsrf('operator', 'package_management', $_POST['csrf_token'] ?? nul
 }
 
 $operator_id = $_SESSION['operator_id'];
-
-/* =====================================================
-   HELPER FUNCTION: Save Base64 Image
-===================================================== */
-function validateBase64Image($data): ?array {
-    if ($data === '' || $data === null) return null;
-    if (!is_string($data) || strlen($data) > 8 * 1024 * 1024
-        || !preg_match('#^data:image/(png|jpeg);base64,([A-Za-z0-9+/]*={0,2})$#D', $data, $matches)) {
-        throw new InvalidArgumentException('An uploaded package image is invalid or too large.');
-    }
-    $content = $matches[2];
-    $decoded = base64_decode($content, true);
-    if ($decoded === false) throw new InvalidArgumentException('An uploaded package image is invalid.');
-    $validated = ItourSecureValidateImageBytes($decoded, 5 * 1024 * 1024);
-    $declaredMime = $matches[1] === 'png' ? 'image/png' : 'image/jpeg';
-    if ((string)$validated['mime'] !== $declaredMime) {
-        throw new InvalidArgumentException('The package image type does not match its contents.');
-    }
-    return $validated;
-}
-
-function saveBase64Image(?array $image){
-    if ($image === null) return null;
-    $uploadDirectory = ItourEnsureProjectDirectory('php/upload');
-    $basename = ItourSecureRandomFilename('pkg', (string)$image['extension']);
-    $path = $uploadDirectory . DIRECTORY_SEPARATOR . $basename;
-    ItourSecureReencodeImageBytes($image, $path);
-    $GLOBALS['itourNewOperatorPackageUploads'][] = $path;
-    return 'php/upload/' . $basename;
-}
 
 /* =====================================================
    COLLECT PACKAGE DATA
@@ -97,17 +67,13 @@ foreach ($steps as $step) {
     }
 }
 
-$validatedImages = [];
-foreach (['package_image_data', 'package_image2_data', 'package_image3_data', 'package_image4_data',
-          'location_image_data', 'route_image_data'] as $imageField) {
-    $validatedImages[$imageField] = validateBase64Image($_POST[$imageField] ?? '');
-}
-$img1 = saveBase64Image($validatedImages['package_image_data']);
-$img2 = saveBase64Image($validatedImages['package_image2_data']);
-$img3 = saveBase64Image($validatedImages['package_image3_data']);
-$img4 = saveBase64Image($validatedImages['package_image4_data']);
-$location_img = saveBase64Image($validatedImages['location_image_data']);
-$route_img    = saveBase64Image($validatedImages['route_image_data']);
+$validatedImages = OperatorPackageValidateImages($_FILES, $_POST);
+$img1 = OperatorPackageSaveImage($validatedImages['package_image'], $GLOBALS['itourNewOperatorPackageUploads']);
+$img2 = OperatorPackageSaveImage($validatedImages['package_image2'], $GLOBALS['itourNewOperatorPackageUploads']);
+$img3 = OperatorPackageSaveImage($validatedImages['package_image3'], $GLOBALS['itourNewOperatorPackageUploads']);
+$img4 = OperatorPackageSaveImage($validatedImages['package_image4'], $GLOBALS['itourNewOperatorPackageUploads']);
+$location_img = OperatorPackageSaveImage($validatedImages['location_image'], $GLOBALS['itourNewOperatorPackageUploads']);
+$route_img = OperatorPackageSaveImage($validatedImages['route_image'], $GLOBALS['itourNewOperatorPackageUploads']);
 
 $pdo->beginTransaction();
 /* =====================================================

@@ -298,29 +298,10 @@ let currentMapZoom = 14; // default
 
 const activitiesGrid = document.getElementById('des_activitiesGrid');
 activitiesGrid.innerHTML = '';
-// ======== ACTIVITY ICONS ========
-const activityIcons = {
-  'Scuba Diving': 'icons/scuba_diving.png',
-  'Photography': 'icons/photography.png',
-  'Surfing': 'icons/surfing.png',
-  'Camping': 'icons/camping.png',
-  'Swimming': 'icons/swimming.png',
-  'Kayaking': 'icons/kayaking.png',
-  'Fishing': 'icons/fishing.png',
-  'Hiking': 'icons/hiking.png',
-  'Dining': 'icons/dining.png',
-  'Boat Tour': 'icons/boat_tour.png',
-  'Sunset Watching': 'icons/sunset_watching.png',
-  'Sightseeing': 'icons/sight_seeing.png',
-  'Cultural Tour': 'icons/cultural_tour.png',
-  'Beach Volleyball': 'icons/beach_volleyball.png',
-  'Yoga': 'icons/yoga.png',
-  'Meditation': 'icons/meditation.png',
-  'Beach Walks': 'icons/beach_walks.png',
-  'Beach Party': 'icons/beach_party.png',
-  'Bonfire': 'icons/bonfire.png',
-};
-
+// Shared matching is used by the public page and editor previews.
+function destinationActivityIconSource(activity) {
+  return window.ItourActivityIcons.source(activity);
+}
 
 // small helper to create gallery image that fades in when loaded
 function createGalleryImg(src, alt, clickHandler){
@@ -450,7 +431,7 @@ function openPlacePage(placeId){
     place.activities.forEach(a => {
       const div = document.createElement('div');
       div.className = 'des_activity-item';
-      const iconSrc = activityIcons[a] || 'icons/default.png'; // fallback if missing
+      const iconSrc = destinationActivityIconSource(a); // fallback if missing
       div.innerHTML = `<img src="${iconSrc}" alt="${a}" class="activity-icon"> ${a}`;
       activitiesGrid.appendChild(div);
     });
@@ -763,7 +744,7 @@ function loadResortsForCurrentPlace() {
     activitiesSection.innerHTML = `
       <h4>Things To Do:</h4>
       <div class="des_activities-grid">
-        ${resort.activities.map(a => `<div class="des_activity-item">${activityIcons[a]?`<img src="${activityIcons[a]}" alt="${a}" class="activity-icon">`:'✓'} ${a}</div>`).join('')}
+        ${resort.activities.map(a => `<div class="des_activity-item">${destinationActivityIconSource(a)?`<img src="${destinationActivityIconSource(a)}" alt="${a}" class="activity-icon">`:'✓'} ${a}</div>`).join('')}
       </div>
     `;
     resortListDiv.appendChild(activitiesSection);
@@ -803,7 +784,7 @@ function openPlacePage(placeId) {
 place.activities.forEach(a => {
   const div = document.createElement('div');
   div.className = 'des_activity-item';
-  const iconSrc = activityIcons[a] || 'icons/default.png'; // fallback icon
+  const iconSrc = destinationActivityIconSource(a); // fallback icon
   div.innerHTML = `<img src="${iconSrc}" alt="${a}" class="activity-icon"> ${a}`;
   activitiesGrid.appendChild(div);
 });
@@ -839,6 +820,73 @@ place.activities.forEach(a => {
   document.body.style.overflow = 'hidden';
 }
 
+function createDestinationStayCard(stay) {
+  const card = document.createElement('article');
+  card.className = 'des_stay-card';
+  const media = document.createElement('div');
+  media.className = 'des_stay-media';
+  const image = document.createElement('img');
+  const source = String(stay.image || 'img/sampleimage.png').replace(/\\/g, '/');
+  image.src = /^(?:javascript|data|vbscript):/i.test(source.trim()) ? 'img/sampleimage.png' : source;
+  image.alt = String(stay.name || 'Hotel or resort');
+  image.loading = 'lazy';
+  image.decoding = 'async';
+  image.onerror = () => { image.onerror = null; image.src = 'img/sampleimage.png'; };
+  const badge = document.createElement('span');
+  badge.className = 'des_stay-type';
+  badge.textContent = stay.type === 'hotel' ? 'Hotel' : stay.type === 'resort' ? 'Resort' : 'Hotel / Resort';
+  media.append(image, badge);
+  const body = document.createElement('div');
+  body.className = 'des_stay-body';
+  const title = document.createElement('h3');
+  title.textContent = String(stay.name || 'Hotel or resort');
+  const location = document.createElement('p');
+  location.className = 'des_stay-location';
+  location.textContent = [stay.location_label || stay.island, 'Mercedes'].filter(Boolean).join(' · ');
+  const reviews = document.createElement('p');
+  reviews.className = 'des_stay-reviews';
+  const reviewCount = Math.max(0, Number(stay.review_count) || 0);
+  reviews.textContent = reviewCount > 0
+    ? `★ ${Number(stay.rating).toFixed(1)} · ${reviewCount} ${reviewCount === 1 ? 'review' : 'reviews'}`
+    : 'No reviews yet';
+  const amenities = document.createElement('div');
+  amenities.className = 'des_stay-amenities';
+  const amenityList = Array.isArray(stay.amenities) ? stay.amenities.filter(item => typeof item === 'string' && item.trim()) : [];
+  amenityList.slice(0, 3).forEach(amenity => {
+    const chip = document.createElement('span');
+    chip.textContent = amenity;
+    amenities.append(chip);
+  });
+  if (amenityList.length > 3) {
+    const more = document.createElement('span');
+    more.textContent = `+${amenityList.length - 3} more`;
+    amenities.append(more);
+  }
+  const rate = document.createElement('div');
+  rate.className = 'des_stay-rate';
+  const price = Number(stay.price) || 0;
+  const rateLabel = document.createElement('span');
+  rateLabel.textContent = price > 0 ? 'From' : 'Room rates';
+  const rateValue = document.createElement('strong');
+  rateValue.textContent = price > 0
+    ? new Intl.NumberFormat('en-PH', {style:'currency',currency:'PHP',maximumFractionDigits:2}).format(price)
+    : 'See rates';
+  rate.append(rateLabel, rateValue);
+  if (price > 0) {
+    const perNight = document.createElement('small');
+    perNight.textContent = '/ night';
+    rate.append(perNight);
+  }
+  const link = document.createElement('a');
+  link.className = 'des_stay-details';
+  link.href = `hotel_details.php?id=${encodeURIComponent(String(stay.id))}`;
+  link.textContent = 'View Details';
+  link.setAttribute('aria-label', `View details for ${stay.name || 'this property'}`);
+  body.append(title, location, reviews, amenities, rate, link);
+  card.append(media, body);
+  return card;
+}
+
 // ======== Destination UI Refactor Override ========
 (() => {
   window.__destinationV2Ready = true;
@@ -858,7 +906,6 @@ place.activities.forEach(a => {
   let destinationReturnUsesHistory = false;
   const destinationMarkerLookupLocal = new Map();
 
-  const iconMap = activityIcons || {};
 
   function placeLabelFromId(placeId) {
     if (placesData[placeId]?.title) return placesData[placeId].title;
@@ -1040,8 +1087,14 @@ place.activities.forEach(a => {
   function createActivityItemV2(activity) {
     const div = document.createElement('div');
     div.className = 'des_activity-item';
-    const iconSrc = iconMap[activity];
-    div.innerHTML = `${iconSrc ? `<img src="${iconSrc}" alt="${activity}" class="activity-icon">` : ''}${activity}`;
+    const icon = document.createElement('img');
+    icon.src = destinationActivityIconSource(activity);
+    icon.alt = '';
+    icon.className = 'activity-icon';
+    icon.onerror = () => { icon.onerror = null; icon.src = window.ItourActivityIcons.source(''); };
+    const label = document.createElement('span');
+    label.textContent = String(activity || '');
+    div.append(icon, label);
     return div;
   }
 
@@ -1542,34 +1595,12 @@ place.activities.forEach(a => {
     resortList.innerHTML = '';
 
     if (!resorts.length) {
-      resortList.innerHTML = '<div class="des_info-section"><p>No resorts available for this destination yet.</p></div>';
+      resortList.innerHTML = '<div class="des_info-section des_stays-empty"><p>No hotels or resorts are listed for this destination yet.</p></div>';
       return;
     }
 
-    resorts.forEach((resort, resortIndex) => {
-      const card = document.createElement('article');
-      card.className = 'des_resort-card';
-      card.innerHTML = `
-        <h3 class="resort-name-outside">${resort.name}</h3>
-        <div class="des_info-section">${toParagraphs(resort.description || '')}</div>
-        <div class="des_activities-section-outside">
-          <h4>Things To Do</h4>
-          <div class="des_activities-grid"></div>
-        </div>
-        <div class="des_image-gallery-outside"></div>
-      `;
-
-      const activitiesGrid = card.querySelector('.des_activities-grid');
-      (resort.activities || []).forEach((activity) => {
-        activitiesGrid.appendChild(createActivityItemV2(activity));
-      });
-
-      const gallery = card.querySelector('.des_image-gallery-outside');
-      (resort.gallery || []).forEach((src, imageIndex) => {
-        gallery.appendChild(createGalleryThumb(src, resort.name, () => openResortImageModalV2(resortIndex, imageIndex)));
-      });
-
-      resortList.appendChild(card);
+    resorts.forEach((resort) => {
+      resortList.appendChild(createDestinationStayCard(resort));
     });
   }
 

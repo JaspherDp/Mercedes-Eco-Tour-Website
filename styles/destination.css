@@ -402,7 +402,32 @@
 .destination-page .des_map-section iframe { height: 360px !important; border-radius: 13px !important; }
 .destination-page .map-meta { margin: 9px 2px 0; color: #71847f; font-size: .67rem; }
 
-.destination-page #sectionResorts #resortList { display: grid; gap: 24px; }
+.destination-page #sectionResorts #resortList { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; align-items: stretch; }
+.destination-page .des_stays-heading { margin-bottom: 24px; }
+.destination-page .des_stays-heading h2 { margin: 0 0 8px; color: var(--des-green-950); font-size: clamp(1.4rem, 3vw, 1.9rem); letter-spacing: -.03em; }
+.destination-page .des_stays-heading p { margin: 0; color: var(--des-muted); font-size: .9rem; }
+.destination-page .des_stays-empty { grid-column: 1 / -1; }
+.destination-page .des_stay-card { display: flex; flex-direction: column; overflow: hidden; min-width: 0; border: 1px solid var(--des-line); border-radius: 14px; background: #fff; box-shadow: 0 6px 20px rgba(11,63,50,.06); }
+.destination-page .des_stay-media { position: relative; flex-shrink: 0; overflow: hidden; aspect-ratio: 3 / 2; background: var(--des-mint-100); }
+.destination-page .des_stay-media img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.destination-page .des_stay-type { position: absolute; left: 10px; top: 10px; padding: 5px 9px; border-radius: 999px; color: var(--des-green-900); background: rgba(255,255,255,.95); font-size: .62rem; font-weight: 800; }
+.destination-page .des_stay-body { display: flex; flex: 1; flex-direction: column; padding: 14px; }
+.destination-page .des_stay-body h3 { margin: 0 0 7px; color: var(--des-green-950); font-size: .98rem; line-height: 1.4; overflow-wrap: anywhere; }
+.destination-page .des_stay-location { margin: 0 0 9px; color: var(--des-muted); font-size: .7rem; line-height: 1.5; }
+.destination-page .des_stay-reviews { margin: 0 0 12px; color: var(--des-green-800); font-size: .71rem; font-weight: 650; }
+.destination-page .des_stay-amenities { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 5px; margin: 0 0 14px; }
+.destination-page .des_stay-amenities:empty { display: none; }
+.destination-page .des_stay-amenities span { max-width: 100%; padding: 4px 7px; border: 1px solid var(--des-line); border-radius: 6px; color: var(--des-muted); background: var(--des-mint-50); font-size: .62rem; overflow-wrap: anywhere; }
+.destination-page .des_stay-rate { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px; margin: auto 0 12px; padding-top: 12px; border-top: 1px solid var(--des-line); }
+.destination-page .des_stay-rate>span { width: 100%; color: var(--des-muted); font-size: .64rem; }
+.destination-page .des_stay-rate strong { color: var(--des-green-950); font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.destination-page .des_stay-rate small { color: var(--des-muted); font-size: .65rem; }
+.destination-page .des_stay-details { display: inline-flex; align-items: center; justify-content: center; min-height: 36px; padding: 8px 12px; border-radius: 8px; color: #fff; background: var(--des-green-700); text-decoration: none; font-size: .72rem; font-weight: 700; transition: background .2s; }
+.destination-page .des_stay-details:hover { background: var(--des-green-900); }
+.destination-page .des_stay-details:focus-visible { outline: 3px solid var(--des-mint); outline-offset: 3px; }
+@media (max-width: 1000px) { .destination-page #sectionResorts #resortList { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (max-width: 780px) { .destination-page #sectionResorts #resortList { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .destination-page #sectionResorts #resortList { grid-template-columns: minmax(0, 1fr); } }
 .destination-page .des_resort-card { padding: 26px; border: 1px solid var(--des-line); border-radius: 18px; background: #fff; box-shadow: 0 10px 30px rgba(11,63,50,.07); }
 .destination-page .resort-name-outside { margin: 0 0 16px; color: var(--des-green-950); font-size: 1.45rem; letter-spacing: -.025em; }
 .destination-page .des_resort-card .des_info-section { margin-bottom: 20px; box-shadow: none; background: var(--des-mint-50); }

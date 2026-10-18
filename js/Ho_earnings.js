@@ -44,7 +44,7 @@
           ${field('Booking total', data.booking_total)}
           ${field('Gross customer payment', data.amount_paid)}
           ${field('Guest balance', data.balance)}
-          ${field('PayMongo fee', data.paymongo_fee)}
+          ${data.hide_paymongo_fee ? '' : field('PayMongo fee', data.paymongo_fee)}
           ${field('Refunded', data.refunded)}
           ${field('Expected net payout', data.net_payout)}
           ${field(settled ? 'Amount settled' : 'Net payout', data.payout_amount)}

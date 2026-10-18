@@ -1415,9 +1415,9 @@ body.modal-open { overflow: hidden; }
                 </svg>
             </div>
             <div class="text">
-                <span>Drag & drop image here or click</span>
+                <span>Drag & drop image here or click</span><small>JPEG, PNG, or WebP up to 40 MB. Images are optimized before saving.</small>
             </div>
-            <input type="file" id="imageInput" accept="image/*" hidden>
+            <input type="file" id="imageInput" accept="image/jpeg,image/png,image/webp" hidden>
         </div>
 
         <!-- Cropper Container -->
@@ -1435,6 +1435,7 @@ body.modal-open { overflow: hidden; }
     </div>
 </div>
 
+<script src="js/image-upload-optimizer-v2.js?v=<?= (int)@filemtime(__DIR__ . '/../js/image-upload-optimizer-v2.js') ?>"></script>
 <script src="https://cdn.jsdelivr.net/npm/cropperjs@1.5.13/dist/cropper.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
@@ -1481,6 +1482,17 @@ echo json_encode($jsPackages, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON
 let currentPackageId = null;
 let cropper = null;
 let currentImageField = null;
+let pendingPackageImageUploads = {};
+let packageImagePreviewUrls = {};
+let currentPackageUploadUrl = null;
+let currentPackageUploadMime = 'image/jpeg';
+let packageImageRequest = 0;
+
+function resetPendingPackageImages() {
+    Object.values(packageImagePreviewUrls).forEach(url => URL.revokeObjectURL(url));
+    pendingPackageImageUploads = {};
+    packageImagePreviewUrls = {};
+}
 
 /* =====================================================
    DOM ELEMENTS (DECLARE ONCE)
@@ -1573,6 +1585,8 @@ function openModal(packageId){
 }
 
 function closeModal(){
+    resetPendingPackageImages();
+    if (imageModal.style.display === 'flex') closeImageModal();
     editModal.style.display = 'none';
     itineraryContainer.innerHTML = '';
     if (imageModal.style.display !== 'flex') document.body.classList.remove('modal-open');
@@ -1616,6 +1630,7 @@ function openAddModal(){
    PACKAGE IMAGES
 ===================================================== */
 function renderPackageImages(pkg){
+    resetPendingPackageImages();
     const container = document.getElementById('packageImagesContainer');
     container.innerHTML = '';
 
@@ -1712,6 +1727,8 @@ function updateDisplayOrders() {
 ===================================================== */
 // ======= IMAGE MODAL =======
 function openGeneralImageModal(field){
+    closeImageModal();
+    ItourImageOptimizer.setButtonBusy(doneBtn, false);
     currentImageField = field;
     imageInput.value = '';
     dragArea.style.display = 'flex';
@@ -1724,6 +1741,9 @@ function openGeneralImageModal(field){
 }
 
 function closeImageModal(){
+    packageImageRequest++;
+    if (currentPackageUploadUrl) URL.revokeObjectURL(currentPackageUploadUrl);
+    currentPackageUploadUrl = null;
     imageModal.style.display = 'none';
     imageInput.value = '';
 
@@ -1752,44 +1772,75 @@ dragArea.addEventListener('drop',e=>{
     e.preventDefault();
     dragArea.classList.remove('dragover');
     if(!e.dataTransfer.files.length) return;
-    imageInput.files = e.dataTransfer.files;
-    imageInput.dispatchEvent(new Event('change',{bubbles:true}));
+    handleOperatorPackageFile(e.dataTransfer.files[0]);
 });
 
 /* =====================================================
    IMAGE INPUT
 ===================================================== */
-imageInput.addEventListener('change',()=>{
-    const file = imageInput.files[0];
-    if(!file) return;
+imageInput.addEventListener('change',()=>handleOperatorPackageFile(imageInput.files[0]));
 
-    cropImage.src = URL.createObjectURL(file);
-    dragArea.style.display = 'none';
-    cropContainer.style.display = 'block';
-    doneBtn.style.display = 'inline-block';
-    cancelBtn.style.display = 'inline-block';
-
-    if(cropper) cropper.destroy();
-    cropper = new Cropper(cropImage,{aspectRatio:4/3,viewMode:1});
-});
-
-/* =====================================================
-   CROP CONFIRM
-===================================================== */
-doneBtn.addEventListener('click',()=>{
-    if(!cropper || !currentImageField) return;
-    const canvas = cropper.getCroppedCanvas({width:600,height:400});
-    const dataUrl = canvas.toDataURL('image/jpeg');
-
-    if(currentImageField.startsWith('package_image')){
-        const img = document.querySelector(`img[data-field="${currentImageField}"]`);
-        if(img) img.src = dataUrl;
-    } else if(currentImageField === 'location_image'){
-        document.getElementById('location_image_preview').src = dataUrl;
-    } else if(currentImageField === 'route_image'){
-        document.getElementById('route_image_preview').src = dataUrl;
+async function handleOperatorPackageFile(file) {
+    if (!file) return;
+    const request = ++packageImageRequest;
+    if (cropper) { cropper.destroy(); cropper = null; }
+    ItourImageOptimizer.setButtonBusy(doneBtn, true, 'Optimizing image...');
+    try {
+        const optimizedFile = await ItourImageOptimizer.optimizeSource(file, 4096);
+        if (request !== packageImageRequest) return;
+        currentPackageUploadMime = optimizedFile.type;
+        if (currentPackageUploadUrl) URL.revokeObjectURL(currentPackageUploadUrl);
+        currentPackageUploadUrl = URL.createObjectURL(optimizedFile);
+        await new Promise((resolve, reject) => {
+            cropImage.onload = resolve;
+            cropImage.onerror = () => reject(new Error('The selected image could not be displayed.'));
+            cropImage.src = currentPackageUploadUrl;
+        });
+        if (request !== packageImageRequest) return;
+        dragArea.style.display = 'none';
+        cropContainer.style.display = 'block';
+        doneBtn.style.display = 'inline-block';
+        cancelBtn.style.display = 'inline-block';
+        const wide = currentImageField === 'location_image' || currentImageField === 'route_image';
+        cropper = new Cropper(cropImage, {aspectRatio:wide ? 16/9 : 4/3,viewMode:1,autoCropArea:1,responsive:true,background:false});
+    } catch (error) {
+        if (request !== packageImageRequest) return;
+        closeImageModal();
+        Swal.fire({icon:'error',title:'Image not accepted',text:error.message || 'The image could not be optimized.'});
+    } finally {
+        if (request === packageImageRequest) {
+            ItourImageOptimizer.setButtonBusy(doneBtn, false);
+            doneBtn.disabled = !cropper;
+        }
     }
-    closeImageModal();
+}
+
+doneBtn.addEventListener('click', async () => {
+    if (!cropper || !currentImageField || doneBtn.disabled) return;
+    const field = currentImageField;
+    const request = packageImageRequest;
+    ItourImageOptimizer.setButtonBusy(doneBtn, true, 'Optimizing image...');
+    try {
+        const wide = field === 'location_image' || field === 'route_image';
+        const blob = await ItourImageOptimizer.exportCrop(cropper, currentPackageUploadMime, {
+            maxWidth: wide ? 1920 : 1600,
+            maxHeight: wide ? 1080 : 1200
+        });
+        if (request !== packageImageRequest) return;
+        if (packageImagePreviewUrls[field]) URL.revokeObjectURL(packageImagePreviewUrls[field]);
+        const preview = URL.createObjectURL(blob);
+        pendingPackageImageUploads[field] = blob;
+        packageImagePreviewUrls[field] = preview;
+        const target = field.startsWith('package_image')
+            ? document.querySelector(`img[data-field="${field}"]`)
+            : document.getElementById(field + '_preview');
+        if (target) target.src = preview;
+        closeImageModal();
+    } catch (error) {
+        if (request === packageImageRequest) Swal.fire({icon:'error',title:'Image processing failed',text:error.message || 'The image could not be prepared.'});
+    } finally {
+        if (request === packageImageRequest) ItourImageOptimizer.setButtonBusy(doneBtn, false);
+    }
 });
 
 cancelBtn.addEventListener('click',closeImageModal);
@@ -1812,11 +1863,10 @@ document.getElementById('editPackageForm').addEventListener('submit', e => {
     submitButton.disabled = true;
     submitButton.innerText = 'Saving...';
 
-    document.querySelectorAll('#packageImagesContainer img').forEach(img => {
-        formData.append(img.dataset.field + '_data', img.src);
+    Object.entries(pendingPackageImageUploads).forEach(([field, blob]) => {
+        const extension = blob.type === 'image/jpeg' ? 'jpg' : blob.type.split('/')[1];
+        formData.append(field, blob, field + '.' + extension);
     });
-    formData.append('location_image_data', document.getElementById('location_image_preview').src);
-    formData.append('route_image_data', document.getElementById('route_image_preview').src);
 
     fetch('php/update_operator_package.php', {
         method: 'POST',
@@ -1859,6 +1909,7 @@ document.getElementById('editPackageForm').addEventListener('submit', e => {
 });
 
 function renderEmptyPackageImages(){
+    resetPendingPackageImages();
     const container = document.getElementById('packageImagesContainer');
     container.innerHTML = '';
 

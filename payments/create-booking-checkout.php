@@ -122,8 +122,8 @@ try {
              WHERE booking_domain = 'hotel' AND status = 'pending' AND expires_at > NOW()
                AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.hotel_resort_id')) = ?
                AND JSON_UNQUOTE(JSON_EXTRACT(payload, '$.hotel_room_id')) = ?
-               AND ? <= JSON_UNQUOTE(JSON_EXTRACT(payload, '$.checkout_date'))
-               AND ? >= JSON_UNQUOTE(JSON_EXTRACT(payload, '$.checkin_date'))"
+               AND ? < JSON_UNQUOTE(JSON_EXTRACT(payload, '$.checkout_date'))
+               AND ? > JSON_UNQUOTE(JSON_EXTRACT(payload, '$.checkin_date'))"
         );
         $draftConflict->execute([(string)$hotelId, (string)$roomId, $checkin, $checkout]);
         if ((int)$draftConflict->fetchColumn() > 0) {

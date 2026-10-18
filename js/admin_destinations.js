@@ -10,6 +10,25 @@
   let sourceObjectUrl = '';
   const editorSteps = ['details', 'media', 'location', 'publishing'];
 
+  function renderActivityIconPreview() {
+    const preview = byId('activityIconPreview');
+    if (!preview || !window.ItourActivityIcons) return;
+    preview.replaceChildren();
+    String(byId('fieldActivities')?.value || '').split(/[,\r\n]+/).map(value => value.trim()).filter(Boolean).forEach(activity => {
+      const match = window.ItourActivityIcons.resolve(activity);
+      const chip = document.createElement('span');
+      chip.className = 'activity-icon-preview-item';
+      chip.title = match.matched ? `${match.category} icon` : 'General activity icon';
+      const icon = document.createElement('img');
+      icon.src = match.source;
+      icon.alt = '';
+      const label = document.createElement('span');
+      label.textContent = activity;
+      chip.append(icon, label);
+      preview.append(chip);
+    });
+  }
+
   function updateEditorNavigation(name) {
     const stepIndex = Math.max(0, editorSteps.indexOf(name));
     const isAddMode = editor?.dataset.mode === 'add';
@@ -51,6 +70,7 @@
     preview('cardPreview', ''); preview('heroPreview', '');
     byId('existingGallery').innerHTML = ''; byId('newGallery').innerHTML = '';
     byId('editorTitle').textContent = 'Add destination';
+    renderActivityIconPreview();
     byId('descriptionCount').textContent = '0';
     switchTab('details');
   }
@@ -62,7 +82,7 @@
     if (isEditMode) {
       const item = data[id];
       editor.dataset.originalStatus = item.status || '';
-      byId('editorTitle').textContent = 'Edit destination';
+      byId('editorTitle').textContent = `Edit ${item.title} destination`;
       byId('editorEyebrow').textContent = 'DESTINATION EDITOR';
       byId('editorSubtitle').textContent = 'Update the card and visitor-facing destination story.';
       set('destinationId', item.destination_id); set('fieldTitle', item.title); set('fieldSlug', item.slug);
@@ -78,6 +98,7 @@
       byId('editorEyebrow').textContent = 'NEW DESTINATION';
       byId('editorSubtitle').textContent = 'Complete the four steps to create a visitor-ready destination.';
     }
+    renderActivityIconPreview();
     editor.showModal();
   }
 
@@ -108,9 +129,14 @@
   });
 
   byId('fieldTitle')?.addEventListener('input', (event) => {
+    if (editor.dataset.mode === 'edit') {
+      const name = event.target.value.trim() || data[byId('destinationId').value]?.title || '';
+      byId('editorTitle').textContent = name ? `Edit ${name} destination` : 'Edit destination';
+    }
     if (!byId('destinationId').value || !byId('fieldSlug').value) byId('fieldSlug').value = event.target.value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   });
   byId('fieldDescription')?.addEventListener('input', (event) => byId('descriptionCount').textContent = String(event.target.value.length));
+  byId('fieldActivities')?.addEventListener('input', renderActivityIconPreview);
 
   function renderNewGallery() {
     byId('newGallery').innerHTML = '';

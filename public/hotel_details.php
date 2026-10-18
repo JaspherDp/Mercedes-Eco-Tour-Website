@@ -2897,6 +2897,7 @@ function ratingValue($value): float {
 
       const response = await fetch(`php/hotel_room_availability.php?${params.toString()}`, {
         method: "GET",
+        cache: "no-store",
         headers: { "Accept": "application/json" }
       });
       if (!response.ok) {

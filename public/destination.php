@@ -8,6 +8,7 @@ require_once 'php/db_connection.php';
 require_once __DIR__ . '/../php/tourist_activity_helper.php';
 TouristPreparePageActivity($pdo);
 require_once 'php/destination_repository.php';
+require_once 'php/destination_stays_helper.php';
 $schemaTables = $pdo->query("
     SELECT COUNT(*)
     FROM information_schema.tables
@@ -20,6 +21,7 @@ if ((int)$schemaTables < 3) {
 }
 
 $publicDestinations = [];
+$destinationStays = destinationLoadStays($pdo);
 $galleryByDestination = [];
 $galleryRows = $pdo->query('SELECT destination_id, image_path FROM destination_gallery ORDER BY destination_id, sort_order, gallery_id')->fetchAll(PDO::FETCH_ASSOC);
 foreach ($galleryRows as $photo) {
@@ -41,7 +43,7 @@ foreach (destinationRows($pdo, true) as $destination) {
             : null,
         'activities' => json_decode((string)$destination['activities'], true) ?: [],
         'gallery' => $gallery,
-        'resorts' => [],
+        'resorts' => destinationStaysForDestination($destinationStays, $destination),
     ];
 }
 ?>
@@ -177,7 +179,7 @@ foreach (destinationRows($pdo, true) as $destination) {
     <nav class="des_place-navbar">
   <ul>
     <li><a href="#" id="navAbout" class="active" onclick="showSection('about'); return false;">ABOUT</a></li>
-    <li><a href="#" id="navResorts" onclick="showSection('resort'); return false;">RESORTS</a></li>
+    <li><a href="#" id="navResorts" onclick="showSection('resort'); return false;">Hotel/Resorts</a></li>
   </ul>
 </nav>
 
@@ -257,6 +259,7 @@ foreach (destinationRows($pdo, true) as $destination) {
 
       <!-- Resorts Section -->
       <section id="sectionResorts" class="des_section">
+        <header class="des_stays-heading"><h2>Hotels &amp; Resorts</h2><p>Explore places to stay around this destination.</p></header>
         <div id="resortList"></div>
       </section>
     </div>
@@ -308,6 +311,7 @@ foreach (destinationRows($pdo, true) as $destination) {
 
 <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
 <script>window.destinationData = <?= json_encode($publicDestinations, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
+<script defer src="js/activity-icons.js?v=<?= (int)@filemtime(__DIR__ . '/../js/activity-icons.js') ?>"></script>
 <script defer src="destination.js?v=<?= (int)@filemtime(__DIR__ . '/../destination.js') ?>"></script>
 <script src="js/header.js?v=<?= (int)@filemtime(__DIR__ . '/../js/header.js') ?>"></script>
 <script>

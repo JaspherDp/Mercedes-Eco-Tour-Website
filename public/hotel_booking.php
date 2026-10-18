@@ -941,9 +941,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
         return false;
       };
 
+      const isRoomDateDisabled = (date) => {
+        const value = toPhpDate(date);
+        if (!unavailableRoomDates.has(value)) return false;
+        const first = stayDurationPicker?.selectedDates?.[0];
+        // An occupied arrival date can still be the previous guest's checkout.
+        return !first || value <= toPhpDate(first) || rangeHasUnavailableDate(toPhpDate(first), value);
+      };
+
       const syncHotelCalendars = () => {
         if (typeof flatpickr !== "function") return;
-        const disabled = [(date) => unavailableRoomDates.has(toPhpDate(date))];
+        const disabled = [isRoomDateDisabled];
         stayDurationPicker?.set("disable", disabled);
       };
 
@@ -958,7 +966,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
           monthSelectorType: "static",
           nextArrow: "&#8250;",
           prevArrow: "&#8249;",
-          disable: [(date) => unavailableRoomDates.has(toPhpDate(date))],
+          disable: [isRoomDateDisabled],
           defaultDate: checkin.value && checkout.value
             ? [new Date(`${checkin.value}T00:00:00`), new Date(`${checkout.value}T00:00:00`)]
             : null,
@@ -968,6 +976,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
               checkin.value = "";
               checkout.value = "";
             } else if (selectedDates.length === 1) {
+              if (unavailableRoomDates.has(toPhpDate(selectedDates[0]))) {
+                instance.clear(false);
+                checkin.value = "";
+                checkout.value = "";
+                showToast("That arrival night is reserved. Please choose another check-in date.", "error");
+                recalc();
+                return;
+              }
               checkin.value = toPhpDate(selectedDates[0]);
               checkout.value = "";
             } else {
@@ -984,6 +1000,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
               checkin.value = selectedCheckin;
               checkout.value = selectedCheckout;
             }
+            instance.redraw();
             touchedFields.add("checkin");
             touchedFields.add("checkout");
             revalidateTouchedField("checkin");
@@ -1031,7 +1048,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
           to: toPhpDate(limit)
         });
         try {
-          const response = await fetch(`${roomAvailabilityEndpoint}?${params}`, { headers: { "Accept": "application/json" } });
+          const response = await fetch(`${roomAvailabilityEndpoint}?${params}`, { cache: "no-store", headers: { "Accept": "application/json" } });
           const result = await response.json();
           if (!response.ok || !result.success) throw new Error(result.message || "Availability could not be loaded.");
           unavailableRoomDates = new Set(result.unavailable_dates || []);
