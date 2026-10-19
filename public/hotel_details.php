@@ -2300,6 +2300,7 @@ function ratingValue($value): float {
   <script src="js/favorites.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+  <script src="js/search-date-policy.js?v=<?= (int)filemtime(__DIR__ . '/../js/search-date-policy.js') ?>"></script>
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
   <script>
     const hotelData = <?= json_encode($hotel, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
@@ -3036,6 +3037,10 @@ function ratingValue($value): float {
 
     async function runRoomSearch(searchData) {
       const requestId = ++roomSearchRequestId;
+      if (!validDetailsStay(searchData.checkin, searchData.checkout)) {
+        renderRoomsSearchPrompt();
+        return;
+      }
       try { HotelChildPolicy.ages(searchData.childAges || [], Number(searchData.children || 0)); } catch (error) {
         roomsContent.innerHTML = `<p class="dummy-text">${escapeHotelDetailsText(error.message)}</p>`;
         document.getElementById("guestBox").style.display = "block";
@@ -3209,7 +3214,20 @@ function ratingValue($value): float {
       };
     }
 
+    function validDetailsStay(checkin, checkout) {
+      const validDay = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+        && !Number.isNaN(Date.parse(value)) && new Date(value).toISOString().slice(0, 10) === value;
+      return validDay(checkin) && validDay(checkout)
+        && checkin >= window.SearchDatePolicy.minimumDate('hotel') && checkout > checkin;
+    }
+
     function fillSearchFromData(data) {
+      data = { ...data };
+      if (!validDetailsStay(data.checkin, data.checkout)) {
+        data.checkin = '';
+        data.checkout = '';
+        picker.clear(false);
+      }
       islandInput.value = normalizeDetailsIsland(data.island) || normalizeDetailsIsland(hotelData.island);
       checkinInput.value = data.checkin || "";
       checkoutInput.value = data.checkout || "";
@@ -3321,6 +3339,9 @@ function ratingValue($value): float {
       if (!data.checkin || !data.checkout) {
         setError(dateRangeInput, "Please fill up this field");
         valid = false;
+      } else if (!validDetailsStay(data.checkin, data.checkout)) {
+        setError(dateRangeInput, "Select a check-in date from today onward and a later check-out date.");
+        valid = false;
       }
       if (!validateGuestSelection()) {
         valid = false;
@@ -3380,7 +3401,6 @@ function ratingValue($value): float {
       });
     }
 
-    const todayStr = new Date().toISOString().split("T")[0];
     let calendarPositionFrame = 0;
     const placeCalendarBelow = () => {
       if (!picker?.isOpen) return;
@@ -3416,10 +3436,11 @@ function ratingValue($value): float {
       monthSelectorType: "static",
       nextArrow: "&#8250;",
       prevArrow: "&#8249;",
-      minDate: todayStr,
+      minDate: window.SearchDatePolicy.minimumDate('hotel'),
       dateFormat: "Y-m-d",
       disableMobile: true,
       onOpen() {
+        this.set('minDate', window.SearchDatePolicy.minimumDate('hotel'));
         requestAnimationFrame(placeCalendarBelow);
       },
       onMonthChange() {
@@ -3667,7 +3688,7 @@ function ratingValue($value): float {
         else renderRoomsSearchPrompt();
       } else if (savedDataIsForCurrentHotel) {
         fillSearchFromData(savedData);
-        runRoomSearch(savedData);
+        runRoomSearch(collectSearchData());
       } else if (draftDataIsForCurrentHotel) {
         fillSearchFromData(draftData);
         renderRoomsSearchPrompt();
