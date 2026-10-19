@@ -18,4 +18,26 @@ foreach (['','2026-02-30','2026-13-01','not-a-date'] as $invalid) {
     try { tourBookingValidateAdvanceDate($invalid); } catch (DomainException) { ++$checks; continue; }
     throw new RuntimeException('Invalid date accepted');
 }
+// Execute the actual search URL guard without loading the database-backed page.
+$source = file_get_contents(__DIR__ . '/../public/search_results.php');
+$start = strpos($source, '$searchDateError = ');
+$end = strpos($source, "\nif (\$resultType !== 'hotels' &&", $start);
+if ($start === false || $end === false) throw new RuntimeException('Search guard missing.');
+$guard = substr($source, $start, $end - $start);
+$minimum = tourBookingEarliestDate();
+$tooSoon = (new DateTimeImmutable($minimum))->modify('-1 day')->format('Y-m-d');
+foreach (['tours', 'guides', 'boats', 'bundle', 'hotels'] as $resultType) {
+    foreach ([['checkin', $tooSoon], ['date', $tooSoon], ['checkout', $tooSoon],
+              ['date', 'not-a-date'], ['date', $minimum]] as [$field, $value]) {
+        $checkin = $date = $checkout = '';
+        $$field = $value;
+        http_response_code(200);
+        eval($guard);
+        $shouldReject = $resultType !== 'hotels' && $value !== $minimum;
+        if (($searchDateError !== '') !== $shouldReject || http_response_code() !== ($shouldReject ? 422 : 200)) {
+            throw new RuntimeException('Search URL date guard failed.');
+        }
+        ++$checks;
+    }
+}
 echo "PASS: $checks server date-policy assertions; no database or payment calls.\n";

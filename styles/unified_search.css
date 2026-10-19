@@ -2344,3 +2344,11 @@
     grid-template-columns: minmax(140px, 1.1fr) minmax(220px, 1.55fr) minmax(70px, .55fr) minmax(100px, .85fr);
   }
 }
+.results-date-error {
+  padding: 14px 18px;
+  border: 1px solid #e8b8b8;
+  border-radius: 10px;
+  background: #fff4f4;
+  color: #842424;
+  line-height: 1.5;
+}

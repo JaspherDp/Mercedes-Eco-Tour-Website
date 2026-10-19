@@ -25,10 +25,9 @@
     if (/^(https?:|data:)/i.test(src)) return src;
     if (src.startsWith("upload/")) return `php/${src}`;
     if (["uploads/", "php/upload/", "img/", "imagess/"].some((folder) => src.startsWith(folder))) {
-      return isBoat && /\.(png|jpe?g)$/i.test(src) ? src.replace(/\.(png|jpe?g)$/i, ".optimized.webp") : src;
+      return src;
     }
-    src = `uploads/${src}`;
-    return isBoat && /\.(png|jpe?g)$/i.test(src) ? src.replace(/\.(png|jpe?g)$/i, ".optimized.webp") : src;
+    return `uploads/${src}`;
   }
 
   function formatPrice(value) {
@@ -42,9 +41,9 @@
     imageIndex = (nextIndex + images.length) % images.length;
     gallery.classList.add("is-changing");
     window.setTimeout(() => {
+      mainImage.onerror = () => { mainImage.onerror = null; mainImage.src = config.fallback; };
       mainImage.src = images[imageIndex];
       mainImage.alt = `${activeItem.name || "Tour service"} image ${imageIndex + 1}`;
-      mainImage.onerror = () => { mainImage.onerror = null; mainImage.src = config.fallback; };
       gallery.classList.remove("is-changing");
     }, 120);
     byId("serviceImageCount").textContent = `${imageIndex + 1} / ${images.length}`;

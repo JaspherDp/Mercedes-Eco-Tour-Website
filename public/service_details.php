@@ -11,6 +11,15 @@ require_once 'php/service_catalog_helper.php';
 $type = strtolower(trim((string)($_GET['type'] ?? 'boat')));
 $type = in_array($type, ['boat', 'guide'], true) ? $type : 'boat';
 $items = serviceCatalogFetch($pdo, $type);
+// Resolve once on the server, where optimized-file existence can be checked.
+foreach ($items as &$item) {
+    $item['images'] = array_values(array_unique(array_map(
+        static fn($image) => serviceCatalogImage((string)$image, $type),
+        $item['images'] ?? []
+    )));
+    $item['img'] = serviceCatalogImage((string)($item['img'] ?? ''), $type);
+}
+unset($item);
 $requestedId = max(0, (int)($_GET['id'] ?? 0));
 $active = null;
 foreach ($items as $item) {
@@ -22,7 +31,7 @@ $favoriteIds = favoriteIdsByType($pdo, (int)($_SESSION['tourist_id'] ?? 0));
 $favoritesCsrf = favoriteCsrfToken();
 $isBoat = $type === 'boat';
 $tab = $isBoat ? 'boats' : 'guides';
-$fallback = $isBoat ? 'img/default-boat.png' : 'img/default-guide.png';
+$fallback = $isBoat ? 'img/boathome.png' : 'img/profileicon.png';
 $activeImages = $active ? array_map(static fn($image) => serviceCatalogImage((string)$image, $type), $active['images'] ?? []) : [];
 if (!$activeImages) $activeImages = [$fallback];
 $pageTitle = $active ? ($active['name'] . ' | iTour Mercedes') : 'Service unavailable | iTour Mercedes';
@@ -143,7 +152,7 @@ function serviceDetailRating(array $item): string {
         <article class="service-profile" id="serviceProfile" aria-live="polite">
           <div class="service-profile-scroll">
             <div class="service-profile-gallery" id="serviceProfileGallery">
-              <img id="serviceMainImage" src="<?= serviceDetailH($activeImages[0]) ?>" alt="<?= serviceDetailH($active['name']) ?>">
+              <img id="serviceMainImage" src="<?= serviceDetailH($activeImages[0]) ?>" alt="<?= serviceDetailH($active['name']) ?>" onerror="this.onerror=null;this.src='<?= $fallback ?>'">
               <div class="service-profile-gallery-shade"></div>
               <span class="service-profile-badge"><i class="fa-solid <?= $isBoat ? 'fa-ship' : 'fa-user-tie' ?>" aria-hidden="true"></i> <?= $isBoat ? 'Tour Boat' : 'Local Tour Guide' ?></span>
               <span class="service-profile-count" id="serviceImageCount">1 / <?= count($activeImages) ?></span>

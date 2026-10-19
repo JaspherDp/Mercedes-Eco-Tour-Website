@@ -175,7 +175,8 @@ $activeTab = isset($SEARCH_TABS[$requestedTab]) ? $requestedTab : 'hotels';
     <?= json_encode($activeTab) ?>
   </script>
   <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-  <script src="js/unified_search.js"></script>
+  <script src="js/search-date-policy.js?v=<?= (int)filemtime(__DIR__ . '/../js/search-date-policy.js') ?>"></script>
+  <script src="js/unified_search.js?v=<?= (int)filemtime(__DIR__ . '/../js/unified_search.js') ?>"></script>
 
   <!-- Login/Signup Modal -->
   <div id="loginModal"></div>

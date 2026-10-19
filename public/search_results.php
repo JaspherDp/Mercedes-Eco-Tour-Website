@@ -7,6 +7,7 @@ require_once __DIR__ . '/../php/tourist_activity_helper.php';
 TouristPreparePageActivity($pdo);
 require_once 'php/unified_search_config.php';
 require_once 'php/tour_resource_availability_helper.php';
+require_once 'php/tour_booking_date_policy.php';
 
 function normalizeSearchTab(string $tab): string
 {
@@ -666,6 +667,19 @@ if (!isset($SEARCH_TABS[$tab])) {
 $tabConfig = $SEARCH_TABS[$tab];
 $resultType = $tabConfig['result_type'];
 $results = [];
+$searchDateError = '';
+if ($resultType !== 'hotels') {
+    foreach ([$checkin, $date, $checkout] as $requestedDate) {
+        if ($requestedDate === '') continue;
+        try {
+            tourBookingValidateAdvanceDate($requestedDate);
+        } catch (DomainException $error) {
+            $searchDateError = $error->getMessage();
+            http_response_code(422);
+            break;
+        }
+    }
+}
 
 if ($resultType !== 'hotels' && $requestedTourType === 'same-day') {
     $checkout = '';
@@ -700,6 +714,7 @@ if ($resultType !== 'hotels' && $handoffTourDuration === '' && $handoffStartDate
     }
 }
 
+if ($searchDateError === '') {
 switch ($resultType) {
     case 'hotels':
         $results = fetchHotelResults($pdo, $destination, $pax, $rooms);
@@ -716,6 +731,7 @@ switch ($resultType) {
     case 'bundle':
         $results = fetchBundleResults($pdo, $destination, $pax, $selectedDate, $selectedEndDate);
         break;
+}
 }
 
 $searchContext = array_filter([
@@ -848,6 +864,9 @@ if ($resultType !== 'hotels' && $searchStartDate !== '') {
             </div>
         </section>
 
+        <?php if ($searchDateError !== ''): ?>
+            <p class="results-date-error" role="alert"><?= htmlspecialchars($searchDateError) ?></p>
+        <?php endif; ?>
         <section class="results-search-panel" aria-label="Refine your search">
             <button
                 class="results-search-toggle"
@@ -1081,6 +1100,7 @@ if ($resultType !== 'hotels' && $searchStartDate !== '') {
     <div id="footer"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script src="js/search-date-policy.js?v=<?= (int)filemtime(__DIR__ . '/../js/search-date-policy.js') ?>"></script>
     <script>
         function removeFilter(filterType) {
             const params = new URLSearchParams(window.location.search);
@@ -1129,6 +1149,8 @@ if ($resultType !== 'hotels' && $searchStartDate !== '') {
             const paxInput = document.getElementById('resultsPax');
             let tourRangePicker = null;
 
+            const minimumTourDate = () => window.SearchDatePolicy.minimumDate(<?= json_encode($tab) ?>);
+
             const formatShortDate = (value) => {
                 if (!value) return '';
                 const parsed = new Date(`${value}T00:00:00`);
@@ -1173,18 +1195,26 @@ if ($resultType !== 'hotels' && $searchStartDate !== '') {
                 if (!tourRangeInput || !tourMode || typeof window.flatpickr !== 'function') return;
                 tourRangePicker?.destroy();
                 const isSameDay = tourMode.value === 'same-day';
-                const defaults = [startDate?.value, isSameDay ? '' : endDate?.value].filter(Boolean);
+                if (startDate?.value && startDate.value < minimumTourDate()) {
+                    startDate.value = '';
+                    if (endDate) endDate.value = '';
+                    tourRangeInput.value = '';
+                }
+                const defaults = [startDate?.value, isSameDay ? '' : endDate?.value].filter(Boolean).map(parseIsoDate).filter(Boolean);
                 tourRangeInput.placeholder = isSameDay ? 'Select tour date' : 'Select tour dates';
                 tourRangePicker = window.flatpickr(tourRangeInput, {
                     mode: isSameDay ? 'single' : 'range',
                     dateFormat: 'M j',
                     conjunction: ' — ',
                     defaultDate: defaults,
-                    minDate: 'today',
+                    minDate: parseIsoDate(minimumTourDate()),
                     disableMobile: true,
                     monthSelectorType: 'static',
                     nextArrow: '&#8250;',
                     prevArrow: '&#8249;',
+                    onOpen() {
+                        tourRangePicker.set('minDate', parseIsoDate(minimumTourDate()));
+                    },
                     onChange(selectedDates) {
                         tourRangeInput.setCustomValidity('');
                         if (!selectedDates.length) {
@@ -1283,6 +1313,13 @@ if ($resultType !== 'hotels' && $searchStartDate !== '') {
             });
 
             searchForm?.addEventListener('submit', (event) => {
+                if (tourMode && startDate?.value && startDate.value < minimumTourDate()) {
+                    event.preventDefault();
+                    tourRangeInput.setCustomValidity('Please choose a tour date at least two days from today (Manila time).');
+                    tourRangeInput.reportValidity();
+                    tourRangePicker?.open();
+                    return;
+                }
                 if (secondaryDestination?.value && secondaryDestination.value === primaryDestination?.value) {
                     event.preventDefault();
                     secondaryDestination.setCustomValidity('Please choose a different second destination.');

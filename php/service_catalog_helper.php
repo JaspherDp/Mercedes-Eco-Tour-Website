@@ -139,7 +139,7 @@ function serviceCatalogFetch(PDO $pdo, string $type): array
 function serviceCatalogImage(string $path, string $type): string
 {
     $path = ltrim(str_replace('\\', '/', trim($path)), '/');
-    if ($path === '') return $type === 'guide' ? 'img/default-guide.png' : 'img/default-boat.png';
+    if ($path === '') return $type === 'guide' ? 'img/profileicon.png' : 'img/boathome.png';
     if (preg_match('#^(https?:|data:)#i', $path)) return $path;
     if (strpos($path, 'upload/') === 0) return 'php/' . $path;
     foreach (['uploads/', 'php/upload/', 'img/', 'imagess/'] as $prefix) {

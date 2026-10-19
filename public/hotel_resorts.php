@@ -1172,6 +1172,7 @@ include 'footer.php';
 </script>
 <script src="js/favorites.js?v=<?= (int)@filemtime(__DIR__ . '/../js/favorites.js') ?>"></script>
 <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+<script src="js/search-date-policy.js?v=<?= (int)filemtime(__DIR__ . '/../js/search-date-policy.js') ?>"></script>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
 <script>
 
@@ -1289,7 +1290,11 @@ include 'footer.php';
       const type = String(item.type || "").toLowerCase();
       const price = Number(item.price || 0);
       const fallbackType = ["package", "guide", "boat"].includes(type) ? type : "generic";
-      const itemImage = normalizeImagePath(item.image, fallbackType);
+      // Old history may contain guessed WebP paths; prefer the current catalog.
+      const liveBoat = type === "boat"
+        ? tourBoats.find(boat => String(boat.id) === String(item.id))
+        : null;
+      const itemImage = normalizeImagePath(liveBoat?.images?.[0] || liveBoat?.img || item.image, fallbackType);
       const isStay = type === "hotel" || type === "resort";
       const liveHotel = isStay
         ? hotels.find(hotel => String(hotel.id) === String(item.id))
@@ -1456,6 +1461,7 @@ include 'footer.php';
       islandSecondary.value = "";
       clearError(islandSecondary);
     }
+    syncSearchDateMinimum();
     document.dispatchEvent(new Event("search-tab-change"));
     syncSearchGuestClassification();
     renderChildAgeRows();
@@ -1490,6 +1496,23 @@ include 'footer.php';
   }
 
   let fp = null;
+
+  function syncSearchDateMinimum() {
+    const minimum = window.SearchDatePolicy.minimumDate(activeSearchTab);
+    const start = document.getElementById("checkin");
+    const end = document.getElementById("checkout");
+    if (start) start.min = minimum;
+    if (end) end.min = minimum;
+    if (fp) fp.set("minDate", minimum);
+    if (start?.value && start.value < minimum) {
+      if (fp) fp.clear();
+      start.value = "";
+      if (end) end.value = "";
+      document.getElementById("dateRangePicker").value = "";
+      const badge = document.getElementById("stayDurationBadge");
+      if (badge) badge.hidden = true;
+    }
+  }
   let searchDatePickerOpenTimer = 0;
 
   function suppressSearchDateKeyboard() {
@@ -1743,10 +1766,11 @@ include 'footer.php';
       monthSelectorType: "static",
       nextArrow: "&#8250;",
       prevArrow: "&#8249;",
-      minDate: todayStr,
+      minDate: window.SearchDatePolicy.minimumDate(activeSearchTab),
       dateFormat: "Y-m-d",
       disableMobile: true,
       onOpen: function() {
+        syncSearchDateMinimum();
         requestAnimationFrame(revealCalendar);
       },
       onReady: function() {
@@ -1856,10 +1880,11 @@ include 'footer.php';
       monthSelectorType: "static",
       nextArrow: "&#8250;",
       prevArrow: "&#8249;",
-      minDate: todayStr,
+      minDate: window.SearchDatePolicy.minimumDate(activeSearchTab),
       dateFormat: "Y-m-d",
       disableMobile: true,
       onOpen: function() {
+        syncSearchDateMinimum();
         requestAnimationFrame(revealCalendar);
       },
       onReady: function() {
@@ -2180,6 +2205,13 @@ include 'footer.php';
             tourDuration: urlParams.get("tour_duration") || ""
           };
           sessionStorage.setItem("searchMode", "true");
+          sessionStorage.setItem("searchData", JSON.stringify(savedData));
+        }
+
+        if (savedData && isTourSearchTab(normalizeSearchTab(savedData.tab || tabFromUrl))
+            && savedData.checkin && savedData.checkin < window.SearchDatePolicy.minimumDate(normalizeSearchTab(savedData.tab || tabFromUrl))) {
+          savedData.checkin = "";
+          savedData.checkout = "";
           sessionStorage.setItem("searchData", JSON.stringify(savedData));
         }
 
@@ -2700,6 +2732,11 @@ include 'footer.php';
       valid = false;
     }
 
+    if (isTourSearch && checkin.value && checkin.value < window.SearchDatePolicy.minimumDate(activeSearchTab)) {
+      setError(dateRangeInput, "Please choose a tour date at least two days from today (Manila time).");
+      valid = false;
+    }
+
     if (!validateGuestSelection(isHotelSearch)) {
       valid = false;
     }
@@ -3195,7 +3232,7 @@ document.querySelectorAll(".filter").forEach(cb => {
 
   function getFallbackImage(type) {
     if (type === "guide") return "img/default-guide.png";
-    if (type === "boat") return "img/default-boat.png";
+    if (type === "boat") return "img/boathome.png";
     if (type === "package") return "img/sampleimage.png";
     return "img/sampleimage.png";
   }

@@ -202,7 +202,7 @@ class UnifiedSearch {
         <label>${label}</label>
         <div class="input-group">
           ${icon}
-          <input type="date" data-type="date" name="${fieldKey}" value="${value}" required />
+          <input type="date" data-type="date" name="${fieldKey}" value="${value}" min="${window.SearchDatePolicy.minimumDate(this.currentTab)}" required />
         </div>
       </div>
     `;
@@ -219,11 +219,11 @@ class UnifiedSearch {
         <div class="daterange-group">
           <div class="daterange-item">
             ${icon}
-            <input type="date" data-type="date" name="checkin" value="${checkinValue}" required />
+            <input type="date" data-type="date" name="checkin" value="${checkinValue}" min="${window.SearchDatePolicy.minimumDate(this.currentTab)}" required />
           </div>
           <span class="daterange-separator">-></span>
           <div class="daterange-item">
-            <input type="date" data-type="date" name="checkout" value="${checkoutValue}" required />
+            <input type="date" data-type="date" name="checkout" value="${checkoutValue}" min="${window.SearchDatePolicy.minimumDate(this.currentTab)}" required />
           </div>
         </div>
       </div>
@@ -276,6 +276,12 @@ class UnifiedSearch {
   handleFocus(event) {
     const target = event.target;
     if (!(target instanceof HTMLInputElement)) return;
+    if (target.dataset.type === "date") {
+      this.formContainer.querySelectorAll('input[data-type="date"]').forEach(input => {
+        input.min = window.SearchDatePolicy.minimumDate(this.currentTab);
+      });
+      return;
+    }
     if (target.dataset.type !== "location") return;
     this.loadLocations().then(() => this.renderLocationDropdown(target, target.value));
   }
@@ -405,6 +411,12 @@ class UnifiedSearch {
 
     const checkin = this.form.querySelector('input[name="checkin"]');
     const checkout = this.form.querySelector('input[name="checkout"]');
+    const start = checkin || this.form.querySelector('input[name="date"]');
+    if (this.currentTab !== "hotels" && start?.value && start.value < window.SearchDatePolicy.minimumDate(this.currentTab)) {
+      start.focus();
+      alert("Please choose a tour date at least two days from today (Manila time).");
+      return false;
+    }
     if (checkin && checkout && checkin.value && checkout.value) {
       if (new Date(checkout.value) <= new Date(checkin.value)) {
         checkout.focus();
