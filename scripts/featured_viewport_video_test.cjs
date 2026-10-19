@@ -24,5 +24,18 @@ function fixture(type){
  const drive=fixture('drive');assert.equal(drive.frame.src,'about:blank');drive.visible(.7);assert.equal(drive.frame.src,drive.source);drive.visible(0);assert.equal(drive.frame.src,'about:blank');drive.visible(.7);assert.equal(drive.frame.src,drive.source);
  const youtube=fixture('youtube');assert.match(youtube.frame.src,/enablejsapi=1/);assert.match(youtube.frame.src,/origin=https%3A%2F%2Fexample.com/);youtube.visible(.8);assert.equal(youtube.counts.play,0);youtube.ready();assert.equal(youtube.counts.mute,1);assert.equal(youtube.counts.play,1);youtube.visible(0);assert.equal(youtube.counts.pause,1);
  const vimeo=fixture('vimeo');vimeo.visible(.8);for(let i=0;i<8;i++)await Promise.resolve();assert.equal(vimeo.counts.mute,1);assert.equal(vimeo.counts.play,1);assert.match(vimeo.frame.src,/h=private/);vimeo.visible(0);assert.equal(vimeo.counts.pause,1);
- console.log('Passed featured viewport checks: sound-enabled native playback and blocked-autoplay recovery, scroll/background pause, return resume, YouTube/Vimeo controls, and Drive offscreen unload.');
+ const mutedFallback=fixture('native');let attempts=0;
+ mutedFallback.video.play=()=>{
+   attempts++;
+   if(!mutedFallback.video.muted)return Promise.reject(Object.assign(new Error('Sound blocked'),{name:'NotAllowedError'}));
+   mutedFallback.events.playing();return Promise.resolve();
+ };
+ mutedFallback.visible(.7);for(let i=0;i<4;i++)await Promise.resolve();
+ assert.equal(attempts,2);assert.equal(mutedFallback.video.muted,true);
+ assert.equal(mutedFallback.soundButton.hidden,false);assert.equal(mutedFallback.soundButton.textContent,'Turn sound on');
+ mutedFallback.visible(0);assert.equal(mutedFallback.soundButton.hidden,true);
+ mutedFallback.visible(.7);assert.equal(mutedFallback.soundButton.hidden,false);
+ mutedFallback.video.play=()=>{mutedFallback.events.playing();return Promise.resolve();};
+ mutedFallback.soundButton.click();assert.equal(mutedFallback.video.muted,false);assert.equal(mutedFallback.soundButton.hidden,true);
+ console.log('Passed featured viewport checks: sound playback, muted autoplay fallback and click-to-unmute, scroll/background pause, return resume, YouTube/Vimeo controls, and Drive offscreen unload.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

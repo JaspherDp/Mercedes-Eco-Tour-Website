@@ -7,7 +7,17 @@
   function apply(){
     if(!controller)return;
     if(!shouldPlay()&&soundButton)soundButton.hidden=true;
-    const blocked=error=>{if(error?.name==='NotAllowedError'&&soundButton&&shouldPlay())soundButton.hidden=false;};
+    const blocked=error=>{
+      if(error?.name!=='NotAllowedError'||!soundButton||!shouldPlay())return;
+      // Sound permission can differ between localhost and the live origin.
+      if(video&&!video.muted){
+        video.muted=true;soundButton.textContent='Turn sound on';soundButton.hidden=false;
+        const failed=()=>{if(shouldPlay()){soundButton.textContent='Play with sound';soundButton.hidden=false;}};
+        try{video.play()?.catch?.(failed);}catch(_error){failed();}
+        return;
+      }
+      soundButton.hidden=false;
+    };
     try{const result=shouldPlay()?controller.play():controller.pause();result?.catch?.(blocked);}catch(error){blocked(error);}
   }
   function observe(){
@@ -27,7 +37,8 @@
     video.autoplay=false;video.removeAttribute('autoplay');video.removeAttribute('muted');video.defaultMuted=false;video.muted=false;video.playsInline=true;video.pause();
     soundButton=document.createElement('button');soundButton.type='button';soundButton.className='fe-video-play-sound';soundButton.textContent='Play with sound';soundButton.hidden=true;box.appendChild(soundButton);
     soundButton.addEventListener('click',()=>{video.muted=false;apply();});
-    video.addEventListener('playing',()=>{soundButton.hidden=true;});
+    video.addEventListener('playing',()=>{soundButton.hidden=!video.muted;if(video.muted)soundButton.textContent='Turn sound on';});
+    video.addEventListener('volumechange',()=>{soundButton.hidden=!video.muted||!shouldPlay();if(video.muted)soundButton.textContent='Turn sound on';});
     controller={play:()=>video.play(),pause:()=>video.pause()};
     video.addEventListener('loadedmetadata',apply);video.addEventListener('play',()=>{if(!shouldPlay())video.pause();});
   }else{

@@ -66,4 +66,30 @@ const result = JSON.parse(execFileSync('php', ['-r',
 assert.equal(result[0], 'img/boat1_img2.png');
 for (const resolved of result) assert.ok(fs.existsSync(path.join(root, resolved)), resolved);
 checks += 4;
+// The homepage has its own renderer and must repair older stored URLs too.
+const home = read('js/homepage.js');
+const homeTrack = { innerHTML: '', setAttribute() {}, querySelectorAll: () => [] };
+const historyItems = [
+  { key: 'boat:1', type: 'boat', id: 1, name: 'Old boat', image: 'uploads/missing.optimized.webp', rating: 4, reviewCount: 3 },
+  { key: 'boat:2', type: 'boat', id: 2, name: 'Another boat', image: 'uploads/also-missing.optimized.webp' },
+  { key: 'package:1', type: 'package', id: 1, name: 'Package', image: 'uploads/package.jpg' }
+];
+const homeContext = vm.createContext({
+  document: { getElementById: id => id === 'recentlyViewedTrack' ? homeTrack : {} },
+  window: { RecentlyViewed: { getAll: () => historyItems },
+    homeBoatImages: { 'boat:1': 'uploads/boat-one.jpg', 'boat:2': 'uploads/boat-two.png' } },
+  escapeHtml: String, recentHref: () => '#', typeLabel: () => 'Boat', categoryLabel: () => 'Boat',
+  renderRatingSummary: (rating, count) => `${rating}/${count}`
+});
+const homeStart = home.indexOf('  function renderRecentlyViewed()');
+const homeEnd = home.indexOf('  function initRecentlyViewedControls()', homeStart);
+vm.runInContext(home.slice(homeStart, homeEnd), homeContext);
+vm.runInContext('renderRecentlyViewed()', homeContext);
+assert.ok(homeTrack.innerHTML.includes('src="uploads/boat-one.jpg"'));
+assert.ok(homeTrack.innerHTML.includes('src="uploads/boat-two.png"'));
+assert.ok(homeTrack.innerHTML.includes('src="uploads/package.jpg"'));
+assert.ok(homeTrack.innerHTML.includes('4/3'));
+assert.ok(!homeTrack.innerHTML.includes('missing.optimized.webp'));
+assert.ok(homeTrack.innerHTML.includes('onerror="this.onerror=null;'));
+checks += 6;
 console.log(`PASS: ${checks} boat image checks; no database writes or network requests.`);

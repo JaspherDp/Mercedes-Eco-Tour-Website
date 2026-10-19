@@ -7,7 +7,25 @@ require_once __DIR__ . '/../php/featured_media_helper.php';
 require_once __DIR__ . '/../php/tourist_activity_helper.php';
 TouristPreparePageActivity($pdo);
 require_once 'php/hotel_reviews_helper.php';
+require_once 'php/service_catalog_helper.php';
 ensureHotelReviewManagementColumns($pdo);
+
+// Refresh historical boat image URLs from the live catalog, including entries
+// saved before the gallery stopped guessing optimized WebP filenames.
+$homeBoatImages = [];
+try {
+    $boatTable = serviceCatalogTableExists($pdo, 'boats') ? 'boats' : 'tour_boats';
+    $boatIdColumn = serviceCatalogColumn($pdo, $boatTable, ['boat_id', 'tour_boat_id', 'id']);
+    $boatImageColumn = serviceCatalogColumn($pdo, $boatTable, ['image1', 'boat_image_path', 'image_path']);
+    if ($boatIdColumn && $boatImageColumn) {
+        $boatImageRows = $pdo->query("SELECT `{$boatIdColumn}` AS id, `{$boatImageColumn}` AS image FROM `{$boatTable}`");
+        foreach ($boatImageRows->fetchAll(PDO::FETCH_ASSOC) as $boatImageRow) {
+            $homeBoatImages['boat:' . (int)$boatImageRow['id']] = serviceCatalogImage((string)($boatImageRow['image'] ?? ''), 'boat');
+        }
+    }
+} catch (Throwable $error) {
+    error_log('Homepage boat image lookup unavailable.');
+}
 
 function getLatestHomepageFields(PDO $pdo): array
 {
@@ -679,6 +697,7 @@ try {
 
   <script>
     window.homeReviewSummaries = <?= json_encode($reviewSummaryByKey, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    window.homeBoatImages = <?= json_encode($homeBoatImages, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     window.RecentlyViewedConfig = {
       accountId: <?= json_encode((string)($_SESSION['tourist_id'] ?? '')) ?>
     };

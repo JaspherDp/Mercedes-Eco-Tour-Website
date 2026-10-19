@@ -555,11 +555,13 @@
 
     const items = window.RecentlyViewed.getAll().map((item) => {
       const summary = window.homeReviewSummaries?.[item.key];
-      if (!summary) return item;
+      const liveBoatImage = item.type === "boat" ? window.homeBoatImages?.[`boat:${item.id}`] : null;
+      if (!summary && !liveBoatImage) return item;
       return {
         ...item,
-        rating: Number(summary.rating || 0),
-        reviewCount: Number(summary.reviewCount || 0)
+        image: liveBoatImage || item.image,
+        rating: Number(summary?.rating ?? item.rating ?? 0),
+        reviewCount: Number(summary?.reviewCount ?? item.reviewCount ?? 0)
       };
     });
     if (!items.length) {
@@ -598,7 +600,7 @@
         <article class="recent-card">
           <a href="${escapeHtml(recentHref(item))}" data-recent-key="${escapeHtml(item.key)}">
             <div class="recent-image">
-              <img src="${escapeHtml(item.image || "img/sampleimage.png")}" alt="${escapeHtml(item.name || "Recently viewed item")}" loading="lazy">
+              <img src="${escapeHtml(item.image || "img/sampleimage.png")}" alt="${escapeHtml(item.name || "Recently viewed item")}" loading="lazy" onerror="this.onerror=null;this.src='img/sampleimage.png'">
               <span class="recent-type">${escapeHtml(typeLabel(item.type))}</span>
             </div>
             <div class="recent-copy">
