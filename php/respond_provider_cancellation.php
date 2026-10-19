@@ -66,6 +66,10 @@ $lockName = '';
 $resourceLocks = [];
 try {
     ensureBookingCancellationRequestsTable($pdo);
+    // Availability checks call packageSlotStatus(), whose first schema setup
+    // executes DDL. MySQL implicitly commits even CREATE TABLE IF NOT EXISTS.
+    // Complete setup before acquiring row locks or changing either record.
+    packageSlotEnsureSchema($pdo);
     $pdo->beginTransaction();
     $statement = $pdo->prepare("SELECT cr.*, b.booking_date, b.booking_type AS source_booking_type, b.package_name,
         b.location, b.num_adults, b.num_children, b.pax, b.guide_id, b.boat_id, b.tour_type, b.tour_range,

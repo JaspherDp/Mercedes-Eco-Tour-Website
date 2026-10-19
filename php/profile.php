@@ -3719,6 +3719,8 @@ html[data-profile-tab="complaints"] .mobile-profile-nav a[data-section="complain
 .tourist-pdf-error p { font-size: 13px; line-height: 1.5; }
 .tourist-pdf-error button, .tourist-pdf-error a { display: inline-block; margin: 4px; padding: 10px 14px; border: 1px solid #26745f; border-radius: 8px; color: #fff; background: #26745f; font: inherit; font-size: 12px; text-decoration: none; cursor: pointer; }
 @media (max-width: 760px) { .tourist-profile-pdf-modal { height: 100dvh; } }
+.swal2-container.profile-decision-swal{z-index:130200!important}
+.swal2-container.profile-decision-swal{z-index:130200!important}
 </style>
 <link rel="stylesheet" href="../styles/tourist-manifest-form.css?v=1">
   <?php TouristRenderActivityMonitor(); ?>
@@ -6465,13 +6467,14 @@ profileDecisionModal?.addEventListener('click',event=>{if(event.target===profile
 document.addEventListener('keydown',event=>{if(event.key==='Escape'&&profileDecisionModal?.classList.contains('open'))profileDecisionClose();});
 
 async function profileSubmitProviderDecision(button,request,decision,newDate){
+  if(profileDecisionSubmit.disabled)return;
   document.getElementById('profileDecisionProcessing').hidden=false;profileDecisionSubmit.disabled=true;
   try{
     const response=await fetch('respond_provider_cancellation.php',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'},body:new URLSearchParams({csrf_token:bookingCancellationCsrf,cancellation_request_id:String(request.cancellation_request_id||''),decision,new_date:newDate})});
     const payload=await response.json();if(!response.ok||!payload.success)throw new Error(payload.message||'Your decision could not be saved.');
-    await Swal.fire({icon:'success',title:decision==='reschedule'?'Booking Rescheduled':'Cancellation Confirmed',text:payload.message,confirmButtonColor:'#176b58'});
+    await Swal.fire({icon:'success',title:decision==='reschedule'?'Booking Rescheduled':'Cancellation Confirmed',text:payload.message,confirmButtonColor:'#176b58',customClass:{container:'profile-decision-swal'}});
     window.location.href=decision==='reschedule'?'profile.php?section=bookings':'profile.php?section=cancel-bookings';
-  }catch(error){document.getElementById('profileDecisionProcessing').hidden=true;profileDecisionSubmit.disabled=false;await Swal.fire({icon:'error',title:'Unable to Save Decision',text:error.message||'Please try again.',confirmButtonColor:'#176b58'});}
+  }catch(error){document.getElementById('profileDecisionProcessing').hidden=true;profileDecisionSubmit.disabled=false;await Swal.fire({icon:'error',title:'Unable to Save Decision',text:error.message||'Please try again.',confirmButtonColor:'#176b58',customClass:{container:'profile-decision-swal'}});}
 }
 document.querySelectorAll('.cancel-booking-btn').forEach(button => {
   button.addEventListener('click', async () => {
