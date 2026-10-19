@@ -1,0 +1,36 @@
+.itour-inbox{position:relative;display:inline-flex;flex:none;font-family:Inter,'Segoe UI',sans-serif;color:#203b32;z-index:1001}
+.itour-inbox [hidden]{display:none!important}
+.itour-inbox-bell{position:relative;display:grid;place-items:center;width:42px;height:42px;padding:10px;border:1px solid #d6e5de;border-radius:12px;background:#fff;color:#28684f;cursor:pointer}
+.itour-inbox-bell svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.itour-inbox-badge{position:absolute;top:-5px;right:-5px;min-width:19px;padding:2px 4px;border:2px solid #fff;border-radius:20px;background:#b94442;color:#fff;font-size:10px;font-weight:700;line-height:14px;text-align:center}
+.itour-inbox-panel{position:absolute;top:calc(100% + 10px);right:0;width:min(380px,calc(100vw - 24px));overflow:hidden;border:1px solid #dce7e1;border-radius:14px;background:#fff;box-shadow:0 12px 38px #15372a25}
+.itour-inbox-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 16px;border-bottom:1px solid #e5ece8}
+.itour-inbox-head strong{display:block;font-size:14px;font-weight:700}
+.itour-inbox-head small{display:block;margin-top:3px;font-size:11px;color:#718078}
+.itour-inbox-mark{padding:5px;border:0;background:transparent;color:#28684f;font-size:11px;font-weight:600;cursor:pointer}
+.itour-inbox-mark:disabled{opacity:.45;cursor:default}
+.itour-inbox-list{max-height:min(410px,65dvh);overflow-y:auto;overscroll-behavior:contain}
+.itour-inbox-item{position:relative;display:flex;flex-direction:column;gap:5px;padding:13px 25px 13px 16px;border-bottom:1px solid #edf1ee;color:#263b31;text-align:left;text-decoration:none;background:#fff}
+.itour-inbox-item.is-unread{background:#f0f7f3}
+.itour-inbox-item.is-unread:after{content:'';position:absolute;top:18px;right:13px;width:6px;height:6px;border-radius:50%;background:#2e7d66}
+.itour-inbox-item strong{font-size:12px;font-weight:700;line-height:1.4}
+.itour-inbox-item span{font-size:12px;line-height:1.5;color:#5b6c62}
+.itour-inbox-item time{font-size:10px;color:#7b8780}
+.itour-inbox-item:hover{background:#e8f1eb}
+.itour-inbox-status{margin:0;padding:18px;text-align:center;color:#728078;font-size:12px;line-height:1.5}
+.itour-inbox-status:empty{display:none}
+.itour-notification-fallback{margin:12px 0;padding:12px 16px;border:1px solid #dce7e1;border-radius:10px;background:#f0f7f3;color:#53685c;font-size:13px;line-height:1.5}
+.itour-inbox :focus-visible{outline:3px solid #83bba7;outline-offset:2px}
+tr.itour-notification-row-focus>td{background:#dcf5e8!important;border-color:#49a57f!important}
+tr.itour-notification-row-focus>td:first-child{box-shadow:inset 4px 0 0 #17845b}
+.itour-inbox-tourist .itour-inbox-bell{width:auto;height:auto;padding:0;border:0;border-radius:0;background:none;box-shadow:none;color:#000}
+.itour-inbox-tourist .itour-inbox-bell img{width:25px;height:25px;filter:invert(1);object-fit:contain}
+.itour-inbox-tourist .itour-inbox-panel{right:-30px;width:min(420px,calc(100vw - 24px));height:auto;max-height:min(520px,calc(100dvh - 110px));display:flex;flex-direction:column;border-color:#dbe7e3;border-radius:12px;box-shadow:0 14px 30px rgba(16,59,46,.16)}
+.itour-inbox-tourist .itour-inbox-head{flex-shrink:0;padding:11px 13px;background:#f8fcfa;border-bottom:1px solid #ebf2ef}
+.itour-inbox-tourist .itour-inbox-head strong{font-size:13px;color:#214f43}
+.itour-inbox-tourist .itour-inbox-list{flex:0 1 auto;min-height:0;max-height:min(410px,calc(100dvh - 200px));overflow-y:auto}
+.itour-inbox-tourist .itour-inbox-item{padding:12px 13px;gap:4px;border-color:#eef4f1}
+.itour-inbox-tourist .itour-inbox-item.is-unread{background:#f2faf6}
+.itour-inbox-tourist .itour-inbox-item strong{font-size:13px;color:#205a4b}
+.itour-inbox-tourist .itour-inbox-item span{font-size:13px;color:#2c4953;line-height:1.45}
+@media(max-width:600px){.itour-inbox-panel{position:fixed;top:76px;right:12px;width:calc(100vw - 24px)}.itour-inbox-list{max-height:calc(100dvh - 200px)}.head-nav-main-header .itour-inbox-tourist .itour-inbox-bell{width:40px;height:44px;padding:8px}.head-nav-main-header .itour-inbox-tourist .itour-inbox-bell img{width:22px;height:22px}.itour-inbox-tourist .itour-inbox-panel{right:10px;top:calc(var(--main-nav,64px) + 8px);width:min(420px,calc(100vw - 20px))}}

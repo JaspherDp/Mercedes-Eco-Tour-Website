@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/booking_tourist_manifest_validation.php';
+require_once __DIR__ . '/hotel_booking_tourists_helper.php';
 
 /** Editing closes at 00:00 Manila time, three calendar days before the tour. */
 function bookingTouristEditDeadline(array $booking): ?DateTimeImmutable
@@ -20,9 +21,10 @@ function bookingTouristCanEdit(array $booking, ?DateTimeImmutable $now = null): 
 }
 
 /** Save the complete validated manifest atomically, checking ownership and cutoff under a booking lock. */
-function bookingTouristSaveManifest(PDO $pdo, int $bookingId, int $touristId, array $rows, array $boatNumbers, bool $editing): void
+function bookingTouristSaveManifest(PDO $pdo, int $bookingId, int $touristId, array $rows, array $boatNumbers, bool $editing, string $domain = 'tour'): void
 {
-    bookingTouristWriteManifest($pdo, $bookingId, $touristId, $rows, $boatNumbers, $editing);
+    if (!in_array($domain, ['tour', 'hotel'], true)) throw new InvalidArgumentException('Invalid booking domain.');
+    bookingTouristWriteManifest($pdo, $bookingId, $touristId, $rows, $boatNumbers, $editing, false, $domain);
 }
 
 /** Only the authenticated Admin endpoint uses this no-account walk-in scope. */
@@ -45,24 +47,31 @@ function bookingTouristAdminWalkinCanManage(array $booking): bool
 }
 
 /** Internal writer: tourist ownership/cutoff remains separate from staff scope. */
-function bookingTouristWriteManifest(PDO $pdo, int $bookingId, int $touristId, array $rows, array $boatNumbers, bool $editing, bool $adminWalkin = false): void
+function bookingTouristWriteManifest(PDO $pdo, int $bookingId, int $touristId, array $rows, array $boatNumbers, bool $editing, bool $adminWalkin = false, string $domain = 'tour'): void
 {
+    if (!in_array($domain, ['tour','hotel'], true) || ($adminWalkin && $domain !== 'tour')) throw new InvalidArgumentException('Invalid booking domain.');
+    $table = $domain === 'hotel' ? 'hotel_booking_tourists' : 'booking_tourists';
+    if ($domain === 'hotel') hotelBookingTouristsEnsureSchema($pdo);
     $pdo->beginTransaction();
     try {
         $lock = $pdo->getAttribute(PDO::ATTR_DRIVER_NAME) === 'mysql' ? ' FOR UPDATE' : '';
-        $ownership = $adminWalkin ? 'tourist_id IS NULL' : 'tourist_id = ?';
-        $check = $pdo->prepare('SELECT *, COALESCE(NULLIF(pax, 0), num_adults + num_children) AS allowed_pax FROM bookings WHERE booking_id = ? AND ' . $ownership . ' LIMIT 1' . $lock);
-        $check->execute($adminWalkin ? [$bookingId] : [$bookingId, $touristId]);
-        $booking = $check->fetch(PDO::FETCH_ASSOC);
+        if ($domain === 'hotel') {
+            $booking = hotelBookingTouristRecord($pdo, $bookingId, $touristId, true);
+        } else {
+            $ownership = $adminWalkin ? 'tourist_id IS NULL' : 'tourist_id = ?';
+            $check = $pdo->prepare('SELECT *, COALESCE(NULLIF(pax, 0), num_adults + num_children) AS allowed_pax FROM bookings WHERE booking_id = ? AND ' . $ownership . ' LIMIT 1' . $lock);
+            $check->execute($adminWalkin ? [$bookingId] : [$bookingId, $touristId]);
+            $booking = $check->fetch(PDO::FETCH_ASSOC);
+        }
         if (!$booking || strtolower((string)$booking['status']) !== 'accepted' || strtolower((string)$booking['is_complete']) !== 'uncomplete') {
             throw new RuntimeException('Tourist lists can only be saved for your active accepted bookings.');
         }
         if ($adminWalkin && !bookingTouristAdminWalkinCanManage($booking)) throw new RuntimeException('Only paid, active no-account walk-in bookings can be managed by this form.');
-        $check = $pdo->prepare("SELECT COUNT(*) FROM booking_cancellation_requests WHERE booking_domain = 'tour' AND booking_id = ? AND request_status IN ('pending','approved','decision_required','completed')");
-        $check->execute([$bookingId]);
+        $check = $pdo->prepare("SELECT COUNT(*) FROM booking_cancellation_requests WHERE booking_domain = ? AND booking_id = ? AND request_status IN ('pending','approved','decision_required','completed')");
+        $check->execute([$domain, $bookingId]);
         if ((int)$check->fetchColumn() > 0) throw new RuntimeException('The tourist list cannot be changed while this booking is in a cancellation workflow.');
 
-        $check = $pdo->prepare('SELECT COUNT(*) FROM booking_tourists WHERE booking_id = ?');
+        $check = $pdo->prepare("SELECT COUNT(*) FROM {$table} WHERE booking_id = ?");
         $check->execute([$bookingId]);
         $exists = (int)$check->fetchColumn() > 0;
         if ($editing && !$exists) throw new RuntimeException('No submitted tourist list was found. Refresh the page and submit the list first.');
@@ -73,11 +82,11 @@ function bookingTouristWriteManifest(PDO $pdo, int $bookingId, int $touristId, a
         if ($pax <= 0 || count($rows) !== $pax) throw new RuntimeException("Complete all {$pax} tourist entries before saving.");
         $rows = bookingTouristAssignBoats($rows, $boatNumbers, (string)$booking['booking_type'], $pax);
         if ($editing) {
-            $delete = $pdo->prepare('DELETE FROM booking_tourists WHERE booking_id = ?');
+            $delete = $pdo->prepare("DELETE FROM {$table} WHERE booking_id = ?");
             $delete->execute([$bookingId]);
         }
         $columns = ['full_name', 'gender', 'age', 'address', 'country', 'region', 'province', 'city', 'barangay', 'postal_code', 'street', 'residence', 'phone_number', 'boat_number'];
-        $insert = $pdo->prepare('INSERT INTO booking_tourists (booking_id, ' . implode(', ', $columns) . ') VALUES (' . implode(', ', array_fill(0, 15, '?')) . ')');
+        $insert = $pdo->prepare("INSERT INTO {$table} (booking_id, " . implode(', ', $columns) . ') VALUES (' . implode(', ', array_fill(0, 15, '?')) . ')');
         foreach ($rows as $row) {
             $values = [$bookingId];
             foreach ($columns as $column) $values[] = $row[$column];

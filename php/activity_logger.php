@@ -12,7 +12,8 @@ function logActivity(
     string $action,
     string $description,
     string $module,
-    ?int $referenceId = null
+    ?int $referenceId = null,
+    ?string $notificationDomain = null
 ): bool {
     $allowedActorTypes = ['Admin', 'Tourist', 'Tour Operator', 'Hotel Owner'];
     $actorType = in_array($actorType, $allowedActorTypes, true) ? $actorType : 'Admin';
@@ -23,6 +24,15 @@ function logActivity(
 
     if ($action === '' || $description === '' || $module === '') {
         return false;
+    }
+
+    // Independent of audit-log delivery; uses the caller's successful event and
+    // transaction, so rolled-back events cannot leave committed notifications.
+    try {
+        require_once __DIR__ . '/notification_helper.php';
+        NotificationFromActivity($pdo, $action, $module, (int)$referenceId, $description, $notificationDomain);
+    } catch (Throwable $notificationError) {
+        error_log('In-app notification delivery unavailable.');
     }
 
     try {

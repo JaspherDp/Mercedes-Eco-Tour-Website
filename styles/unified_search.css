@@ -2337,3 +2337,10 @@
     font-size: .55rem;
   }
 }
+
+/* Package searches have one destination and four controls. */
+@media (min-width: 701px) {
+  .results-page.results-type-tours .results-search-form {
+    grid-template-columns: minmax(140px, 1.1fr) minmax(220px, 1.55fr) minmax(70px, .55fr) minmax(100px, .85fr);
+  }
+}

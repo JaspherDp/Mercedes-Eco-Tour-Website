@@ -93,7 +93,7 @@ function AppRequestCountsAsActivity(): bool
 {
     // Notification polling (including automatic badge updates) is passive.
     $page = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
-    if (in_array($page, ['session_status.php', 'fetch_notifications.php', 'mark_notif_badge.php'], true)) return false;
+    if (in_array($page, ['session_status.php', 'fetch_notifications.php', 'mark_notif_badge.php', 'notification_inbox.php'], true)) return false;
     foreach (['get_pending_count', 'get_unviewed'] as $key) {
         if (isset($_GET[$key])) return false;
     }

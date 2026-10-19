@@ -1208,6 +1208,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const btn = notifWrap.querySelector('.ap-header-notif-btn');
+        if (window.ItourNotificationConfig?.role === 'admin') return;
         const panel = notifWrap.querySelector('.ap-header-notif-panel');
         const badge = notifWrap.querySelector('.ap-header-notif-badge');
         const list = notifWrap.querySelector('.ap-header-notif-list');
@@ -1281,3 +1282,5 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 </script>
+
+<?php require_once __DIR__ . '/../php/notification_component.php'; NotificationRender($pdo, 'admin'); ?>

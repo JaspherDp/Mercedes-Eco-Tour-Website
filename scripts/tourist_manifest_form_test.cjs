@@ -5,7 +5,7 @@ const source = fs.readFileSync(require('node:path').join(__dirname, '../js/touri
 const slice = (start, end) => source.slice(source.indexOf(start), source.indexOf(end, source.indexOf(start)));
 const tick = () => new Promise(setImmediate);
 
-async function fixture({ admin = true, editing = true, canEdit = true, saveFails = false } = {}) {
+async function fixture({ admin = true, editing = true, canEdit = true, saveFails = false, domain = 'tour' } = {}) {
   const events = {};
   const alerts = [];
   const calls = [];
@@ -15,7 +15,7 @@ async function fixture({ admin = true, editing = true, canEdit = true, saveFails
   let reloaded = 0;
   let pdfOpened = 0;
   let buttonClick;
-  const button = {dataset:{bookingId:'10',pax:'999',bookingType:'boat',manifestMode:editing?'edit':'submit'},closest:()=>null,addEventListener:(_,handler)=>{buttonClick=handler;}};
+  const button = {dataset:{bookingId:'10',pax:'999',bookingDomain:domain,bookingType:domain==='hotel'?'hotel':'boat',manifestMode:editing?'edit':'submit'},closest:()=>null,addEventListener:(_,handler)=>{buttonClick=handler;}};
   const submit = {disabled:false,textContent:''};
   const modal = {style:{display:'none'}};
   const fields = {};
@@ -23,7 +23,7 @@ async function fixture({ admin = true, editing = true, canEdit = true, saveFails
   const rowContainer = {innerHTML:'',appendChild:row=>shown.push(row),querySelectorAll:()=>rows,addEventListener(){}};
   const form = {checkValidity:()=>true,reportValidity(){},querySelector:()=>submit,addEventListener:(name,handler)=>{events[`form:${name}`]=handler;}};
   class Fields {
-    constructor(from){this.data=new Map();if(from)this.set('csrf_token','form-csrf');}
+    constructor(from){this.data=new Map();if(from){this.set('csrf_token','form-csrf');this.set('booking_domain',node('touristBookingDomain').value);}}
     set(key,value){this.data.set(key,String(value));} append(key,value){this.set(key,value);} has(key){return this.data.has(key);} get(key){return this.data.get(key);}
   }
   const context = {
@@ -35,10 +35,10 @@ async function fixture({ admin = true, editing = true, canEdit = true, saveFails
     location:{reload:()=>{reloaded++;}},localStorage:{setItem(){}},
     alert:message=>alerts.push(message),Swal:{fire:async()=>({isConfirmed:true})},
     createTouristRowUser:row=>row||{},renumberTouristRows(){},updateAddButtonState(){},
-    touristAddressFromRow:()=>address,openTouristAddressModal(){},openTouristProfilePdf(){pdfOpened++;},
+    touristAddressFromRow:()=>address,openTouristAddressModal(){},openTouristProfilePdf(id,refresh,bookingDomain){pdfOpened++;context.pdfDomain=bookingDomain;},
     fetch:async(url,options)=>{
       calls.push({url,body:options.body});
-      return {ok:true,json:async()=>options.body.has('fetch_tourists')?{success:true,can_edit:canEdit,pax:2,booking_type:'boat',edit_deadline_label:'Test cutoff',tourists:editing?rows:[]}:{success:!saveFails,updated:editing,message:saveFails?'Synthetic rejection':'Saved'}};
+      return {ok:true,json:async()=>options.body.has('fetch_tourists')?{success:true,can_edit:canEdit,pax:2,booking_type:domain==='hotel'?'hotel':'boat',edit_deadline_label:'Test cutoff',tourists:editing?rows:[]}:{success:!saveFails,updated:editing,message:saveFails?'Synthetic rejection':'Saved'}};
     }
   };
   vm.createContext(context);
@@ -76,5 +76,12 @@ async function fixture({ admin = true, editing = true, canEdit = true, saveFails
   vm.runInContext('maxPax=2;',tourist.context);
   tourist.events['form:submit'].call(tourist.form,{preventDefault(){}});await tick();
   assert.equal(tourist.pdf(),1,'Customer success must retain its existing PDF option.');
+  const hotel=await fixture({admin:false,domain:'hotel'});
+  assert.equal(hotel.calls[0].body.get('booking_domain'),'hotel','Hotel load must carry its domain.');
+  assert.equal(vm.runInContext('maxPax',hotel.context),2,'Hotel pax must come from the server.');
+  assert.equal(vm.runInContext('touristBookingIsBoat',hotel.context),false,'Hotel list must never use boat grouping.');
+  hotel.events['form:submit'].call(hotel.form,{preventDefault(){}});await tick();
+  assert.equal(hotel.calls[1].body.get('booking_domain'),'hotel','Hotel save must carry its domain.');
+  assert.equal(hotel.context.pdfDomain,'hotel','Hotel success must preview the hotel PDF.');
   console.log('PASS: shared Admin/customer modal opens, loads existing tourists, dispatches scoped CSRF requests, trusts server pax, preserves failed edits, refreshes Upload/Edit actions, and retains customer endpoint/PDF behavior.');
 })().catch(error=>{console.error(error);process.exitCode=1;});

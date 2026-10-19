@@ -26,6 +26,20 @@ function AddonCatalogOwned(PDO $pdo, string $role, int $id, int $hotelId = 0): a
     return $query->fetchAll(PDO::FETCH_ASSOC);
 }
 
+/** Staff choose their own active catalog; manual charges remain available without the catalog migration. */
+function AddonCatalogStaffAvailable(PDO $pdo, string $role, int $id, int $hotelId = 0): array
+{
+    try {
+        return array_values(array_map(
+            static fn(array $item): array => ['addon_id' => (int)$item['addon_id'], 'name' => (string)$item['name'], 'price' => (string)$item['price']],
+            array_filter(AddonCatalogOwned($pdo, $role, $id, $hotelId), static fn(array $item): bool => (int)$item['is_active'] === 1)
+        ));
+    } catch (PDOException $error) {
+        if (($error->errorInfo[1] ?? 0) === 1146 || str_contains($error->getMessage(), 'no such table')) return [];
+        throw $error;
+    }
+}
+
 /** Public catalog never includes private account identifiers. Missing migration leaves legacy bookings usable. */
 function AddonCatalogAvailable(PDO $pdo, string $domain, int $hotelId = 0): array
 {

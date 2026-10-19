@@ -6,8 +6,10 @@ require_once __DIR__ . '/../php/session_security.php';
 AppSessionStart();
 require_once __DIR__ . '/../php/db_connection.php';
 require_once __DIR__ . '/../php/admin_auth_helper.php';
+require_once __DIR__ . '/../php/hotel_booking_tourists_helper.php';
 
 AdminRequireLogin();
+hotelBookingTouristsEnsureSchema($pdo);
 
 function tourismReportDate(string $value, DateTimeImmutable $fallback): DateTimeImmutable
 {
@@ -99,7 +101,7 @@ function tourismReportCollect(PDO $pdo, string $from, string $to): array
         $resortRows[$key] = tourismReportEmptyCounts();
         $resortRows[$key]['name'] = trim((string)$hotelName);
     }
-    $hotelPeople = $pdo->prepare("SELECT TRIM(hr.name) name,bt.gender,bt.residence FROM hotel_room_bookings hb INNER JOIN hotel_resorts hr ON hr.hotel_resort_id=hb.hotel_resort_id AND LOWER(COALESCE(hr.status,'active'))='active' INNER JOIN booking_tourists bt ON bt.booking_id=hb.hotel_booking_id AND LOWER(COALESCE(bt.booking_source,''))='hotel' WHERE hb.checkin_date BETWEEN ? AND ? AND LOWER(COALESCE(hb.booking_status,''))='completed'");
+    $hotelPeople = $pdo->prepare("SELECT TRIM(hr.name) name,bt.gender,bt.residence FROM hotel_room_bookings hb INNER JOIN hotel_resorts hr ON hr.hotel_resort_id=hb.hotel_resort_id AND LOWER(COALESCE(hr.status,'active'))='active' INNER JOIN (SELECT booking_id,gender,residence FROM hotel_booking_tourists UNION ALL SELECT legacy.booking_id,legacy.gender,legacy.residence FROM booking_tourists legacy WHERE LOWER(COALESCE(legacy.booking_source,''))='hotel' AND NOT EXISTS (SELECT 1 FROM hotel_booking_tourists current_guests WHERE current_guests.booking_id=legacy.booking_id)) bt ON bt.booking_id=hb.hotel_booking_id WHERE hb.checkin_date BETWEEN ? AND ? AND LOWER(COALESCE(hb.booking_status,''))='completed'");
     $hotelPeople->execute([$from, $to]);
     foreach ($hotelPeople->fetchAll(PDO::FETCH_ASSOC) as $person) {
         $key = mb_strtolower((string)$person['name']);

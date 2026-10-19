@@ -4,7 +4,7 @@
   const add = document.getElementById('adminAddonAdd');
   const money = value => `\u20b1${value.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   function update() {
-    let total = 0;
+    let total = Math.round((window.StaffBookingAddons?.total(rows.closest('form')) || 0) * 100);
     const items = Array.from(rows.children);
     items.forEach((row, index) => {
       const quantity = Number(row.querySelector('[name="quantity[]"]').value || 0);
@@ -28,6 +28,7 @@
     }
   }
   function reset() {
+    window.StaffBookingAddons?.reset(rows.closest('form'));
     rows.replaceChildren();
     addRow();
   }

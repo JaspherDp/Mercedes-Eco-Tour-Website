@@ -53,7 +53,7 @@
 
   document.addEventListener("DOMContentLoaded", async () => {
     try {
-      await loadScriptOnce("js/header.js?v=mobile-sidebar-3", "site-header", () => typeof window.initHeader === "function");
+      await loadScriptOnce("js/header.js?v=notifications-5", "site-header", () => typeof window.initHeader === "function");
       await injectHtml("header", "php/header.php");
       if (typeof window.initHeader === "function") {
         window.initHeader();

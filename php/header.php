@@ -5,6 +5,9 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 require_once 'db_connection.php';
+require_once __DIR__ . '/notification_component.php';
+$headerInboxConfig = NotificationConfig($pdo, 'tourist');
+if ($headerInboxConfig) unset($_SESSION['notification_pending']['tourist']);
 
 $headerRequestFile = realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? ''));
 $headerIsStandaloneRequest = $headerRequestFile !== false && $headerRequestFile === realpath(__FILE__);
@@ -455,6 +458,7 @@ if (
 </nav>
       <!-- NOTIFICATION ICON -->
       <div class="head-nav-notif-wrap"
+           <?php if ($headerInboxConfig): ?>data-inbox-config="<?= htmlspecialchars(json_encode($headerInboxConfig), ENT_QUOTES, 'UTF-8') ?>"<?php endif; ?>
            data-notif-key="<?= htmlspecialchars($notifKey) ?>"
            data-notif-active="<?= $bookingSuccessNotif ? '1' : '0' ?>"
            data-notif-title="Booking Submitted"

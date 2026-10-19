@@ -269,8 +269,8 @@ img { max-width: 100%; }
 }
 
 .hero-search input {
-  width: 100%;
   min-width: 0;
+  width: 100%;
   padding: 10px 0;
   border: 0;
   outline: 0;

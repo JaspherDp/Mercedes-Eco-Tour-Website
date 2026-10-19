@@ -1,4 +1,14 @@
 <?php
+require_once __DIR__ . '/../php/admin_auth_helper.php';
+// This implementation is served through the root wrapper; its existing asset,
+// form and AJAX paths are relative to that public URL, not the /admin folder.
+if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'GET'
+    && basename(str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? ''))) === 'adbookings.php'
+    && basename(dirname(str_replace('\\', '/', (string)($_SERVER['SCRIPT_NAME'] ?? '')))) === 'admin') {
+    $bookingCanonicalQuery = (string)($_SERVER['QUERY_STRING'] ?? '');
+    header('Location: ' . AdminProjectWebPath() . '/adbookings.php' . ($bookingCanonicalQuery !== '' ? '?' . $bookingCanonicalQuery : ''), true, 302);
+    exit;
+}
 chdir(__DIR__ . '/..');
 require_once __DIR__ . '/../php/session_security.php';
 AppSessionStart();
@@ -38,6 +48,7 @@ require_once __DIR__ . '/../php/hotel_rooms_helper.php';
 require_once __DIR__ . '/../php/input_validation.php';
 require_once __DIR__ . '/../php/payment_receipt_breakdown.php';
 require_once __DIR__ . '/../php/booking_addons_helper.php';
+require_once __DIR__ . '/../php/staff_booking_addon_picker.php';
 require_once __DIR__ . '/../php/walkin_booking_helper.php';
 require_once __DIR__ . '/../payments/PayMongoService.php';
 require_once __DIR__ . '/../payments/PaymentReconciler.php';
@@ -679,7 +690,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancellation_action']
         }
         try {
             logActivity($pdo, 'Admin', $adminId, (string)($_SESSION['admin_name'] ?? 'Administrator'),
-                $activityTitle, $activityTitle . ' for ' . $reference . '.', 'Bookings', (int)$cancellation['booking_id']);
+                $activityTitle, $activityTitle . ' for ' . $reference . '.', 'Bookings', (int)$cancellation['booking_id'], (string)$cancellation['booking_domain']);
         } catch (Throwable $loggingError) {
             error_log('Cancellation admin activity logging failed: ' . $loggingError->getMessage());
         }
@@ -842,9 +853,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
 
         $bookingDate = trim((string)($_POST['booking_date'] ?? ''));
         $bookingDate = ItourValidationDate($bookingDate, 'Booking date');
-        if ($bookingDate < date('Y-m-d')) {
-            throw new RuntimeException('The booking date cannot be in the past.');
-        }
+        tourBookingValidateAdvanceDate($bookingDate);
         $bookingEndDate = trim((string)($_POST['booking_end_date'] ?? ''));
 
         $adults = ItourValidationInt($_POST['num_adults'] ?? null, 'Adults', 1, 100);
@@ -1113,7 +1122,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'add_expense') {
         }
 
         $booking_id = ItourValidationInt($_POST['booking_id'] ?? null, 'Booking ID', 1, PHP_INT_MAX);
-        $batch = BookingAddonsValidateRows($_POST);
+        $batch = BookingAddonsValidateRows(StaffBookingAddonInput($pdo, 'admin', (int)$_SESSION['admin_id'], 0, $_POST));
         BookingAddonsEnsureSchema($pdo);
         $updatedBookingTotals = BookingAddonsSave($pdo, $booking_id, $batch);
 
@@ -1292,6 +1301,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'send_
         if (!filter_var(trim((string)($booking['email'] ?? '')), FILTER_VALIDATE_EMAIL)) {
             throw new RuntimeException('This tourist does not have a valid email address.');
         }
+        // The in-app request remains useful even if SMTP delivery fails.
+        require_once __DIR__ . '/../php/notification_helper.php';
+        NotificationEmit($pdo, 'Tourist Submission Requested', 'tour', $id);
         if (!sendTouristSubmissionAlertEmail($booking)) {
             throw new RuntimeException('The tourist submission alert could not be sent. Please try again.');
         }
@@ -2188,7 +2200,7 @@ if(isset($_GET['action']) && $_GET['action'] === 'fetchBookings') {
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <link rel="stylesheet" href="styles/admin_panel_theme.css" />
-<link rel="stylesheet" href="styles/adbookings.css?v=42" />
+<link rel="stylesheet" href="styles/adbookings.css?v=<?= (int)filemtime(__DIR__ . '/../styles/adbookings.css') ?>" />
 <link rel="stylesheet" href="styles/tourist-manifest-form.css?v=1" />
 <link rel="stylesheet" href="styles/admin-booking-addons.css?v=2" />
 <link rel="stylesheet" href="styles/tourist-booking-history.css?v=1" />
@@ -2699,7 +2711,7 @@ if(isset($_GET['action']) && $_GET['action'] === 'fetchBookings') {
 <div class="admin-container">
 <?php include 'admin_sidebar.php'; ?>
 <main class="main-content">
-<header class="admin-header admin-page-header">
+<header class="admin-header admin-page-header admin-booking-header">
   <div class="admin-header-left admin-page-title">
     <span class="admin-page-title-icon" aria-hidden="true">
       <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/><path d="m8 15 2.2 2.2L16 12"/></svg>
@@ -2709,7 +2721,7 @@ if(isset($_GET['action']) && $_GET['action'] === 'fetchBookings') {
       <p class="admin-header-subtitle">Review reservations, payments, and booking activity</p>
     </div>
   </div>
-  <div class="admin-header-right">
+  <div class="admin-header-right ap-header-right">
     <form id="overviewFilterForm" method="GET" class="ad-global-filter-form">
       <input type="hidden" name="tab" value="<?= htmlspecialchars($activeTab) ?>">
       <input type="hidden" name="sort_by" value="<?= htmlspecialchars($sortBy) ?>">
@@ -2723,25 +2735,64 @@ if(isset($_GET['action']) && $_GET['action'] === 'fetchBookings') {
         <option value="monthly" <?= $rangeFilter === 'monthly' ? 'selected' : '' ?>>Monthly</option>
         <option value="daily" <?= $rangeFilter === 'daily' ? 'selected' : '' ?>>Daily</option>
       </select>
-      <select id="adRangeYear" name="year" class="ad-global-filter-select">
+      <select id="adRangeYear" name="year" class="ad-global-filter-select"<?= in_array($rangeFilter, ['yearly','monthly','daily'], true) ? '' : ' hidden' ?>>
         <?php foreach($years as $y): ?>
           <option value="<?= (int)$y ?>" <?= (int)$selectedYear === (int)$y ? 'selected' : '' ?>><?= (int)$y ?></option>
         <?php endforeach; ?>
       </select>
-      <select id="adRangeMonth" name="month" class="ad-global-filter-select">
+      <select id="adRangeMonth" name="month" class="ad-global-filter-select"<?= $rangeFilter === 'monthly' ? '' : ' hidden' ?>>
         <?php for ($m = 1; $m <= 12; $m++): ?>
           <option value="<?= $m ?>" <?= (int)$selectedMonth === $m ? 'selected' : '' ?>><?= date('F', mktime(0,0,0,$m,1)) ?></option>
         <?php endfor; ?>
       </select>
-      <input id="adRangeDate" type="date" name="date" class="ad-global-filter-select ad-global-filter-date" value="<?= htmlspecialchars($selectedDate) ?>">
+      <input id="adRangeDate" type="date" name="date" class="ad-global-filter-select ad-global-filter-date" value="<?= htmlspecialchars($selectedDate) ?>"<?= $rangeFilter === 'daily' ? '' : ' hidden' ?>>
       <button type="submit" class="ad-global-filter-apply">Apply</button>
     </form>
     <button class="btn-generate-report" id="openReportModal">
       <img src="https://img.icons8.com/ios-filled/24/ffffff/document.png" alt="icon">
       Generate Report
     </button>
+    <div class="ap-header-notif-wrap">
+      <button type="button" class="ap-header-notif-btn" aria-expanded="false" aria-label="Notifications">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"></path></svg>
+        <strong class="ap-header-notif-badge" style="display:none">0</strong>
+      </button>
+      <div class="ap-header-notif-panel" role="dialog" aria-label="Notifications">
+        <div class="ap-header-notif-head">
+          <div class="ap-header-notif-title"><div><h4>Booking Notifications</h4><small>Recent booking activity</small></div></div>
+          <button type="button" class="ap-header-mark-read">Mark all read</button>
+        </div>
+        <div class="ap-header-notif-list"></div>
+      </div>
+    </div>
+    <span class="admin-header-profile" aria-label="Admin profile">
+      <?php if ($admin_profile_picture !== ''): ?>
+        <img src="<?= htmlspecialchars($admin_profile_picture, ENT_QUOTES, 'UTF-8') ?>" alt="Admin profile">
+      <?php else: ?>
+        <?= htmlspecialchars($admin_initial, ENT_QUOTES, 'UTF-8') ?>
+      <?php endif; ?>
+    </span>
   </div>
 </header>
+<script>
+// Initialize before remote report/payment scripts can delay or interrupt loading.
+(() => {
+  const form = document.getElementById('overviewFilterForm');
+  if (!form) return;
+  const range = form.querySelector('#adRangeFilter');
+  const year = form.querySelector('#adRangeYear');
+  const month = form.querySelector('#adRangeMonth');
+  const date = form.querySelector('#adRangeDate');
+  const sync = () => {
+    const mode = range ? range.value : 'all';
+    if (year) year.hidden = !['yearly','monthly','daily'].includes(mode);
+    if (month) month.hidden = mode !== 'monthly';
+    if (date) date.hidden = mode !== 'daily';
+  };
+  range?.addEventListener('change', sync);
+  sync();
+})();
+</script>
 
 <!-- Report Modal -->
 <div class="af-modal-overlay" id="reportModal" report-mode="1">
@@ -7204,24 +7255,6 @@ if (focusedCancellationId && /^\d+$/.test(focusedCancellationId)) {
 // ===========================================================
 // ----------------- OVERVIEW FILTER -------------------------
 // ===========================================================
-const overviewForm = document.getElementById('overviewFilterForm');
-if (overviewForm) {
-  const range = overviewForm.querySelector('#adRangeFilter');
-  const year = overviewForm.querySelector('#adRangeYear');
-  const month = overviewForm.querySelector('#adRangeMonth');
-  const date = overviewForm.querySelector('#adRangeDate');
-
-  const syncOverviewFields = () => {
-    const mode = range ? range.value : 'all';
-    if (year) year.style.display = (mode === 'yearly' || mode === 'monthly' || mode === 'daily') ? '' : 'none';
-    if (month) month.style.display = mode === 'monthly' ? '' : 'none';
-    if (date) date.style.display = mode === 'daily' ? '' : 'none';
-  };
-
-  if (range) range.addEventListener('change', syncOverviewFields);
-  syncOverviewFields();
-}
-
 // ===========================================================
 // ----------------- LIVE SEARCH ----------------------------
 // ===========================================================
@@ -7285,7 +7318,7 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
         behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
         block: 'center'
       });
-      setTimeout(() => bookingRow.classList.remove('is-notification-focus'), 500);
+      setTimeout(() => bookingRow.classList.remove('is-notification-focus'), 1000);
     });
   }
 }
@@ -7430,7 +7463,7 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
     walkinDatePicker = flatpickr(dateDisplay, {
       mode: 'single',
       showMonths: window.innerWidth >= 760 ? 2 : 1,
-      minDate: 'today',
+      minDate: <?= json_encode(tourBookingEarliestDate()) ?>,
       dateFormat: 'F j, Y',
       conjunction: ' to ',
       disableMobile: true,
@@ -8086,7 +8119,11 @@ if (focusedBookingId && /^\d+$/.test(focusedBookingId)) {
 })();
 
 </script>
-<script src="js/admin-booking-addons.js?v=1"></script>
+<script src="js/admin-booking-addons.js?v=2"></script>
+<?php
+require_once __DIR__ . '/../php/staff_booking_addon_picker.php';
+StaffBookingAddonPicker($pdo, 'admin', (int)$_SESSION['admin_id']);
+?>
 <script src="js/booking-payment-summary.js?v=3"></script>
 </body>
 </html>

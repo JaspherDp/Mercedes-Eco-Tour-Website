@@ -22,6 +22,7 @@ ensureBookingCancellationRequestsTable($pdo);
 $user = TouristRequireLogin($pdo, 'redirect', '../?open_login=1', (string)($_SERVER['REQUEST_URI'] ?? ''));
 header('Cache-Control: private, no-store, max-age=0');
 $tourist_id = (int) $_SESSION['tourist_id'];
+hotelBookingTouristsEnsureSchema($pdo);
 
 // Used by the shared PayMongo balance-checkout endpoint. The token is tied to
 // this tourist session so a balance payment cannot be started for somebody
@@ -323,11 +324,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['booking_id'], $_POST[
         $booking_id = ItourValidationInt($_POST['booking_id'], 'Booking ID', 1, PHP_INT_MAX);
         $editing = ($_POST['manifest_mode'] ?? '') === 'edit';
         $touristRows = profileTouristManifestRows($_POST);
-        bookingTouristSaveManifest($pdo, $booking_id, $tourist_id, $touristRows, (array)($_POST['boat_number'] ?? []), $editing);
+        bookingTouristSaveManifest($pdo, $booking_id, $tourist_id, $touristRows, (array)($_POST['boat_number'] ?? []), $editing, (string)($_POST['booking_domain'] ?? 'tour'));
         logActivity($pdo, 'Tourist', $tourist_id,
             (string)($user['full_name'] ?? $_SESSION['full_name'] ?? 'Tourist'),
             $editing ? 'Tourist Data Updated' : 'Tourist Data Submitted',
-            ($editing ? 'Updated' : 'Submitted') . ' traveler details for booking #' . $booking_id . '.', 'Bookings', $booking_id);
+            ($editing ? 'Updated' : 'Submitted') . ' traveler details for booking #' . $booking_id . '.', 'Bookings', $booking_id, (string)($_POST['booking_domain'] ?? 'tour'));
         echo json_encode(['success' => true, 'updated' => $editing,
             'message' => $editing ? 'Your tourist list changes were saved successfully.' : 'Tourists submitted successfully.']);
     } catch (Throwable $error) {
@@ -758,6 +759,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['fetch_tourists'])) {
     header('Content-Type: application/json');
 
     $booking_id = (int)($_POST['booking_id'] ?? 0);
+    $domain = (string)($_POST['booking_domain'] ?? 'tour');
+    if (!in_array($domain, ['tour','hotel'], true)) {
+        http_response_code(400); echo json_encode(['success'=>false,'message'=>'Invalid booking domain.']); exit;
+    }
+    if ($domain === 'hotel') {
+        $booking = hotelBookingTouristRecord($pdo, $booking_id, $tourist_id);
+        if (!$booking) { http_response_code(404); echo json_encode(['success'=>false,'message'=>'Booking not found.']); exit; }
+        $query = $pdo->prepare('SELECT * FROM hotel_booking_tourists WHERE booking_id = ? ORDER BY id');
+        $query->execute([$booking_id]);
+        $cancellation = $pdo->prepare("SELECT COUNT(*) FROM booking_cancellation_requests WHERE booking_domain='hotel' AND booking_id=? AND request_status IN ('pending','approved','decision_required','completed')");
+        $cancellation->execute([$booking_id]);
+        echo json_encode(['success'=>true, 'pax'=>$booking['allowed_pax'], 'booking_type'=>'hotel',
+            'can_edit'=>bookingTouristCanEdit($booking) && !(int)$cancellation->fetchColumn(),
+            'edit_deadline_label'=>bookingTouristEditDeadline($booking)?->format('F j, Y \a\t g:i A') . ' Manila time',
+            'tourists'=>$query->fetchAll(PDO::FETCH_ASSOC)], JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
     $bookingCheck = $pdo->prepare("SELECT b.*, EXISTS (SELECT 1 FROM booking_cancellation_requests cr WHERE cr.booking_domain = 'tour' AND cr.booking_id = b.booking_id AND cr.request_status IN ('pending','approved','decision_required','completed')) AS manifest_cancellation_active FROM bookings b WHERE b.booking_id = ? AND b.tourist_id = ? LIMIT 1");
     $bookingCheck->execute([$booking_id, $tourist_id]);
     $manifestBooking = $bookingCheck->fetch(PDO::FETCH_ASSOC);
@@ -830,7 +848,7 @@ $hotel_stmt = $pdo->prepare("
 
 $hotel_stmt->execute([$tourist_id]);
 
-$hotel_active_bookings = $hotel_stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+$hotel_active_bookings = array_map('HotelBookingApplyStatus', $hotel_stmt->fetchAll(PDO::FETCH_ASSOC) ?: []);
 $hotel_stmt->execute([$tourist_id]);
 
 // ---------- SPLIT ONLY FROM THIS ARRAY ----------
@@ -882,7 +900,7 @@ $activeTourPendingCount = count(array_filter(
 ));
 $activeHotelConfirmedCount = count(array_filter(
     $hotel_upcoming_bookings,
-    fn($booking) => in_array(strtolower((string)($booking['booking_status'] ?? '')), ['accepted', 'confirmed', 'approved'], true)
+    fn($booking) => $booking['booking_status'] === 'confirmed'
 ));
 $activeHotelPendingCount = count(array_filter(
     $hotel_upcoming_bookings,
@@ -984,7 +1002,8 @@ while ($row = $feedback_stmt->fetch(PDO::FETCH_ASSOC)) {
   const isHistoryTraversal = navigationEntry
     ? navigationEntry.type === 'back_forward'
     : performance.navigation?.type === 2;
-  const initialTab = hasTouristSubmission ? 'bookings' : isReload
+  const hasNotificationBooking = /^[1-9]\d*$/.test(new URLSearchParams(window.location.search).get('notification_booking') || '');
+  const initialTab = hasTouristSubmission ? 'bookings' : hasNotificationBooking && allowedTabs.includes(requestedTab) ? requestedTab : isReload
     ? (allowedTabs.includes(savedTab) ? savedTab : (allowedTabs.includes(requestedTab) ? requestedTab : 'profile'))
     : (isHistoryTraversal ? 'profile' : (allowedTabs.includes(requestedTab) ? requestedTab : 'profile'));
   document.documentElement.dataset.profileTab = initialTab;
@@ -2979,6 +2998,10 @@ body.password-modal-open .main{overflow:hidden}
 }
 .bookings-section .status-pill.pending,#history .status-pill.pending{border-color:#f5dfa3;background:#fff3cf;color:#945706}
 .bookings-section .status-pill.accepted,#history .status-pill.accepted{border-color:#bfe3d4;background:#e3f5ed;color:#176047}
+.bookings-section .status-pill.confirmed,#history .status-pill.confirmed{border-color:#bfe3d4;background:#e3f5ed;color:#176047}
+.bookings-section .status-pill.completed,#history .status-pill.completed{border-color:#b9d7f5;background:#e5f1ff;color:#1d5f9f}
+.booking-detail-status-user.confirmed{background:#e3f5ed;color:#176047}
+.booking-detail-status-user.completed{background:#e5f1ff;color:#1d5f9f}
 #history .formal-table .pill{min-width:72px;padding:5px 9px;border:1px solid transparent;text-align:center;font-size:.63rem;font-weight:800;letter-spacing:.035em;text-transform:uppercase}
 #history .formal-table .pill.completed,#history .formal-table .pill.complete{border-color:#b9d7f5;background:#e5f1ff;color:#1d5f9f}
 #history .formal-table .pill.cancelled,#history .formal-table .pill.declined{border-color:#f1cccc;background:#fceaea;color:#a43a3a}
@@ -4654,18 +4677,21 @@ document.addEventListener("DOMContentLoaded", function () {
             <?php 
               $hotelBookingId = (int)($h['hotel_booking_id'] ?? 0);
               $status = strtolower($h['booking_status'] ?? '');
-              $isAccepted = in_array($status, ['accepted', 'confirmed']);
+              $isConfirmed = $status === 'confirmed' && empty($h['checked_out_at']) && empty($activeCancellationKeys['hotel:' . $hotelBookingId]);
             ?>
             <td>
-              <?php if (!$isAccepted): ?>
+              <?php if (!$isConfirmed): ?>
                 <span class="text-muted">Not available</span>
-              <?php elseif ($hotelBookingId > 0 && hasTourists($pdo, $hotelBookingId)): ?>
-                <button class="btn-action btn-secondary view-tourist-btn-user" onclick="window.open('tourists_pdf.php?booking_id=<?= $hotelBookingId ?>','_blank')">
+              <?php elseif ($hotelBookingId > 0 && hotelBookingHasTourists($pdo, $hotelBookingId)): ?>
+                <?php if (bookingTouristCanEdit(hotelBookingTouristNormalize($h))): ?>
+                <button type="button" class="btn-action add-tourist-btn-user edit-tourist-btn-user" data-manifest-mode="edit" data-booking-domain="hotel" data-booking-type="hotel" data-booking-id="<?= $hotelBookingId ?>" data-pax="<?= (int)$guests ?>">Edit Tourist</button>
+                <?php else: ?><small class="tourist-edit-closed">Editing closed</small><?php endif; ?>
+                <button type="button" class="btn-action btn-secondary view-tourist-btn-user" onclick="openTouristProfilePdf(<?= $hotelBookingId ?>, false, 'hotel')">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
                   PDF
                 </button>
               <?php else: ?>
-                <button class="btn-action add-tourist-btn-user" data-booking-id="<?= (int)$h['hotel_booking_id'] ?>" data-pax="<?= (int)$guests ?>">
+                <button type="button" class="btn-action add-tourist-btn-user" data-booking-domain="hotel" data-booking-type="hotel" data-booking-id="<?= (int)$h['hotel_booking_id'] ?>" data-pax="<?= (int)$guests ?>">
                   <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                   Add
                 </button>
@@ -4679,7 +4705,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 </span>
               </div>
             </td>
-            <td><span class="status-pill <?= htmlspecialchars($h['booking_status'] ?? 'pending') ?>"><?= ucfirst($h['booking_status'] ?? 'Pending') ?></span></td>
+            <td><span class="status-pill <?= htmlspecialchars($h['booking_status'] ?? 'pending') ?>"><?= htmlspecialchars(HotelBookingStatusLabel($h)) ?></span></td>
             <td>
               <div class="profile-booking-dropdown">
                 <button type="button" class="profile-booking-toggle" aria-haspopup="menu" aria-expanded="false">Actions <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></button>
@@ -5257,7 +5283,7 @@ document.addEventListener("DOMContentLoaded", function () {
               $status_class = strtolower(str_replace(' ', '-', $raw_status));
               
               // 3. Format it for display (e.g., "cancelled" becomes "Cancelled")
-              $display_status = ucwords(str_replace(['_', '-'], ' ', $raw_status));
+              $display_status = HotelBookingStatusLabel($h);
             ?>
               <tr>
                 <td>
@@ -7271,7 +7297,7 @@ function openBookingDetailsModalUser(booking) {
       <div class="booking-detail-hero-user">
         <div class="booking-detail-hero-top-user">
           <span class="booking-detail-label-user">Booking reference</span>
-          <span class="booking-detail-status-user ${safe(status)}">${safe(status)}</span>
+          <span class="booking-detail-status-user ${safe(status)}">${safe(isHotel ? (status === 'confirmed' ? 'ACCEPTED' : status.toUpperCase()) : status)}</span>
         </div>
         <h4 class="booking-detail-reference-user">${safe(reference)}</h4>
       </div>
@@ -7353,12 +7379,12 @@ document.addEventListener('keydown', event => {
 });
 
 let refreshProfileAfterPdfClose = false;
-function openTouristProfilePdf(bookingId, refreshAfterClose = false) {
+function openTouristProfilePdf(bookingId, refreshAfterClose = false, domain = 'tour') {
   const id = Number(bookingId || 0);
   if (!id) return;
   const modal = document.getElementById('touristProfilePdfModal');
   const download = document.getElementById('touristProfilePdfDownload');
-  const url = `tourist_submission_pdf.php?booking_id=${encodeURIComponent(id)}`;
+  const url = `tourist_submission_pdf.php?booking_id=${encodeURIComponent(id)}&booking_domain=${encodeURIComponent(domain)}`;
   refreshProfileAfterPdfClose = Boolean(refreshAfterClose);
   download.href = `${url}&download=1`;
   modal.classList.add('show');
@@ -7389,7 +7415,7 @@ document.addEventListener('keydown', event => {
 });
 
 </script>
-<script src="../js/tourist-manifest-form.js?v=1"></script>
+<script src="../js/tourist-manifest-form.js?v=2"></script>
 <script>
 /* ---------- RESTORE ACTIVE TAB AFTER RELOAD ---------- */
 document.addEventListener('DOMContentLoaded', () => {
@@ -7689,6 +7715,7 @@ window.FavoritesConfig = {
 <script src="../js/mobile-scroll.js"></script>
 <script src="../js/tourist-pdf-preview.js?v=<?= (int)filemtime(__DIR__ . '/../js/tourist-pdf-preview.js') ?>"></script>
 <script src="../js/profile-booking-actions.js?v=<?= (int)filemtime(__DIR__ . '/../js/profile-booking-actions.js') ?>"></script>
+<?php require_once __DIR__ . '/notification_component.php'; NotificationRender($pdo, 'tourist'); ?>
 </body>
 </html>
 

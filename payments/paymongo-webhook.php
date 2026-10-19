@@ -124,7 +124,16 @@ if (RefundWebhookReconciler::supportsEventType($eventType)) {
             // Some refund resources omit livemode; the signed event supplies it.
             $providerRefund['livemode'] = $livemode;
             $result = RefundWebhookReconciler::reconcile($pdo, $providerRefund);
-            PaymentHelper::logPayMongo('refund_webhook_result', ['event_id' => $eventId, 'payment_id' => (string)($providerRefund['payment_id'] ?? ''), 'status' => $result['status'], 'idempotent' => $result['idempotent']]);
+            PaymentHelper::logPayMongo('refund_webhook_result', [
+                'event_id' => $eventId,
+                'refund_id' => (string)($providerRefund['id'] ?? ''),
+                'payment_id' => (string)($providerRefund['payment_id'] ?? ''),
+                'provider_status' => (string)($providerRefund['status'] ?? ''),
+                'matched' => $result['matched'],
+                'updated' => $result['updated'],
+                'status' => $result['status'],
+                'idempotent' => $result['idempotent'],
+            ]);
             $matched = $matched || $result['matched'];
             $allMatched = $allMatched && $result['matched'];
             $updated = $updated || $result['updated'];

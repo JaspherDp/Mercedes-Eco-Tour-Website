@@ -9,6 +9,7 @@ require_once 'php/tourist_auth_helper.php';
 require_once 'php/additional_fees_helper.php';
 require_once 'php/booking_capacity_helper.php';
 require_once 'php/booking_addon_picker.php';
+require_once 'php/tour_booking_date_policy.php';
 
 $tourAvailabilityBase = rtrim(str_replace('\\', '/', dirname((string)($_SERVER['SCRIPT_NAME'] ?? ''))), '/');
 if (str_ends_with(strtolower($tourAvailabilityBase), '/public')) {
@@ -527,7 +528,7 @@ $locations = [
             </label>
             <label>
               Start Date
-              <input type="date" id="bookingDate" name="booking_date" readonly inputmode="none" virtualkeyboardpolicy="manual" required />
+              <input type="date" id="bookingDate" name="booking_date" min="<?= htmlspecialchars(tourBookingEarliestDate(), ENT_QUOTES, 'UTF-8') ?>" readonly inputmode="none" virtualkeyboardpolicy="manual" required />
             </label>
           </div>
 
@@ -2254,12 +2255,8 @@ preferredSelect.addEventListener("change", function () {
       };
 
       const setDateMin = () => {
-        const today = new Date();
-        const yyyy = today.getFullYear();
-        const mm = String(today.getMonth() + 1).padStart(2, "0");
-        const dd = String(today.getDate()).padStart(2, "0");
-        bookingDate.min = `${yyyy}-${mm}-${dd}`;
-        bookingEndDate.min = `${yyyy}-${mm}-${dd}`;
+        bookingDate.min = window.BookingValidationSchemas?.minimumTourBookingDate?.() || bookingDate.min;
+        bookingEndDate.min = bookingDate.min;
         if (bookingDate.value && bookingDate.value < bookingDate.min) {
           bookingDate.value = "";
           bookingEndDate.value = "";

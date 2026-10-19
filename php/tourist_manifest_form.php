@@ -12,6 +12,7 @@
 
     <form id="touristFormUser" method="POST">
       <input type="hidden" name="booking_id" id="touristBookingId">
+      <input type="hidden" name="booking_domain" id="touristBookingDomain" value="tour">
       <input type="hidden" name="manifest_mode" id="touristManifestMode" value="submit">
       <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($manifestCsrf, ENT_QUOTES, 'UTF-8') ?>">
 

@@ -17,6 +17,14 @@ $admin = AddonCatalogSave($pdo, 'admin', 1, 0, ['name'=>'Packed lunch','price'=>
 $operator = AddonCatalogSave($pdo, 'operator', 2, 0, ['name'=>'Snorkeling gear','price'=>'200.25']);
 $hotel = AddonCatalogSave($pdo, 'hotel_admin', 3, 10, ['name'=>'Breakfast','price'=>'150']);
 $otherHotel = AddonCatalogSave($pdo, 'hotel_admin', 4, 20, ['name'=>'Spa','price'=>'600']);
+foreach ([['admin',1,0,$admin],['operator',2,0,$operator],['hotel_admin',3,10,$hotel]] as [$role,$ownerId,$propertyId,$expectedId]) {
+    $presets = AddonCatalogStaffAvailable($pdo,$role,$ownerId,$propertyId);
+    catalogCheck(count($presets) === 1 && $presets[0]['addon_id'] === $expectedId, 'Staff presets must contain only their own active catalog.');
+    catalogCheck(array_keys($presets[0]) === ['addon_id','name','price'], 'Staff preset payload should expose only charge fields.');
+}
+catalogCheck(AddonCatalogStaffAvailable($pdo,'hotel_admin',3,20) === [], 'Staff presets must not cross property boundaries.');
+catalogCheck(AddonCatalogStaffAvailable($pdo,'operator',99) === [], 'Staff presets must not leak another operator catalog.');
+catalogReject(fn()=>AddonCatalogStaffAvailable($pdo,'tourist',1));
 foreach (['boat','tourguide','package'] as $domain) {
     $expected = $domain === 'package' ? [$admin,$operator] : [$admin];
     catalogCheck(array_map('intval', array_column(AddonCatalogAvailable($pdo,$domain),'addon_id')) === $expected, 'Operator extras must be package-only; admin extras remain on all tour types.');
@@ -40,6 +48,10 @@ catalogReject(fn()=>AddonCatalogResolve($pdo,'boat',0,[['addon_id'=>$admin],['ad
 catalogReject(fn()=>AddonCatalogResolve($pdo,'boat',0,str_repeat('x',26)));
 $snapshot = AddonCatalogResolve($pdo,'boat',0,[['addon_id'=>$admin,'quantity'=>2]]);
 AddonCatalogSave($pdo,'admin',1,0,['addon_id'=>$admin,'name'=>'New price','price'=>'999','is_active'=>0]);
+catalogCheck(AddonCatalogStaffAvailable($pdo,'admin',1) === [], 'Hidden options must not be offered as staff charge presets.');
+$noCatalog = new PDO('sqlite::memory:');
+$noCatalog->setAttribute(PDO::ATTR_ERRMODE,PDO::ERRMODE_EXCEPTION);
+catalogCheck(AddonCatalogStaffAvailable($noCatalog,'admin',1) === [], 'Manual entry must remain usable without a catalog table.');
 catalogReject(fn()=>AddonCatalogResolve($pdo,'boat',0,[['addon_id'=>$admin]]));
 catalogCheck((float)$snapshot['total'] === 251.0 && $snapshot['rows'][0]['name'] === 'Packed lunch', 'Existing checkout snapshots must survive price/name edits and archiving.');
 $oldMode = getenv('PAYMONGO_MODE');

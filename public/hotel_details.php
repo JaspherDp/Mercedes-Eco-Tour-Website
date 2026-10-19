@@ -461,7 +461,7 @@ function ratingValue($value): float {
       max-width: 1188px !important;
       margin: 0 auto !important;
       display: grid !important;
-      grid-template-columns: minmax(150px, 1fr) minmax(210px, 1.25fr) minmax(170px, 1fr) 130px !important;
+      grid-template-columns: minmax(150px, 1fr) minmax(210px, 1.25fr) minmax(170px, 1fr) 175px !important;
       gap: 10px !important;
       align-items: start !important;
       box-shadow: none !important;
@@ -494,6 +494,8 @@ function ratingValue($value): float {
       font-size: 14px !important;
       color: #111111 !important;
       min-height: 40px !important;
+      height: 40px !important;
+      box-sizing: border-box !important;
     }
     #detailsSearchWrap .location-search-box select { padding-right: 58px !important; }
     #detailsSearchWrap .search-btn {
@@ -501,7 +503,9 @@ function ratingValue($value): float {
       padding: 9px 18px !important; border-radius: 10px !important; cursor: pointer !important;
       width: 100% !important; min-width: 0 !important; height: 40px !important; white-space: nowrap !important; margin-top: 0 !important; font-weight: 700 !important;
       display: inline-flex !important; align-items: center !important; justify-content: center !important;
+      align-self: start !important; box-sizing: border-box !important; gap: 8px !important;
     }
+    #detailsSearchWrap .search-btn > svg { flex-shrink: 0; }
     #detailsSearchWrap .search-btn:hover { background: #144d1c !important; }
     #detailsSearchWrap .input-error { border: 1px solid #dc3545 !important; background: #fff5f5 !important; }
     #detailsSearchWrap .error-text { font-size: 12px !important; color: #dc3545 !important; margin-top: 4px !important; }
@@ -1763,7 +1767,7 @@ function ratingValue($value): float {
           </div>
         </div>
       </div>
-      <button id="searchActionBtn" class="search-btn" type="button">Search Room</button>
+      <button id="searchActionBtn" class="search-btn" type="button"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><circle cx="10.5" cy="10.5" r="6.5"></circle><path d="m16 16 4.5 4.5"></path></svg><span id="searchActionLabel">Search Room</span></button>
     </div>
   </section>
 
@@ -3087,6 +3091,7 @@ function ratingValue($value): float {
 
     async function runRoomSearch(searchData) {
       const requestId = ++roomSearchRequestId;
+      document.getElementById("searchActionLabel").textContent = "Update results";
       roomsContent.innerHTML = `<p class="dummy-text">Checking room availability...</p>`;
       try {
         const availableRooms = await fetchAvailableRooms(searchData);
@@ -3296,6 +3301,7 @@ function ratingValue($value): float {
     }
 
     function persistSearchFormDraft() {
+      if (roomSearchRequestId > 0) document.getElementById("searchActionLabel").textContent = "Update results";
       const draftData = { ...collectSearchData(), hotelId: hotelData.id };
       sessionStorage.setItem(hotelSearchDraftStorageKey, JSON.stringify(draftData));
     }
@@ -3729,7 +3735,6 @@ function ratingValue($value): float {
           renderRoomsSearchPrompt();
         }
       }
-      searchActionBtn.innerText = "Search Room";
       updateIslandFieldState();
       updateDetailsSearchSummary();
       if (window.matchMedia('(max-width: 768px)').matches) {

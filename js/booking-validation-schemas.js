@@ -2,6 +2,11 @@
   "use strict";
 
   const z = global.Zod || (global.zod && (global.zod.z || global.zod));
+  const minimumTourBookingDate = (now = new Date()) => {
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+    const value = type => Number(parts.find(part => part.type === type).value);
+    return new Date(Date.UTC(value('year'), value('month') - 1, value('day') + 2)).toISOString().slice(0, 10);
+  };
 
   const parseDateOnly = (value) => {
     if (!value) return null;
@@ -36,7 +41,7 @@
       {},
       global.BookingValidationSchemas || {},
       createFallbackResult(),
-      { hasZod: false }
+      { hasZod: false, minimumTourBookingDate }
     );
     return;
   }
@@ -64,9 +69,6 @@
       agree_other_fees: z.boolean()
     })
     .superRefine((data, ctx) => {
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
       const selectedDate = parseDateOnly(data.booking_date);
       if (!selectedDate) {
         ctx.addIssue({
@@ -74,11 +76,11 @@
           path: ["booking_date"],
           message: "Please select a valid booking date."
         });
-      } else if (selectedDate < today) {
+      } else if (data.booking_date < minimumTourBookingDate()) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ["booking_date"],
-          message: "Please select a booking date that is today or later."
+          message: "Please select a booking date at least two calendar days from today (Manila time)."
         });
       }
 
@@ -227,6 +229,7 @@
     global.BookingValidationSchemas || {},
     {
       hasZod: true,
+      minimumTourBookingDate,
       validateTourBooking,
       validateHotelBooking
     }

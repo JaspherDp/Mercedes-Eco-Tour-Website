@@ -3,6 +3,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/additional_fees_helper.php';
 require_once __DIR__ . '/tour_resource_availability_helper.php';
 require_once __DIR__ . '/input_validation.php';
+require_once __DIR__ . '/tour_booking_date_policy.php';
 require_once __DIR__ . '/booking_capacity_helper.php';
 require_once __DIR__ . '/payment_receipt_breakdown.php';
 require_once __DIR__ . '/booking_addons_helper.php';
@@ -184,6 +185,7 @@ function WalkinBookingQuote(PDO $pdo, array $input, bool $checkAvailability = tr
         throw new DomainException('Choose the booking type and tour type first.');
     }
     $start = ItourValidationDate($input['booking_date'] ?? '', 'Tour date');
+    tourBookingValidateAdvanceDate($start);
     $end = $tourType === 'overnight' ? ItourValidationDate($input['booking_end_date'] ?? '', 'Tour end date') : $start;
     if ($start < date('Y-m-d') || ($tourType === 'overnight' && $end <= $start)) throw new DomainException('Choose a valid tour duration.');
     $adults = ItourValidationInt($input['num_adults'] ?? 1, 'Adults', 1, 100);

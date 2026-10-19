@@ -487,5 +487,13 @@ function bookingRefundSyncCancellationStatus(PDO $pdo, int $cancellationRequestI
     $next = bookingRefundAggregateStatus($targetMinor, $succeeded, $active, $failed);
     $update = $pdo->prepare('UPDATE booking_cancellation_requests SET refund_status=?, refund_updated_at=NOW() WHERE cancellation_request_id=?');
     $update->execute([$next, $cancellationRequestId]);
+    // Observe the saved aggregate status; do not change refund processing.
+    try {
+        require_once __DIR__ . '/notification_helper.php';
+        $notificationRequest = $pdo->prepare('SELECT booking_domain, booking_id FROM booking_cancellation_requests WHERE cancellation_request_id=?');
+        $notificationRequest->execute([$cancellationRequestId]);
+        $notificationRecord = $notificationRequest->fetch(PDO::FETCH_ASSOC);
+        if ($notificationRecord) NotificationEmit($pdo, 'Refund Status Updated', (string)$notificationRecord['booking_domain'], (int)$notificationRecord['booking_id'], $cancellationRequestId . ':' . $next);
+    } catch (Throwable $notificationError) { error_log('Refund notification unavailable.'); }
     return $next;
 }

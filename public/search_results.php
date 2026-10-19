@@ -624,6 +624,10 @@ foreach (array_merge([$destination, $destination2], $destinationsFromList) as $c
     }
     $selectedDestinations[] = $candidate;
 }
+if ($tab === 'tours') {
+    $selectedDestinations = array_slice($selectedDestinations, 0, 1);
+    $destination2 = '';
+}
 $checkin = trim((string)($_GET['checkin'] ?? ''));
 $checkout = trim((string)($_GET['checkout'] ?? ''));
 $date = trim((string)($_GET['date'] ?? ''));
@@ -781,6 +785,9 @@ $locationChoices = array_values(array_unique(array_filter(array_merge(
     ['Apuao', 'Malasugui', 'Quinapaguian', 'Cayucyucan', 'Caringo', 'Canimog'],
     $selectedDestinations
 ))));
+if ($tab === 'boats') {
+    $locationChoices = array_values(array_filter($locationChoices, static fn(string $location): bool => strcasecmp(trim($location), 'Cayucyucan') !== 0));
+}
 sort($locationChoices, SORT_NATURAL | SORT_FLAG_CASE);
 $primaryDestination = $selectedDestinations[0] ?? $destination;
 $secondaryDestination = $selectedDestinations[1] ?? $destination2;
@@ -881,7 +888,7 @@ if ($resultType !== 'hotels' && $searchStartDate !== '') {
                     </div>
                 </div>
 
-                <?php if ($resultType !== 'hotels'): ?>
+                <?php if ($resultType !== 'hotels' && $tab !== 'tours'): ?>
                 <div class="results-search-field results-search-field--destination">
                     <label for="resultsDestination2">Second destination <span>Optional</span></label>
                     <div class="results-search-control">
@@ -1315,6 +1322,6 @@ if ($resultType !== 'hotels' && $searchStartDate !== '') {
         });
     </script>
     <script src="https://unpkg.com/lucide@0.469.0/dist/umd/lucide.min.js"></script>
-    <script src="includes/header_loader.js?v=2"></script>
+    <script src="includes/header_loader.js?v=<?= (int)@filemtime(__DIR__ . '/../includes/header_loader.js') ?>"></script>
 </body>
 </html>

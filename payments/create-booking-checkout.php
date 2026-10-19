@@ -14,6 +14,7 @@ require_once __DIR__ . '/../php/package_checkout_authority_helper.php';
 require_once __DIR__ . '/../php/tour_resource_availability_helper.php';
 require_once __DIR__ . '/../php/request_rate_limiter.php';
 require_once __DIR__ . '/../php/input_validation.php';
+require_once __DIR__ . '/../php/tour_booking_date_policy.php';
 require_once __DIR__ . '/../php/booking_capacity_helper.php';
 require_once __DIR__ . '/../php/app_url_helper.php';
 require_once __DIR__ . '/PayMongoService.php';
@@ -146,6 +147,7 @@ try {
     } else {
         $bookingDate = bookingCheckoutDate($input['bookingDate'] ?? '');
         $bookingEndDate = bookingCheckoutDate($input['bookingEndDate'] ?? '');
+        tourBookingValidateAdvanceDate($bookingDate);
         $tourType = bookingCheckoutText($input['tourType'] ?? '', 20);
         $phone = bookingCheckoutText($input['contactNumber'] ?? '', 20);
         $adults = ItourValidationInt($input['numAdults'] ?? 0, 'Adults', 0, 100);

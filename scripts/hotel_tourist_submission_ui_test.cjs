@@ -1,0 +1,17 @@
+'use strict';
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict'),path=require('node:path');
+const read=file=>fs.readFileSync(path.join(__dirname,'..',file),'utf8');
+const events={};
+const closeButton={focus(){this.focused=true;},addEventListener(type,fn){events.close=fn;}};
+const modal={inert:true,open:false,classList:{contains:()=>modal.open,add:()=>{modal.open=true;},remove:()=>{modal.open=false;}},setAttribute(key,value){this[key]=value;},querySelector:()=>closeButton,addEventListener(type,fn){events[type]=fn;}};
+const frame={removeAttribute(key){delete this[key];}},download={},reference={};
+const button={dataset:{hotelTourists:'42',bookingReference:'HR26-0002'},focus(){this.focused=true;},addEventListener(type,fn){events.open=fn;}};
+const document={getElementById:id=>({hotelTouristPdfModal:modal,hotelTouristPdfFrame:frame,hotelTouristPdfDownload:download,hotelTouristPdfReference:reference}[id]),querySelectorAll:()=>[button],addEventListener(type,fn){events[type]=fn;}};
+vm.runInNewContext(read('js/hotel-tourist-submission.js'),{document,URLSearchParams});
+events.open();assert.equal(modal.open,true);assert.equal(modal.inert,false);assert.equal(reference.textContent,'Booking HR26-0002');
+const url=new URL(frame.src,'https://fixture.test/');assert.equal(url.pathname,'/php/tourist_submission_pdf.php');assert.equal(url.searchParams.get('booking_domain'),'hotel');assert.equal(url.searchParams.get('viewer'),'hotel_admin');assert.equal(url.searchParams.get('booking_id'),'42');assert.equal(download.href,frame.src+'&download=1');assert.equal(closeButton.focused,true);
+events.keydown({key:'Escape'});assert.equal(modal.open,false);assert.equal(modal.inert,true);assert.equal(frame.src,undefined);assert.equal(button.focused,true);
+events.open();events.mousedown({target:modal});assert.equal(modal.open,false);
+const page=read('Hobookings.php');assert.ok(page.includes("$statusFilter === 'confirmed'): ?><th>Tourists</th>"));assert.ok(page.includes('No submission yet'));assert.ok(page.includes('tourist_submission_count'));assert.ok(page.includes('FROM hotel_booking_tourists ht WHERE ht.booking_id = b.hotel_booking_id'));
+const endpoint=read('php/tourist_submission_pdf.php');assert.ok(endpoint.includes('HoRequireHotelAdmin($pdo)'));assert.ok(endpoint.includes("hotelBookingTouristPropertyRecord($pdo, $bookingId, (int)$hotelAdminAccount['hotel_resort_id'])"));assert.ok(endpoint.includes('private, no-store'));
+console.log('PASS: Confirmed-tab tourist column, submission state, shared branded PDF preview/download, property-scoped endpoint, modal cleanup and focus return.');

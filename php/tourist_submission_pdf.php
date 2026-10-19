@@ -8,16 +8,41 @@ require_once __DIR__ . '/tourist_auth_helper.php';
 require_once __DIR__ . '/booking_tourists_helper.php';
 require_once __DIR__ . '/../tcpdf/tcpdf.php';
 
-$touristAccount = TouristRequireLogin($pdo, 'text');
+$hotelAdminViewer = (string)($_GET['viewer'] ?? '') === 'hotel_admin';
+if ($hotelAdminViewer) {
+    require_once __DIR__ . '/../Ho_common.php';
+    $hotelAdminAccount = HoRequireHotelAdmin($pdo);
+    if ((string)($_GET['booking_domain'] ?? '') !== 'hotel') { http_response_code(400); exit('Invalid booking domain.'); }
+    $touristAccount = [];
+} else {
+    $touristAccount = TouristRequireLogin($pdo, 'text');
+}
+header('Cache-Control: private, no-store, max-age=0');
 
 ensureBookingTouristManifestColumns($pdo);
-$touristId = (int)$_SESSION['tourist_id'];
+$touristId = $hotelAdminViewer ? 0 : (int)$_SESSION['tourist_id'];
 $bookingId = (int)($_GET['booking_id'] ?? 0);
 if ($bookingId <= 0) {
     http_response_code(400);
     exit('Invalid booking.');
 }
 
+$domain = (string)($_GET['booking_domain'] ?? 'tour');
+if (!in_array($domain, ['tour','hotel'], true)) { http_response_code(400); exit('Invalid booking domain.'); }
+if ($domain === 'hotel') {
+    hotelBookingTouristsEnsureSchema($pdo);
+    $booking = $hotelAdminViewer
+        ? hotelBookingTouristPropertyRecord($pdo, $bookingId, (int)$hotelAdminAccount['hotel_resort_id'])
+        : hotelBookingTouristRecord($pdo, $bookingId, $touristId);
+    if ($booking) {
+        $property = $pdo->prepare('SELECT name FROM hotel_resorts WHERE hotel_resort_id = ?');
+        $property->execute([(int)$booking['hotel_resort_id']]);
+        $booking['location'] = (string)($property->fetchColumn() ?: $booking['room_type']);
+        $booking['package_name'] = $booking['room_type'];
+        $booking['tour_type'] = 'Hotel stay';
+        $booking['account_name'] = $touristAccount['full_name'] ?? '';
+    }
+} else {
 $bookingStmt = $pdo->prepare("
     SELECT b.booking_id, b.booking_reference, b.booking_date, b.created_at,
            b.booking_type, b.package_name, b.location, b.tour_type, b.pax,
@@ -29,15 +54,17 @@ $bookingStmt = $pdo->prepare("
 ");
 $bookingStmt->execute([$bookingId, $touristId]);
 $booking = $bookingStmt->fetch(PDO::FETCH_ASSOC);
+}
 if (!$booking) {
     http_response_code(404);
     exit('Booking not found.');
 }
 
+$passengerTable = $domain === 'hotel' ? 'hotel_booking_tourists' : 'booking_tourists';
 $passengerStmt = $pdo->prepare("
     SELECT full_name, gender, age, address, country, region, province, city, boat_number,
            barangay, postal_code, street, residence, phone_number
-    FROM booking_tourists
+    FROM {$passengerTable}
     WHERE booking_id = ?
     ORDER BY id ASC
 ");

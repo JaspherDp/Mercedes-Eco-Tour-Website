@@ -221,7 +221,7 @@ final class PaymentHelper
     public static function logPayMongo(string $action, array $context = []): void
     {
         $safe = ['action' => preg_replace('/[^a-z0-9_]/', '', $action)];
-        foreach (['mode', 'event_id', 'session_id', 'payment_id', 'transaction_id', 'booking_id', 'status', 'http_status', 'idempotent'] as $key) {
+        foreach (['mode', 'event_id', 'session_id', 'payment_id', 'refund_id', 'transaction_id', 'booking_id', 'status', 'provider_status', 'matched', 'updated', 'http_status', 'idempotent'] as $key) {
             if (!array_key_exists($key, $context)) continue;
             $value = $context[$key];
             if (is_bool($value) || is_int($value)

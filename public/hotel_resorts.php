@@ -884,7 +884,7 @@ foreach ($hotelsFromDb as $hotel) {
         <button class="search-btn" onclick="filterHotels()">
           <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
           <span class="search-btn-default-label">Search</span>
-          <span class="search-btn-update-label">Update</span>
+          <span class="search-btn-update-label">Update results</span>
         </button>
         <div class="field-error-slot" aria-hidden="true"></div>
       </div>
@@ -1226,7 +1226,7 @@ include 'footer.php';
     const secondary = String(document.getElementById("islandSecondary")?.value || "").trim();
     const values = [];
     if (primary) values.push(primary);
-    if (secondary && secondary !== primary) values.push(secondary);
+    if (activeSearchTab !== "tours" && secondary && secondary !== primary) values.push(secondary);
     return values.slice(0, 2);
   }
 
@@ -1435,27 +1435,28 @@ include 'footer.php';
     const islandSecondaryWrap = islandSecondary.closest(".secondary-location-wrap");
     const isHotelTab = activeSearchTab === "hotels";
     const isTourTab = isTourSearchTab(activeSearchTab);
+    const hasSecondDestination = isTourTab && activeSearchTab !== "tours";
 
     const searchContainer = document.querySelector(".search-container");
 
-    // Every tour-service tab uses the two-stop route layout. Tying this
-    // directly to the tab avoids a stale visibility check during tab changes.
-    searchContainer.classList.toggle("double-location", isTourTab);
+    // Package searches use one destination; boat and guide searches allow two.
+    searchContainer.classList.toggle("double-location", hasSecondDestination);
 
     searchSection.dataset.searchTab = activeSearchTab;
-    locationLabel.textContent = isTourTab ? "Destinations (up to 2)" : "Where to go?";
+    locationLabel.textContent = hasSecondDestination ? "Destinations (up to 2)" : (isTourTab ? "Destination" : "Where to go?");
     dateLabel.textContent = isTourTab ? "Stay dates" : "Check-in / Check-out";
     guestLabel.textContent = isHotelTab ? "Guests & Rooms" : "Guests";
     roomsGuestRow.classList.toggle("is-hidden", !isHotelTab);
     tourDateModeToggle.style.display = isTourTab ? "flex" : "none";
-    islandSecondary.classList.toggle("is-hidden", !isTourTab);
+    islandSecondary.classList.toggle("is-hidden", !hasSecondDestination);
     if (islandSecondaryWrap) {
-      islandSecondaryWrap.classList.toggle("is-hidden", !isTourTab);
+      islandSecondaryWrap.classList.toggle("is-hidden", !hasSecondDestination);
     }
-    if (!isTourTab) {
+    if (!hasSecondDestination) {
       islandSecondary.value = "";
       clearError(islandSecondary);
     }
+    document.dispatchEvent(new Event("search-tab-change"));
     syncSearchGuestClassification();
     renderChildAgeRows();
     applyGuestSelection(false);
@@ -2099,26 +2100,26 @@ include 'footer.php';
           .map(option => ({ value: option.value, label: option.textContent }));
 
         const syncDestinationOptions = () => {
-          const primaryValue = island.value;
-          const secondaryValue = islandSecondary.value;
+          const destinations = destinationOptions.filter(destination =>
+            activeSearchTab !== "boats" || destination.value.toLowerCase() !== "cayucyucan");
+          let primaryValue = island.value;
+          let secondaryValue = activeSearchTab === "tours" ? "" : islandSecondary.value;
+          if (!destinations.some(destination => destination.value === primaryValue)) primaryValue = "";
+          if (!destinations.some(destination => destination.value === secondaryValue) || secondaryValue === primaryValue) secondaryValue = "";
 
-          [...island.options].forEach(option => {
-            if (!option.value) return;
-            option.hidden = option.value === secondaryValue;
-            option.disabled = option.value === secondaryValue;
+          island.replaceChildren(new Option("Choose primary destination", "", false, !primaryValue));
+          island.options[0].disabled = true;
+          destinations.forEach(destination => {
+            const option = new Option(destination.label, destination.value, false, destination.value === primaryValue);
+            option.hidden = option.disabled = destination.value === secondaryValue;
+            island.add(option);
           });
-
-          islandSecondary.replaceChildren();
-          const placeholder = new Option("Add another destination (optional)", "", false, secondaryValue === "");
-          islandSecondary.add(placeholder);
-          destinationOptions.forEach(destination => {
-            if (destination.value === primaryValue) return;
-            islandSecondary.add(new Option(destination.label, destination.value, false, destination.value === secondaryValue));
+          island.value = primaryValue;
+          islandSecondary.replaceChildren(new Option("Add another destination (optional)", "", false, !secondaryValue));
+          destinations.forEach(destination => {
+            if (destination.value !== primaryValue) islandSecondary.add(new Option(destination.label, destination.value, false, destination.value === secondaryValue));
           });
-
-          if (secondaryValue === primaryValue || !destinationOptions.some(destination => destination.value === secondaryValue)) {
-            islandSecondary.value = "";
-          }
+          islandSecondary.value = secondaryValue;
         };
 
         const updateIslandFieldState = () => {
@@ -2128,6 +2129,7 @@ include 'footer.php';
           const hasSecondary = Boolean(islandSecondary.value);
           islandSecondary.classList.toggle("is-placeholder", !hasSecondary);
         };
+        document.addEventListener("search-tab-change", updateIslandFieldState);
         island.addEventListener("change", () => {
           if (islandSecondary.value === island.value) islandSecondary.value = "";
           if (island.value) clearError(island);

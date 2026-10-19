@@ -9,9 +9,12 @@ require_once __DIR__ . '/../php/booking_reference_helper.php';
 require_once __DIR__ . '/../php/tour_resource_availability_helper.php';
 require_once __DIR__ . '/../php/firebase_config.php';
 require_once __DIR__ . '/../php/input_validation.php';
+require_once __DIR__ . '/../php/tour_booking_date_policy.php';
 require_once __DIR__ . '/../php/additional_fees_helper.php';
 require_once __DIR__ . '/../php/booking_capacity_helper.php';
 require_once __DIR__ . '/../php/payment_receipt_breakdown.php';
+require_once __DIR__ . '/../php/booking_addons_helper.php';
+require_once __DIR__ . '/../php/staff_booking_addon_picker.php';
 require_once __DIR__ . '/../payments/PayMongoService.php';
 require_once __DIR__ . '/../payments/PaymentReconciler.php';
 
@@ -283,13 +286,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_e
             throw new Exception('Invalid security token. Refresh the page and try again.');
         }
         $bookingId = ItourValidationInt($_POST['booking_id'] ?? null, 'Booking ID', 1, PHP_INT_MAX);
-        $type = ItourValidationText($_POST['expense_type'] ?? null, 'Expense type', 40, true);
-        $amount = ItourValidationMoney($_POST['amount'] ?? null, 'Expense amount', 10000000.00, false);
-        $note = ItourValidationText($_POST['note'] ?? '', 'Expense note', 500);
-        $allowedTypes = ['additional_boat', 'additional_tourguide', 'food', 'others'];
-        if ($bookingId <= 0 || $amount <= 0 || !in_array($type, $allowedTypes, true)) {
-            throw new Exception('Please provide valid expense details.');
-        }
+        $batch = BookingAddonsValidateRows(StaffBookingAddonInput($pdo, 'operator', $operator_id, 0, $_POST));
+        $amount = $batch['total'];
+        BookingAddonsEnsureSchema($pdo);
 
         $pdo->beginTransaction();
         $stmt = $pdo->prepare("SELECT grand_total, payment_amount, remaining_balance, status, is_complete FROM bookings WHERE booking_id = ? AND operator_id = ? AND LOWER(booking_type) = 'package' FOR UPDATE");
@@ -307,8 +306,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'add_e
         $newRemaining = round(max(0, $newGrandTotal - $amountPaid), 2);
         $newIsPaid = $newGrandTotal > 0 && $newRemaining <= 0 ? 1 : 0;
 
-        $insert = $pdo->prepare('INSERT INTO booking_expenses (booking_id, expense_type, amount, note) VALUES (?, ?, ?, ?)');
-        $insert->execute([$bookingId, $type, $amount, $note]);
+        $insert = $pdo->prepare('INSERT INTO booking_expenses (booking_id, expense_type, expense_name, quantity, unit_price, amount, note) VALUES (?, ?, ?, ?, ?, ?, ?)');
+        foreach ($batch['rows'] as $row) {
+            $insert->execute([$bookingId, $row['type'], $row['name'], $row['quantity'], $row['unit_price'], $row['amount'], $row['note']]);
+        }
         $update = $pdo->prepare("UPDATE bookings SET grand_total = ?, remaining_balance = ?, is_paid = ?, updated_at = NOW()
             WHERE booking_id = ? AND operator_id = ? AND LOWER(is_complete) = 'uncomplete'");
         $update->execute([$newGrandTotal, $newRemaining, $newIsPaid, $bookingId, $operator_id]);
@@ -462,6 +463,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['boo
 }
 // --- END OF POST ACTION ---
 
+$notificationBookingId = max(0, (int)($_GET['notification_booking'] ?? 0));
+// Older notification URLs carried search/status filters. Open the full list instead.
+if ($notificationBookingId > 0) {
+    unset($_GET['q'], $_GET['status'], $_GET['range']);
+}
+$notificationBookingId = max(0, (int)($_GET['notification_booking'] ?? 0));
+if ($notificationBookingId > 0) {
+    unset($_GET['q'], $_GET['status'], $_GET['range']);
+}
 $statusFilter = strtolower(trim((string)($_GET['status'] ?? 'all')));
 $search = trim((string)($_GET['q'] ?? ''));
 $rangeFilter = strtolower(trim((string)($_GET['range'] ?? 'all')));
@@ -618,9 +628,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'creat
         $allowedPaymentMethods = ['', 'cash', 'gcash', 'bank_transfer'];
 
         $bookingDate = ItourValidationDate($bookingDate, 'Booking date');
-        if ($bookingDate < date('Y-m-d')) {
-            throw new RuntimeException('Select a valid tour date that is not in the past.');
-        }
+        tourBookingValidateAdvanceDate($bookingDate);
         if (!in_array($jumpOffPort, $allowedPorts, true)) {
             throw new RuntimeException('Select a valid jump-off port.');
         }
@@ -828,8 +836,11 @@ if ($statusFilter !== 'all') {
 }
 
 if ($search !== '') {
-    $where[] = "(COALESCE(t.full_name, '') LIKE :search OR COALESCE(b.booking_reference, '') LIKE :search OR CAST(b.booking_id AS CHAR) LIKE :search OR COALESCE(b.package_name, '') LIKE :search)";
-    $params[':search'] = '%' . $search . '%';
+    $where[] = "(COALESCE(t.full_name, '') LIKE :search_guest_name OR COALESCE(b.booking_reference, '') LIKE :search_reference OR CAST(b.booking_id AS CHAR) LIKE :search_booking_id OR COALESCE(b.package_name, '') LIKE :search_package)";
+    $params[':search_guest_name'] = '%' . $search . '%';
+    $params[':search_reference'] = '%' . $search . '%';
+    $params[':search_booking_id'] = '%' . $search . '%';
+    $params[':search_package'] = '%' . $search . '%';
 }
 if ($rangeFilter === 'yearly') {
     $where[] = 'YEAR(b.created_at) = :selected_year';
@@ -865,6 +876,37 @@ $whereSql
 $countStmt = $pdo->prepare($countSql);
 $countStmt->execute($params);
 $totalFilteredBookings = (int)$countStmt->fetchColumn();
+if ($notificationBookingId > 0) {
+    $orderBySql .= ', b.booking_id DESC';
+    $focusStmt = $pdo->prepare(str_replace('SELECT COUNT(*)', 'SELECT b.booking_id', $countSql) . " ORDER BY $orderBySql");
+    $focusStmt->execute($params);
+    $position = 0;
+    while (($focusId = $focusStmt->fetchColumn()) !== false) {
+        if ((int)$focusId === $notificationBookingId) {
+            // Include the target without hiding any preceding bookings.
+            $rowsPerPage = max($rowsPerPage, $position + 1);
+            break;
+        }
+        $position++;
+    }
+    $focusStmt->closeCursor();
+}
+if ($notificationBookingId > 0) {
+    $orderBySql .= ', b.booking_id DESC';
+    $focusStmt = $pdo->prepare(str_replace('SELECT COUNT(*)', 'SELECT b.booking_id', $countSql) . " ORDER BY $orderBySql");
+    $focusStmt->execute($params);
+    $position = 0;
+    while (($focusId = $focusStmt->fetchColumn()) !== false) {
+        if ((int)$focusId === $notificationBookingId) {
+            // This panel has a row limit rather than pagination. Keep every row
+            // before the target visible so highlighting never isolates a booking.
+            $rowsPerPage = max($rowsPerPage, $position + 1);
+            break;
+        }
+        $position++;
+    }
+    $focusStmt->closeCursor();
+}
 
 $sql = "
 SELECT
@@ -2107,10 +2149,10 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
             <div class="ho-checkin-fields two">
               <label>Tour date
-                <input type="date" name="booking_date" id="opWalkinBookingDate" min="<?= htmlspecialchars(date('Y-m-d')) ?>" value="<?= htmlspecialchars((string)($walkinForm['booking_date'] ?? '')) ?>" required />
+                <input type="date" name="booking_date" id="opWalkinBookingDate" min="<?= htmlspecialchars(tourBookingEarliestDate()) ?>" value="<?= htmlspecialchars((string)($walkinForm['booking_date'] ?? '')) ?>" required />
               </label>
               <label id="opWalkinEndDateField" hidden>Tour end date
-                <input type="date" name="booking_end_date" id="opWalkinBookingEndDate" min="<?= htmlspecialchars(date('Y-m-d', strtotime('+1 day'))) ?>" value="<?= htmlspecialchars((string)($walkinForm['booking_end_date'] ?? '')) ?>" />
+                <input type="date" name="booking_end_date" id="opWalkinBookingEndDate" min="<?= htmlspecialchars((new DateTimeImmutable(tourBookingEarliestDate()))->modify('+1 day')->format('Y-m-d')) ?>" value="<?= htmlspecialchars((string)($walkinForm['booking_end_date'] ?? '')) ?>" />
               </label>
               <label>Jump-off port
                 <select name="jump_off_port" required>
@@ -2385,13 +2427,16 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
         <input type="hidden" name="booking_id" id="opExpenseBookingId">
         <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($operatorBookingCsrf, ENT_QUOTES, 'UTF-8') ?>">
         <label>Add-on Type
-          <select name="expense_type" required><option value="additional_boat">Additional Boat</option><option value="additional_tourguide">Additional Tour Guide</option><option value="food">Food</option><option value="others">Other Add-on</option></select>
+          <select name="expense_type[]" required><option value="">Select</option><option value="additional_boat">Additional Boat</option><option value="additional_tourguide">Additional Tour Guide</option><option value="food">Food</option><option value="others">Other Add-on</option></select>
           <small>Select the category that best describes this additional charge.</small>
         </label>
-        <label>Amount
-          <span class="op-expense-money"><span>₱</span><input type="number" name="amount" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" required></span>
+        <label>Description<input type="text" name="expense_name[]" maxlength="160" placeholder="Enter item or service" required></label>
+        <label>Quantity<input type="number" name="quantity[]" min="1" max="1000" step="1" value="1" required></label>
+        <label>Unit Price
+          <span class="op-expense-money"><span>₱</span><input type="number" name="unit_price[]" min="0.01" max="10000000" step="0.01" inputmode="decimal" placeholder="0.00" required></span>
         </label>
-        <label>Note <small>Optional description shown in the billing breakdown.</small><textarea name="note" maxlength="255" placeholder="Add a short explanation for this add-on"></textarea></label>
+        <label>Note <small>Optional description shown in the billing breakdown.</small><textarea name="note[]" maxlength="500" placeholder="Add a short explanation for this add-on"></textarea></label>
+        <div class="staff-addon-total"><span>New charge total</span><strong data-staff-addon-total>&#8369;0.00</strong></div>
         <div class="op-modal-actions op-expense-footer"><button type="button" class="ho-btn" data-close-modal="opExpenseModal">Cancel</button><button type="submit" class="ho-btn confirm">Save Add-ons</button></div>
       </form>
     </div>
@@ -3616,6 +3661,7 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
       document.addEventListener('keydown', event => { if (event.key === 'Escape') closeBilling(); });
       billingAddExpense?.addEventListener('click', () => {
         if (!billingState.bookingId || !billingState.canAddExpense) return;
+        document.getElementById('opExpenseForm').reset();
         document.getElementById('opExpenseBookingId').value = String(billingState.bookingId);
         closeBilling();
         openModal(expenseModal);
@@ -3638,6 +3684,7 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
       document.querySelectorAll('[data-expense]').forEach(button => {
         button.addEventListener('click', () => {
+          document.getElementById('opExpenseForm').reset();
           document.getElementById('opExpenseBookingId').value = button.dataset.id || '';
           openModal(expenseModal);
         });
@@ -3909,5 +3956,9 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
   </script>
   <script src="js/operator_header.js?v=4"></script>
 <script src="js/booking-payment-summary.js?v=3"></script>
+<?php
+require_once __DIR__ . '/../php/staff_booking_addon_picker.php';
+StaffBookingAddonPicker($pdo, 'operator', $operator_id);
+?>
 </body>
 </html>

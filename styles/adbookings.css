@@ -4855,3 +4855,14 @@ body.cancellation-details-open{overflow:hidden}
 .crd-reason-section blockquote{margin:12px 0 0;padding:13px;border-left:3px solid #2b7a66;border-radius:0 10px 10px 0;background:#f3f8f6;color:#294a40;font-size:11px;line-height:1.55;overflow-wrap:anywhere}.crd-admin-note{margin-top:9px;padding:11px;border-radius:10px;background:#fff2f3}.crd-admin-note p{margin:5px 0 0;color:#873742;font-size:10px;line-height:1.5}
 .crd-verification-note{display:flex;align-items:flex-start;gap:8px;padding:12px 13px;border:1px solid #cfe4db;border-radius:11px;background:#edf7f3}.crd-verification-note strong{color:#176047;font-size:10px;white-space:nowrap}.crd-verification-note span{color:#60776f;font-size:9px;line-height:1.45}
 @media(max-width:520px){#cancellationDetailsDrawer .cancellation-details-drawer{width:100vw;border-radius:0}.crd-info-grid,.crd-status-row{grid-template-columns:1fr}.crd-info-item.wide{grid-column:auto}.crd-money-grid{grid-template-columns:1fr}.crd-hero{align-items:flex-start;flex-direction:column}}
+
+/* Stable booking header from first paint, before optional scripts finish. */
+.main-content > .admin-booking-header{flex-wrap:wrap !important}
+.main-content > .admin-booking-header > .admin-header-left{flex:1 1 280px;min-width:0}
+.main-content > .admin-booking-header > .admin-header-right{flex:0 1 auto;min-width:0;max-width:100%;margin-left:auto;align-items:center !important;align-content:center;gap:10px !important}
+.admin-booking-header .ad-global-filter-form{margin:0;max-width:100%;min-width:0}
+.admin-booking-header .ad-global-filter-form [hidden]{display:none !important}
+.admin-booking-header .btn-generate-report{flex:0 0 auto;white-space:nowrap}
+.admin-booking-header .ap-header-notif-wrap,.admin-booking-header .itour-inbox{flex:0 0 40px}
+.admin-booking-header .itour-inbox-bell{box-sizing:border-box;width:40px;height:40px}
+@media(max-width:980px){.main-content > .admin-booking-header > .admin-header-right{flex:1 1 100%;width:100%}}

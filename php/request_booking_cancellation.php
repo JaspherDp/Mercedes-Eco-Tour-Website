@@ -178,7 +178,8 @@ try {
             'Cancellation Requested',
             'Requested cancellation of ' . $reference . '.',
             'Bookings',
-            $bookingId
+            $bookingId,
+            $domain
         );
     } catch (Throwable $loggingError) {
         error_log('Cancellation request activity logging failed: ' . $loggingError->getMessage());

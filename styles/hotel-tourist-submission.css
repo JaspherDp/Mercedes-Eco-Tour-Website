@@ -1,0 +1,18 @@
+.ho-tourist-submission-button { white-space: nowrap; color: #176b55; border-color: #b8ddce; background: #eef8f2; }
+.ho-tourist-submission-empty { display: inline-block; padding: 7px 9px; border: 1px solid #f0d5dc; border-radius: 8px; background: #fff2f5; color: #a62644; font-size: 10px; font-weight: 700; }
+#hotelTouristPdfModal { z-index: 16000; padding: 16px; }
+#hotelTouristPdfModal .ho-tourist-pdf-card { display: flex; flex-direction: column; width: min(1100px, 100%); height: min(850px, calc(100dvh - 32px)); max-height: calc(100dvh - 32px); padding: 0; overflow: hidden; border-radius: 16px; }
+.ho-tourist-pdf-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 16px 20px; background: #f1f8f4; border-bottom: 1px solid #d8e6de; }
+.ho-tourist-pdf-header small { color: #176b55; font-size: 9px; font-weight: 800; letter-spacing: .1em; }
+.ho-tourist-pdf-header h3 { margin: 4px 0; color: #163f32; font-size: 19px; }
+.ho-tourist-pdf-header p { margin: 0; color: #61796e; font-size: 12px; }
+.ho-tourist-pdf-actions { display: flex; flex-shrink: 0; gap: 8px; }
+#hotelTouristPdfFrame { width: 100%; flex: 1; min-height: 0; border: 0; background: #e9eeeb; }
+@media (max-width: 600px) { .ho-tourist-pdf-header { padding: 12px; gap: 8px; } .ho-tourist-pdf-actions .ho-btn { padding: 8px; font-size: 10px; } }
+
+#hotelTouristPdfDownload { display: inline-flex; align-items: center; justify-content: center; gap: 9px; min-height: 42px; box-sizing: border-box; padding: 10px 16px; border: 1px solid #176b55; border-radius: 9px; background: #176b55; color: #fff; font-size: 12px; font-weight: 750; line-height: 1.2; text-decoration: none; white-space: nowrap; box-shadow: 0 3px 8px rgba(23,107,85,.14); transition: background .15s, box-shadow .15s; }
+#hotelTouristPdfDownload:hover { background: #105640; border-color: #105640; box-shadow: 0 4px 12px rgba(23,107,85,.22); }
+#hotelTouristPdfDownload:focus-visible { outline: 3px solid #8bc4ae; outline-offset: 3px; }
+#hotelTouristPdfDownload svg { flex-shrink: 0; }
+#hotelTouristPdfModal [data-close-hotel-tourists] { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px; padding: 0; border-radius: 9px; font-size: 22px; line-height: 1; }
+@media (max-width: 600px) { #hotelTouristPdfDownload { gap: 6px; padding: 10px 12px; font-size: 11px; } }

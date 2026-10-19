@@ -246,9 +246,26 @@ function initHeader() {
       window.matchMedia("(max-width: 980px)").addEventListener("change", () => setOpen(false));
     }
   const attachListeners = () => {
+    const inboxSource = document.querySelector('[data-inbox-config]');
+    if (inboxSource) {
+      try {
+        const config = JSON.parse(inboxSource.dataset.inboxConfig);
+        window.ItourNotificationConfig = config;
+        if (window.ItourNotificationInbox) window.ItourNotificationInbox.mount();
+        else if (!document.querySelector('script[data-inbox-loader]')) {
+          const script = document.createElement('script');
+          script.src = `${config.base}js/notification-inbox.js?v=5`;
+          script.dataset.inboxLoader = '1';
+          script.onload = () => window.ItourNotificationInbox?.mount();
+          script.onerror = () => script.remove();
+          document.body.appendChild(script);
+        }
+      } catch (_error) { /* Keep the existing header usable. */ }
+    }
     // Profile dropdown
     const profileBtn = document.getElementById("profileBtn");
     const profileDropdown = document.getElementById("profileDropdown");
+    // Keep the existing bell usable until the new inbox replaces its element.
     const notifBtn = document.getElementById("headNavNotifBtn");
     const notifPanel = document.getElementById("headNavNotifPanel");
     const notifBadge = document.getElementById("headNavNotifBadge");

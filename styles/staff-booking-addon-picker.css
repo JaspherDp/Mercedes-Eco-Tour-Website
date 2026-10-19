@@ -1,0 +1,21 @@
+.staff-saved-addons { padding: 14px; margin: 0 0 16px; border: 1px solid #d5e7df; border-radius: 10px; background: #f5faf7; }
+.staff-saved-addons h4 { margin: 0 0 5px; color: #163f32; font-size: 13px; }
+.staff-saved-addons > p { margin: 0 0 12px; color: #607c70; font-size: 11px; line-height: 1.5; }
+.staff-saved-addon { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; margin-top: 7px; background: #fff; border: 1px solid #dce8e1; border-radius: 8px; }
+.staff-saved-addon.is-selected { border-color: #6aa58d; background: #ebf6ef; }
+.staff-saved-addon-label { display: flex; align-items: center; flex: 1; gap: 10px; min-width: 0; cursor: pointer; }
+.staff-saved-addon-label strong { display: block; color: #234c3c; font-size: 12px; overflow-wrap: anywhere; }
+.staff-saved-addon-label small { display: block; color: #607c70; font-size: 10px; margin-top: 3px; }
+.staff-saved-addons .staff-saved-addon-label > input { flex: none; width: 16px; height: 16px; min-height: 0; margin: 0; padding: 0; accent-color: #1b7558; }
+.staff-saved-addon-qty { display: flex; align-items: center; flex: none; gap: 6px; color: #456556; font-size: 10px; }
+.staff-saved-addons .staff-saved-addon-qty input { box-sizing: border-box; width: 65px; min-height: 34px; padding: 6px; border: 1px solid #c8ddd3; border-radius: 6px; font: inherit; background: #fff; }
+.staff-saved-addons input:focus-visible { outline: 2px solid #237b61; outline-offset: 2px; }
+.staff-saved-addon-subtotal { display: flex; justify-content: space-between; gap: 12px; margin-top: 12px; color: #254f40; font-size: 11px; }
+.op-expense-card { display: flex; flex-direction: column; max-height: calc(100dvh - 32px); }
+.op-expense-header { flex-shrink: 0; }
+.op-expense-form { overflow-y: auto; min-height: 0; }
+#opExpenseForm .staff-saved-addon-label { flex-direction: row; }
+#opExpenseForm .staff-saved-addon-qty { flex-direction: row; }
+#opExpenseForm .staff-saved-addon-label > input { width: 16px; height: 16px; padding: 0; }
+#opExpenseForm .staff-saved-addon-qty input { width: 65px; padding: 6px; }
+.staff-addon-total { display: flex; justify-content: space-between; gap: 12px; padding: 12px; border-radius: 8px; background: #e4f2ec; color: #16513c; font-size: 12px; font-weight: 750; }

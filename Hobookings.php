@@ -4,6 +4,8 @@ require_once __DIR__ . '/php/activity_logger.php';
 require_once __DIR__ . '/php/booking_reference_helper.php';
 require_once __DIR__ . '/php/firebase_config.php';
 require_once __DIR__ . '/php/input_validation.php';
+require_once __DIR__ . '/php/hotel_booking_tourists_helper.php';
+require_once __DIR__ . '/php/staff_booking_addon_picker.php';
 require_once __DIR__ . '/payments/PayMongoService.php';
 require_once __DIR__ . '/payments/PaymentReconciler.php';
 
@@ -17,6 +19,7 @@ use PHPMailer\PHPMailer\Exception;
 
 $hoAdmin = HoRequireHotelAdmin($pdo);
 $hoHotelResortId = (int)$hoAdmin['hotel_resort_id'];
+hotelBookingTouristsEnsureSchema($pdo);
 $hoPropertyName = trim((string)($hoAdmin['property_name'] ?? ''));
 
 $hoActive = 'bookings';
@@ -914,14 +917,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_expense'])) {
     }
 
     // ✅ arrays (multiple rows support)
-    $expenseTypes = $_POST['expense_type'] ?? [];
-    $expenseNames = $_POST['expense_name'] ?? [];
-    $quantities   = $_POST['quantity'] ?? [];
-    $unitPrices   = $_POST['unit_price'] ?? [];
-    $notesArr     = $_POST['notes'] ?? [];
-
+    $expenseNames = [];
     $validatedExpenses = [];
     try {
+        $expenseInput = StaffBookingAddonInput($pdo, 'hotel_admin', (int)$hoAdmin['hotel_admin_id'], $hoHotelResortId, $_POST);
+        $expenseTypes = $expenseInput['expense_type'] ?? [];
+        $expenseNames = $expenseInput['expense_name'] ?? [];
+        $quantities = $expenseInput['quantity'] ?? [];
+        $unitPrices = $expenseInput['unit_price'] ?? [];
+        $notesArr = $expenseInput['notes'] ?? [];
         $lists = [$expenseTypes, $expenseNames, $quantities, $unitPrices, $notesArr];
         foreach ($lists as $list) {
             if (!is_array($list)) throw new InvalidArgumentException('Expense fields must be submitted as lists.');
@@ -1166,6 +1170,11 @@ $walkinSavedChildAges = is_array($walkinForm['walkin_child_ages'] ?? null)
     ? array_map('intval', array_values($walkinForm['walkin_child_ages']))
     : [];
 
+$notificationBookingId = max(0, (int)($_GET['notification_booking'] ?? 0));
+// Older notification URLs carried search/status filters. Open the full list instead.
+if ($notificationBookingId > 0) {
+    unset($_GET['q'], $_GET['status'], $_GET['range'], $_GET['page']);
+}
 $statusFilter = strtolower(trim((string)($_GET['status'] ?? 'all')));
 $search = trim((string)($_GET['q'] ?? ''));
 $rangeFilter = strtolower(trim((string)($_GET['range'] ?? 'all')));
@@ -1179,6 +1188,7 @@ if ($rowsPerPage < 1) {
 if ($rowsPerPage > 300) {
     $rowsPerPage = 300;
 }
+if ($statusFilter === 'accepted') $statusFilter = 'confirmed';
 $validStatus = ['all', 'pending', 'confirmed', 'completed', 'cancelled', 'no-show'];
 if (!in_array($statusFilter, $validStatus, true)) {
     $statusFilter = 'all';
@@ -1306,9 +1316,11 @@ if ($rangeFilter === 'yearly') {
     $params[':selected_year'] = $selectedYear;
 }
 if ($search !== '') {
-    $where[] = "(b.first_name LIKE :search_name OR b.last_name LIKE :search_name OR b.booking_reference LIKE :search_id OR b.hotel_booking_id LIKE :search_id)";
-    $params[':search_name'] = '%' . $search . '%';
-    $params[':search_id'] = '%' . $search . '%';
+    $where[] = "(b.first_name LIKE :search_first_name OR b.last_name LIKE :search_last_name OR b.booking_reference LIKE :search_reference OR b.hotel_booking_id LIKE :search_booking_id)";
+    $params[':search_first_name'] = '%' . $search . '%';
+    $params[':search_last_name'] = '%' . $search . '%';
+    $params[':search_reference'] = '%' . $search . '%';
+    $params[':search_booking_id'] = '%' . $search . '%';
 }
 
 $statsWhere = ['b.hotel_resort_id = :stats_hotel_resort_id'];
@@ -1326,9 +1338,11 @@ if ($rangeFilter === 'yearly') {
     $statsParams[':stats_selected_year'] = $selectedYear;
 }
 if ($search !== '') {
-    $statsWhere[] = "(b.first_name LIKE :stats_search_name OR b.last_name LIKE :stats_search_name OR b.booking_reference LIKE :stats_search_id OR b.hotel_booking_id LIKE :stats_search_id)";
-    $statsParams[':stats_search_name'] = '%' . $search . '%';
-    $statsParams[':stats_search_id'] = '%' . $search . '%';
+    $statsWhere[] = "(b.first_name LIKE :stats_search_first_name OR b.last_name LIKE :stats_search_last_name OR b.booking_reference LIKE :stats_search_reference OR b.hotel_booking_id LIKE :stats_search_booking_id)";
+    $statsParams[':stats_search_first_name'] = '%' . $search . '%';
+    $statsParams[':stats_search_last_name'] = '%' . $search . '%';
+    $statsParams[':stats_search_reference'] = '%' . $search . '%';
+    $statsParams[':stats_search_booking_id'] = '%' . $search . '%';
 }
 $statsWhereSql = $statsWhere ? ('WHERE ' . implode(' AND ', $statsWhere)) : '';
 $statsSql = "
@@ -1362,6 +1376,20 @@ $whereSql
 $countStmt = $pdo->prepare($countSql);
 $countStmt->execute($params);
 $totalFilteredBookings = (int)$countStmt->fetchColumn();
+if ($notificationBookingId > 0) {
+    $orderBySql .= ', b.hotel_booking_id DESC';
+    $focusStmt = $pdo->prepare(str_replace('SELECT COUNT(*)', 'SELECT b.hotel_booking_id', $countSql) . " ORDER BY $orderBySql");
+    $focusStmt->execute($params);
+    $position = 0;
+    while (($focusId = $focusStmt->fetchColumn()) !== false) {
+        if ((int)$focusId === $notificationBookingId) {
+            $currentPage = intdiv($position, $rowsPerPage) + 1;
+            break;
+        }
+        $position++;
+    }
+    $focusStmt->closeCursor();
+}
 $totalPages = max(1, (int)ceil($totalFilteredBookings / $rowsPerPage));
 $currentPage = min($currentPage, $totalPages);
 $offset = ($currentPage - 1) * $rowsPerPage;
@@ -1385,6 +1413,7 @@ SELECT
   CONCAT(b.first_name, ' ', b.last_name) AS guest_name,
   (b.adults + b.children) AS guest_count,
   h.name AS hotel_name,
+  (SELECT COUNT(*) FROM hotel_booking_tourists ht WHERE ht.booking_id = b.hotel_booking_id AND TRIM(ht.full_name) <> '') AS tourist_submission_count,
   t.profile_picture AS tourist_profile_picture,
   t.google_id AS tourist_google_id,
   t.address AS tourist_address,
@@ -1403,7 +1432,7 @@ $limitSql
 ";
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
-$bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$bookings = array_map('HotelBookingApplyStatus', $stmt->fetchAll(PDO::FETCH_ASSOC));
 
 $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
 ?>
@@ -1475,6 +1504,12 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
   .ho-balance-payment-footer .ho-billing-btn{min-height:42px;padding:10px 16px;font-size:12px}
   .swal2-container{z-index:100600!important}
   @media(max-width:560px){.ho-balance-payment-body{padding:20px}.ho-qr-device{grid-template-columns:42px 1fr}.ho-qr-device button{grid-column:1/-1}.ho-balance-payment-footer{flex-wrap:wrap;padding:15px 20px}.ho-balance-payment-footer .ho-billing-btn{flex:1 1 auto}.ho-phone-steps{gap:14px}.ho-phone-setup-link input{font-size:10px}.ho-phone-overview-card{grid-template-columns:46px 1fr}.ho-phone-overview-change{grid-column:1/-1;width:100%}}
+  .ho-bookings-table .ho-status-stack > .ho-status {
+    padding: 4px 8px;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: .025em;
+  }
   .ho-status-stack{
   display:flex;
   flex-direction:column;
@@ -1608,7 +1643,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
           </article>
           <article class="ho-booking-summary-card confirmed">
             <div class="ho-booking-summary-copy">
-              <span>Total Confirmed</span>
+              <span>Total Accepted</span>
               <strong><?= (int)$summaryConfirmedBookings ?></strong>
             </div>
             <div class="ho-booking-summary-icon" aria-hidden="true">
@@ -1642,7 +1677,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
               <div class="ho-booking-tabs" role="tablist" aria-label="Booking status quick tabs">
                 <a href="Hobookings.php?<?= htmlspecialchars(http_build_query(['status' => 'all', 'q' => $search, 'range' => $rangeFilter, 'year' => $selectedYear, 'month' => $selectedMonth, 'date' => $selectedDate, 'sort' => $sortBy, 'rows' => $rowsPerPage])) ?>" class="<?= $statusFilter === 'all' ? 'active' : '' ?>">All</a>
                 <a href="Hobookings.php?<?= htmlspecialchars(http_build_query(['status' => 'pending', 'q' => $search, 'range' => $rangeFilter, 'year' => $selectedYear, 'month' => $selectedMonth, 'date' => $selectedDate, 'sort' => $sortBy, 'rows' => $rowsPerPage])) ?>" class="<?= $statusFilter === 'pending' ? 'active' : '' ?>">Pending</a>
-                <a href="Hobookings.php?<?= htmlspecialchars(http_build_query(['status' => 'confirmed', 'q' => $search, 'range' => $rangeFilter, 'year' => $selectedYear, 'month' => $selectedMonth, 'date' => $selectedDate, 'sort' => $sortBy, 'rows' => $rowsPerPage])) ?>" class="<?= $statusFilter === 'confirmed' ? 'active' : '' ?>">Confirmed</a>
+                <a href="Hobookings.php?<?= htmlspecialchars(http_build_query(['status' => 'confirmed', 'q' => $search, 'range' => $rangeFilter, 'year' => $selectedYear, 'month' => $selectedMonth, 'date' => $selectedDate, 'sort' => $sortBy, 'rows' => $rowsPerPage])) ?>" class="<?= $statusFilter === 'confirmed' ? 'active' : '' ?>">Accepted</a>
                 <a href="Hobookings.php?<?= htmlspecialchars(http_build_query(['status' => 'completed', 'q' => $search, 'range' => $rangeFilter, 'year' => $selectedYear, 'month' => $selectedMonth, 'date' => $selectedDate, 'sort' => $sortBy, 'rows' => $rowsPerPage])) ?>" class="<?= $statusFilter === 'completed' ? 'active' : '' ?>">Completed</a>
                 <a href="Hobookings.php?<?= htmlspecialchars(http_build_query(['status' => 'cancelled', 'q' => $search, 'range' => $rangeFilter, 'year' => $selectedYear, 'month' => $selectedMonth, 'date' => $selectedDate, 'sort' => $sortBy, 'rows' => $rowsPerPage])) ?>" class="<?= $statusFilter === 'cancelled' ? 'active' : '' ?>">Cancelled</a>
                 <a href="Hobookings.php?<?= htmlspecialchars(http_build_query(['status' => 'no-show', 'q' => $search, 'range' => $rangeFilter, 'year' => $selectedYear, 'month' => $selectedMonth, 'date' => $selectedDate, 'sort' => $sortBy, 'rows' => $rowsPerPage])) ?>" class="<?= $statusFilter === 'no-show' ? 'active' : '' ?>">No-show</a>
@@ -1677,7 +1712,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
             <select name="status">
               <option value="all" <?= $statusFilter === 'all' ? 'selected' : '' ?>>All Statuses</option>
               <option value="pending" <?= $statusFilter === 'pending' ? 'selected' : '' ?>>Pending</option>
-              <option value="confirmed" <?= $statusFilter === 'confirmed' ? 'selected' : '' ?>>Confirmed</option>
+              <option value="confirmed" <?= $statusFilter === 'confirmed' ? 'selected' : '' ?>>Accepted</option>
               <option value="completed" <?= $statusFilter === 'completed' ? 'selected' : '' ?>>Completed</option>
               <option value="cancelled" <?= $statusFilter === 'cancelled' ? 'selected' : '' ?>>Cancelled</option>
               <option value="no-show" <?= $statusFilter === 'no-show' ? 'selected' : '' ?>>No-show</option>
@@ -1702,6 +1737,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
                     <th>No. of Guests</th>
                     <th>Status</th>
                     <th>Payment</th>
+                    <?php if ($statusFilter === 'confirmed'): ?><th>Tourists</th><?php endif; ?>
                     <th>Actions</th>
                   </tr>
                 </thead>
@@ -1809,7 +1845,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
                         <div class="ho-status-stack">
 
                           <span class="ho-status <?= htmlspecialchars($status) ?>">
-                            <?= ucfirst($status) ?>
+                            <?= htmlspecialchars(HotelBookingStatusLabel($status)) ?>
                           </span>
 
                           <?php if (!empty($row['checked_in_at']) && empty($row['checked_out_at'])): ?>
@@ -1847,6 +1883,15 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
                         <?php endif; ?>
 
                         </td>
+                        <?php if ($statusFilter === 'confirmed'): ?>
+                        <td class="ho-cell-center">
+                          <?php if ((int)$row['tourist_submission_count'] > 0): ?>
+                            <button type="button" class="ho-btn ho-tourist-submission-button" data-hotel-tourists="<?= (int)$row['hotel_booking_id'] ?>" data-booking-reference="<?= htmlspecialchars($publicBookingReference, ENT_QUOTES, 'UTF-8') ?>">View Tourists</button>
+                          <?php else: ?>
+                            <span class="ho-tourist-submission-empty">No submission yet</span>
+                          <?php endif; ?>
+                        </td>
+                        <?php endif; ?>
                         <td>
                         <div class="ho-row-actions" data-row-actions>
                           <button type="button" class="ho-btn ho-row-actions-trigger" data-row-actions-trigger aria-haspopup="menu" aria-expanded="false">Actions</button>
@@ -3751,7 +3796,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
           grid.innerHTML = `
             <div class="ho-bd-drawer-hero">
               <div class="ho-bd-reference"><span>BOOKING ID</span><strong>${escapeProfileText(data.id)}</strong></div>
-              <span class="ho-bd-status-pill ho-bd-status-${statusClass}">${escapeProfileText(status)}</span>
+              <span class="ho-bd-status-pill ho-bd-status-${statusClass}">${escapeProfileText(String(status).toLowerCase() === 'confirmed' ? 'ACCEPTED' : String(status).toUpperCase())}</span>
             </div>
 
             <section class="ho-bd-drawer-section ho-bd-guest-card">
@@ -4190,7 +4235,7 @@ document.addEventListener('click', (e) => {
 });
 
 function updateHotelExpenseTotals() {
-  let grandTotal = 0;
+  let grandTotal = window.StaffBookingAddons?.total(expenseRows.closest('form')) || 0;
   expenseRows.querySelectorAll('.ho-expense-row').forEach((row, index) => {
     const quantity = Math.max(0, Number(row.querySelector('[name="quantity[]"]')?.value || 0));
     const price = Math.max(0, Number(row.querySelector('[name="unit_price[]"]')?.value || 0));
@@ -4439,6 +4484,21 @@ updateHotelExpenseTotals();
     })();
   </script>
 <script src="js/booking-payment-summary.js?v=3"></script>
+<?php
+require_once __DIR__ . '/php/staff_booking_addon_picker.php';
+StaffBookingAddonPicker($pdo, 'hotel_admin', (int)$hoAdmin['hotel_admin_id'], $hoHotelResortId);
+?>
+<link rel="stylesheet" href="styles/hotel-tourist-submission.css?v=<?= filemtime(__DIR__ . '/styles/hotel-tourist-submission.css') ?>">
+<div class="ho-modal" id="hotelTouristPdfModal" aria-hidden="true" inert>
+  <section class="ho-modal-card ho-tourist-pdf-card" role="dialog" aria-modal="true" aria-labelledby="hotelTouristPdfTitle">
+    <header class="ho-tourist-pdf-header">
+      <div><small>iTOUR MERCEDES</small><h3 id="hotelTouristPdfTitle">Tourist list</h3><p id="hotelTouristPdfReference"></p></div>
+      <div class="ho-tourist-pdf-actions"><a class="ho-btn" id="hotelTouristPdfDownload" href="#" target="_blank" rel="noopener"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M5 16v4h14v-4"/></svg><span>Download PDF</span></a><button type="button" class="ho-btn" data-close-hotel-tourists aria-label="Close tourist list">&times;</button></div>
+    </header>
+    <iframe id="hotelTouristPdfFrame" title="iTour Mercedes submitted tourist list"></iframe>
+  </section>
+</div>
+<script src="js/hotel-tourist-submission.js?v=<?= filemtime(__DIR__ . '/js/hotel-tourist-submission.js') ?>"></script>
 </body>
 </html>
 

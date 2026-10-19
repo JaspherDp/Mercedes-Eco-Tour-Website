@@ -26,6 +26,7 @@ vendor/
 *.sql
 !*_migration.sql
 !payments/*_migration.sql
+!HOSTINGER_NOTIFICATION_DATABASE_UPDATE.sql
 *.dump
 *.bak
 *.backup

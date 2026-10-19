@@ -7099,3 +7099,38 @@ body.hotel-map-open {
     opacity: 0;
   }
 }
+
+/* A completed hotel search keeps its update action at every screen size. */
+#searchSection.search-fixed[data-search-tab="hotels"] .search-btn-default-label { display: none; }
+#searchSection.search-fixed[data-search-tab="hotels"] .search-btn-update-label { display: inline; }
+@media (min-width: 769px) {
+  #searchSection.search-fixed[data-search-tab="hotels"] .search-container {
+    grid-template-columns: minmax(0, .82fr) minmax(0, 1.05fr) minmax(0, 1.1fr) 190px;
+    align-items: start;
+  }
+  #searchSection.search-fixed[data-search-tab="hotels"] .search-box {
+    gap: 6px;
+  }
+  #searchSection.search-fixed[data-search-tab="hotels"] .search-box > label,
+  #searchSection.search-fixed[data-search-tab="hotels"] .date-field-heading {
+    height: 20px; min-height: 20px; margin: 0; line-height: 20px;
+  }
+  #searchSection.search-fixed[data-search-tab="hotels"] .date-field-heading > label {
+    margin: 0; line-height: 20px;
+  }
+  #searchSection.search-fixed[data-search-tab="hotels"] .search-box input,
+  #searchSection.search-fixed[data-search-tab="hotels"] .search-box select,
+  #searchSection.search-fixed[data-search-tab="hotels"] .guest-display {
+    height: 48px; box-sizing: border-box;
+  }
+  #searchSection.search-fixed[data-search-tab="hotels"] .search-submit-wrap {
+    padding-top: 26px; align-self: start;
+  }
+  #searchSection.search-fixed[data-search-tab="hotels"] .search-submit-wrap .search-btn {
+    width: 100%; height: 48px; min-height: 48px; margin: 0; padding: 0 22px;
+    gap: 9px; box-sizing: border-box; white-space: nowrap;
+  }
+  #searchSection.search-fixed[data-search-tab="hotels"] .search-submit-wrap .search-btn svg {
+    flex-shrink: 0;
+  }
+}

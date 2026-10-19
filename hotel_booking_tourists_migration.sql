@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS hotel_booking_tourists (
+ id INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+ booking_id INT NOT NULL,
+ full_name VARCHAR(180) NOT NULL,
+ gender VARCHAR(10) NOT NULL,
+ age TINYINT UNSIGNED NULL,
+ address VARCHAR(500) NULL,
+ country VARCHAR(100) NULL,
+ region VARCHAR(120) NULL,
+ province VARCHAR(120) NULL,
+ city VARCHAR(120) NULL,
+ barangay VARCHAR(120) NULL,
+ postal_code VARCHAR(20) NULL,
+ street VARCHAR(180) NULL,
+ residence VARCHAR(20) NULL,
+ phone_number VARCHAR(50) NULL,
+ boat_number SMALLINT UNSIGNED NULL,
+ created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ INDEX idx_hotel_tourist_booking (booking_id),
+ CONSTRAINT fk_hotel_tourists_booking FOREIGN KEY (booking_id) REFERENCES hotel_room_bookings(hotel_booking_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

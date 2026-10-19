@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/hotel_booking_status.php';
 function HoRoomsTableExists(PDO $pdo, string $tableName): bool
 {
     $stmt = $pdo->prepare("

@@ -572,6 +572,8 @@ document.querySelectorAll('.add-tourist-btn-user, .edit-tourist-btn-user').forEa
       btn.closest('.row-actions')?.querySelector('.action-toggle-btn')?.setAttribute('aria-expanded', 'false');
     }
     const bookingId = btn.dataset.bookingId;
+    const bookingDomain = btn.dataset.bookingDomain || 'tour';
+    document.getElementById('touristBookingDomain').value = bookingDomain;
     maxPax = parseInt(btn.dataset.pax || 0);
     touristBookingIsBoat = btn.dataset.bookingType === 'boat';
     touristBookingHasMultipleBoats = touristBookingIsBoat && maxPax > 8;
@@ -585,6 +587,7 @@ document.querySelectorAll('.add-tourist-btn-user, .edit-tourist-btn-user').forEa
     const formData = new FormData();
     formData.append('fetch_tourists', '1');
     formData.append('booking_id', bookingId);
+    formData.append('booking_domain', bookingDomain);
 
     try {
       const res = await touristManifestFetch(touristManifestEndpoint, {
@@ -593,9 +596,9 @@ document.querySelectorAll('.add-tourist-btn-user, .edit-tourist-btn-user').forEa
       });
 
       const data = await res.json();
-      if (bookingIdInput.value !== bookingId) return;
+      if (bookingIdInput.value !== bookingId || document.getElementById('touristBookingDomain').value !== bookingDomain) return;
       if (!res.ok || !data.success) throw new Error(data.message || 'Tourist details could not be loaded.');
-      if (touristManifestConfig.adminWalkin) {
+      if (touristManifestConfig.adminWalkin || bookingDomain === 'hotel') {
         maxPax = Number(data.pax);
         touristBookingIsBoat = data.booking_type === 'boat';
         touristBookingHasMultipleBoats = touristBookingIsBoat && maxPax > 8;
@@ -638,7 +641,7 @@ const touristSubmissionId = new URLSearchParams(window.location.search).get('sub
 function openRequestedTouristSubmission() {
   if (!touristSubmissionId || !/^[1-9]\d*$/.test(touristSubmissionId)) return;
   const submissionButton = Array.from(document.querySelectorAll('.add-tourist-btn-user, .edit-tourist-btn-user'))
-    .find(button => button.dataset.bookingId === touristSubmissionId);
+    .find(button => button.dataset.bookingId === touristSubmissionId && (button.dataset.bookingDomain || 'tour') === (new URLSearchParams(window.location.search).get('submit_domain') || 'tour'));
   const bookingRow = document.getElementById('booking-' + touristSubmissionId);
   bookingRow?.scrollIntoView({block: 'center'});
   if (submissionButton) submissionButton.click();
@@ -727,6 +730,7 @@ document.getElementById('touristFormUser').addEventListener('submit', function(e
   const formData = new FormData(this);
   const submitBtn = this.querySelector('button[type="submit"]');
   const submittedBookingId = bookingIdInput.value;
+  const submittedBookingDomain = document.getElementById('touristBookingDomain').value;
   submitBtn.disabled = true;
   submitBtn.textContent = touristManifestEditing ? 'Saving Changes...' : 'Submitting...';
 
@@ -748,7 +752,7 @@ document.getElementById('touristFormUser').addEventListener('submit', function(e
           allowOutsideClick: false
         });
         if (result.isConfirmed && !touristManifestConfig.adminWalkin) {
-          openTouristProfilePdf(submittedBookingId, true);
+          openTouristProfilePdf(submittedBookingId, true, submittedBookingDomain);
         } else {
           location.reload(); // reloads, active tab will be restored
         }

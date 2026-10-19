@@ -1,5 +1,7 @@
 <?php
 $hoTitle = $hoTitle ?? 'Hotel Owner Panel';
+require_once __DIR__ . '/php/notification_component.php';
+NotificationRender($pdo, 'hotel_admin');
 $hoOwnerName = $hoOwnerName ?? 'Hotel Owner';
 $hoPendingBadge = isset($hoPendingBadge) ? (int)$hoPendingBadge : 0;
 $hoUnreadBadge = isset($hoUnreadBadge) ? (int)$hoUnreadBadge : 0;
