@@ -565,7 +565,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'retry
         $statement->execute([$requestId]);
         $request = $statement->fetch(PDO::FETCH_ASSOC);
         if (!$request) throw new RuntimeException('Provider cancellation record not found.');
-        if (($request['tourist_decision'] ?? '') === 'booking_rejected') $request = array_merge($request, BookingRejectionRecipient($pdo, $request));
+        if (in_array($request['tourist_decision'] ?? '', ['booking_rejected','hotel_booking_cancelled'], true)) $request = array_merge($request, BookingRejectionRecipient($pdo, $request));
         $status = strtolower((string)$request['request_status']);
         if (!in_array($status, ['decision_required', 'approved', 'rescheduled'], true)) {
             throw new RuntimeException('This notification is not available for the current cancellation status.');
@@ -1940,12 +1940,14 @@ function getGoogleAvatarById($googleId) {
     return '';
 }
 
-function outputBookingTouristProfileImage(PDO $pdo, int $bookingId): never {
+function outputBookingTouristProfileImage(PDO $pdo, int $bookingId, string $domain = 'tour'): never {
+    $table = $domain === 'hotel' ? 'hotel_room_bookings' : 'bookings';
+    $key = $domain === 'hotel' ? 'hotel_booking_id' : 'booking_id';
     $statement = $pdo->prepare("
         SELECT t.profile_picture
-        FROM bookings b
+        FROM $table b
         INNER JOIN tourist t ON t.tourist_id = b.tourist_id
-        WHERE b.booking_id = ?
+        WHERE b.$key = ?
         LIMIT 1
     ");
     $statement->execute([$bookingId]);
@@ -2082,11 +2084,12 @@ try {
 
 if (isset($_GET['action']) && $_GET['action'] === 'fetchTouristProfileImage') {
     $bookingId = (int)($_GET['id'] ?? 0);
-    if ($bookingId <= 0) {
+    $imageDomain = (string)($_GET['domain'] ?? 'tour');
+    if ($bookingId <= 0 || !in_array($imageDomain, ['tour','hotel'], true)) {
         http_response_code(404);
         exit;
     }
-    outputBookingTouristProfileImage($pdo, $bookingId);
+    outputBookingTouristProfileImage($pdo, $bookingId, $imageDomain);
 }
 
 if (isset($_GET['action']) && $_GET['action'] === 'fetchBookingDetails') {

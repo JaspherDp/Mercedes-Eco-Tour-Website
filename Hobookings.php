@@ -765,7 +765,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['boo
                 // EMAIL SUBJECT
                 // =========================
                 $mail->isHTML(true);
-                $mail->Subject = "iTour Mercedes | Hotel / Resort Reservation Confirmed ($bookingReference)";
+                $mail->Subject = "iTour Mercedes | Hotel / Resort Reservation Accepted ($bookingReference)";
 
                 // =========================
                 // EMAIL BODY (PROFESSIONAL DESIGN)
@@ -842,7 +842,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['boo
                     'guest_name' => $guestName,
                     'service_label' => 'Hotel / Resort Reservation',
                     'booking_reference' => $bookingReference,
-                    'intro' => 'Your accommodation reservation has been reviewed and confirmed by the property through iTour Mercedes.',
+                    'intro' => 'Your accommodation reservation has been reviewed and accepted by the property through iTour Mercedes.',
                     'details' => [
                         'Property' => (string)($b['hotel_name'] ?? $hoPropertyName),
                         'Room type' => (string)($b['room_type'] ?? ''),
@@ -865,7 +865,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['boo
                     ],
                     'important_note' => 'Please bring a valid ID and this confirmation when checking in. Contact the property ahead of arrival for special requests, exact check-in instructions, or schedule changes.',
                 ], BookingConfirmationEmailBranding($mail)));
-                $mail->AltBody = "Your iTour Mercedes hotel/resort reservation $bookingReference has been confirmed. Check-in: "
+                $mail->AltBody = "Your iTour Mercedes hotel/resort reservation $bookingReference has been accepted. Check-in: "
                     . BookingConfirmationEmailDate($b['checkin_date'] ?? '') . '; Check-out: '
                     . BookingConfirmationEmailDate($b['checkout_date'] ?? '') . '.';
 
@@ -907,9 +907,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['boo
     if ($isAjaxBookingAction) {
         $bookingConfirmed = $actionNotice === 'booking-confirmed';
         $responseMessages = [
-            'sent' => 'The booking was confirmed and the confirmation email was sent successfully.',
-            'failed' => 'The booking was confirmed, but the confirmation email could not be sent.',
-            'no_email' => 'The booking was confirmed, but no guest email address was provided.',
+            'sent' => 'The booking was accepted and the confirmation email was sent successfully.',
+            'failed' => 'The booking was accepted, but the confirmation email could not be sent.',
+            'no_email' => 'The booking was accepted, but no guest email address was provided.',
         ];
 
         while (ob_get_level() > $ajaxResponseBufferLevel) {
@@ -922,10 +922,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['boo
             'booking_confirmed' => $bookingConfirmed,
             'email_status' => $emailStatus,
             'message' => $bookingConfirmed
-                ? ($responseMessages[$emailStatus] ?? 'The booking was confirmed.')
+                ? ($responseMessages[$emailStatus] ?? 'The booking was accepted.')
                 : ($actionNotice === 'booking-not-updated'
-                    ? 'No booking record was updated. It may already be confirmed.'
-                    : 'The booking could not be confirmed.'),
+                    ? 'No booking record was updated. It may already be accepted.'
+                    : 'The booking could not be accepted.'),
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         exit;
     }
@@ -1138,16 +1138,16 @@ switch ($actionNotice) {
     case 'booking-confirmed':
         $redirectEmailStatus = strtolower(trim((string)($_GET['email_status'] ?? '')));
         if ($redirectEmailStatus === 'sent') {
-            $actionNoticeText = 'The booking was confirmed and the confirmation email was sent successfully.';
+            $actionNoticeText = 'The booking was accepted and the confirmation email was sent successfully.';
             $actionNoticeIcon = 'success';
         } elseif ($redirectEmailStatus === 'no_email') {
-            $actionNoticeText = 'The booking was confirmed, but no guest email address was provided.';
+            $actionNoticeText = 'The booking was accepted, but no guest email address was provided.';
             $actionNoticeIcon = 'warning';
         } elseif ($redirectEmailStatus === 'failed') {
-            $actionNoticeText = 'The booking was confirmed, but the confirmation email could not be sent.';
+            $actionNoticeText = 'The booking was accepted, but the confirmation email could not be sent.';
             $actionNoticeIcon = 'warning';
         } else {
-            $actionNoticeText = 'Booking has been confirmed.';
+            $actionNoticeText = 'Booking has been accepted.';
             $actionNoticeIcon = 'success';
         }
         break;
@@ -1987,16 +1987,16 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
                                   <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($hotelBookingCsrf, ENT_QUOTES, 'UTF-8') ?>" />
                                   <input type="hidden" name="booking_id" value="<?= (int)$row['hotel_booking_id'] ?>" />
                                   <input type="hidden" name="email" value="<?= htmlspecialchars($row['email']) ?>" />
-                                  <button type="submit" class="ho-btn confirm">Confirm</button>
+                                  <button type="submit" class="ho-btn confirm">Accept</button>
                               </form>
                             <?php endif; ?>
 
                             <?php if (!in_array($status, ['completed', 'cancelled', 'no-show'], true)): ?>
-                              <form method="post" data-cancel-form>
+                              <form method="post" data-cancel-form data-hotel-decision="<?= $status === 'confirmed' ? 'cancel' : 'reject' ?>">
                                 <input type="hidden" name="action" value="cancel" />
                                 <input type="hidden" name="csrf_token" value="<?= htmlspecialchars($hotelBookingCsrf, ENT_QUOTES, 'UTF-8') ?>" />
                                 <input type="hidden" name="booking_id" value="<?= (int)$row['hotel_booking_id'] ?>" />
-                                <button type="submit" class="ho-btn cancel">Cancel</button>
+                                <button type="submit" class="ho-btn cancel"><?= $status === 'confirmed' ? 'Cancel' : 'Reject' ?></button>
                               </form>
                             <?php endif; ?>
 
@@ -4419,7 +4419,7 @@ updateHotelExpenseTotals();
         form.addEventListener('submit', async (e) => {
           e.preventDefault();
           if (!window.Swal) {
-            const ok = window.confirm('Confirm this booking?');
+            const ok = window.confirm('Accept this booking?');
             if (ok) {
               form.submit();
             }
@@ -4427,10 +4427,10 @@ updateHotelExpenseTotals();
           }
           const result = await Swal.fire({
             icon: 'question',
-            title: 'Confirm booking?',
-            text: 'This booking will be marked as confirmed.',
+            title: 'Accept booking?',
+            text: 'This pending hotel booking will be accepted and the guest will be notified.',
             showCancelButton: true,
-            confirmButtonText: 'Yes, confirm',
+            confirmButtonText: 'Accept booking',
             cancelButtonText: 'Cancel',
             confirmButtonColor: '#2b7a66',
             cancelButtonColor: '#6c757d'
@@ -4438,7 +4438,7 @@ updateHotelExpenseTotals();
           if (!result.isConfirmed) return;
 
           const progressModal = Swal.fire({
-            title: 'Confirming booking',
+            title: 'Accepting booking',
             text: 'Please wait while the confirmation email is being sent…',
             allowOutsideClick: false,
             allowEscapeKey: false,
@@ -4467,8 +4467,8 @@ updateHotelExpenseTotals();
               payload = JSON.parse(responseText);
             } catch (_parseError) {
               throw new Error(response.ok
-                ? 'The confirmation response could not be read. Please refresh and check the booking status.'
-                : `The server could not complete the confirmation (HTTP ${response.status}).`);
+                ? 'The acceptance response could not be read. Please refresh and check the booking status.'
+                : `The server could not complete the acceptance (HTTP ${response.status}).`);
             }
             if (response.status === 401 && payload.code === 'SESSION_EXPIRED' && payload.login_url) {
               Swal.hideLoading();
@@ -4493,11 +4493,11 @@ updateHotelExpenseTotals();
             Swal.update({
               icon: bookingConfirmed ? (emailSent ? 'success' : 'warning') : 'error',
               title: bookingConfirmed
-                ? (emailSent ? 'Booking confirmed' : 'Booking confirmed — email not sent')
-                : 'Confirmation failed',
+                ? (emailSent ? 'Booking accepted' : 'Booking accepted - email not sent')
+                : 'Acceptance failed',
               text: payload.message || (bookingConfirmed
-                ? 'The booking was confirmed.'
-                : 'The booking could not be confirmed.'),
+                ? 'The booking was accepted.'
+                : 'The booking could not be accepted.'),
               showConfirmButton: true,
               confirmButtonText: 'OK',
               confirmButtonColor: '#2b7a66',
@@ -4513,8 +4513,8 @@ updateHotelExpenseTotals();
             Swal.hideLoading();
             Swal.update({
               icon: 'error',
-              title: 'Confirmation failed',
-              text: error.message || 'The booking could not be confirmed. Please try again.',
+              title: 'Acceptance failed',
+              text: error.message || 'The booking could not be accepted. Please try again.',
               showConfirmButton: true,
               confirmButtonText: 'Close',
               confirmButtonColor: '#b42336',
@@ -4567,7 +4567,7 @@ StaffBookingAddonPicker($pdo, 'hotel_admin', (int)$hoAdmin['hotel_admin_id'], $h
 <script src="js/hotel-tourist-submission.js?v=<?= filemtime(__DIR__ . '/js/hotel-tourist-submission.js') ?>"></script>
 <?php $rejectionFlash = $_SESSION['booking_rejection_flash'] ?? null; unset($_SESSION['booking_rejection_flash']); ?>
 <script>window.bookingRejectionFlash = <?= json_encode($rejectionFlash, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
-<script src="js/booking-rejection.js?v=2"></script>
+<script src="js/booking-rejection.js?v=3"></script>
 <?php $hotelReviewFlash = $_SESSION['hotel_cancellation_flash'] ?? null; unset($_SESSION['hotel_cancellation_flash']); ?>
 <script>window.hotelCancellationFlash = <?= json_encode($hotelReviewFlash, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
 <script src="js/hotel-cancellation-requests.js?v=3"></script>

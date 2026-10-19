@@ -1565,7 +1565,7 @@ $exportFilterSummary = $exportFilterLabels ? implode(' · ', $exportFilterLabels
                     'request_id' => $requestId,
                     'guest' => (string)$refund['full_name'],
                     'email' => (string)$refund['email'],
-                    'profile_image' => 'adbookings.php?action=fetchTouristProfileImage&id=' . (int)$refund['booking_id'],
+                    'profile_image' => 'adbookings.php?action=fetchTouristProfileImage&domain=' . rawurlencode((string)$refund['booking_domain']) . '&id=' . (int)$refund['booking_id'],
                     'booking_reference' => (string)$refund['booking_reference'],
                     'booking_type' => paymentLabel((string)$refund['booking_type']),
                     'service' => (string)$refund['service_name'],
@@ -1603,7 +1603,7 @@ $exportFilterSummary = $exportFilterLabels ? implode(' · ', $exportFilterLabels
                   ];
                 ?>
                   <tr id="refund-request-<?= $requestId ?>" class="<?= $focused ? 'refund-focus' : '' ?>">
-                    <td><div class="refund-guest"><span class="refund-avatar"><?= htmlspecialchars($initial) ?><img src="adbookings.php?action=fetchTouristProfileImage&amp;id=<?= (int)$refund['booking_id'] ?>" alt="" onerror="this.remove()"></span><div><strong><?= htmlspecialchars((string)$refund['full_name'] ?: 'Guest') ?></strong><small><?= htmlspecialchars((string)$refund['booking_reference']) ?> · <?= htmlspecialchars(paymentLabel((string)$refund['booking_type'])) ?></small></div></div></td>
+                    <td><div class="refund-guest"><span class="refund-avatar"><?= htmlspecialchars($initial) ?><img src="adbookings.php?action=fetchTouristProfileImage&amp;domain=<?= htmlspecialchars((string)$refund['booking_domain'], ENT_QUOTES, 'UTF-8') ?>&amp;id=<?= (int)$refund['booking_id'] ?>" alt="" onerror="this.remove()"></span><div><strong><?= htmlspecialchars((string)$refund['full_name'] ?: 'Guest') ?></strong><small><?= htmlspecialchars((string)$refund['booking_reference']) ?> · <?= htmlspecialchars(paymentLabel((string)$refund['booking_type'])) ?></small></div></div></td>
                     <td><div class="refund-cell refund-booking-type"><span class="refund-type-pill"><?= htmlspecialchars(paymentLabel((string)$refund['booking_type'])) ?></span><small>Service date: <?= date('M j, Y', strtotime((string)$refund['service_date'])) ?></small></div></td>
                     <td><div class="refund-cell refund-route"><strong><?= htmlspecialchars(!empty($refund['manual_required']) ? ((string)($refund['refund_destination_institution'] ?? '') ?: 'Refund account required') : (string)$refund['method_label']) ?></strong><small><?= !empty($refund['manual_required']) ? (!empty($refund['refund_destination_last4']) ? 'Manual transfer to account ending ' . htmlspecialchars((string)$refund['refund_destination_last4']) : 'Tourist must add refund account') : ($refund['automatic_available'] ? 'Returns through PayMongo API' : 'API refund unavailable') ?></small></div></td>
                     <td><div class="refund-progress">

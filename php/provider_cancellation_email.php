@@ -149,7 +149,7 @@ function sendRescheduleOfferEmail(array $request, array $tourist): bool
 
 function sendProviderCancellationEmail(array $request, array $tourist): bool
 {
-    if (($request['tourist_decision'] ?? '') === 'booking_rejected') return sendBookingRejectedEmail($request, $tourist);
+    if (in_array($request['tourist_decision'] ?? '', ['booking_rejected','hotel_booking_cancelled'], true)) return sendBookingRejectedEmail($request, $tourist);
     $name = trim((string)($tourist['full_name'] ?? '')) ?: 'Guest';
     $reference = (string)($request['booking_reference'] ?: ('Booking #' . $request['booking_id']));
     $timeframe = trim((string)getenv('REFUND_PROCESSING_TIMEFRAME'));
@@ -190,15 +190,16 @@ function BookingRejectionEmailContent(array $request, array $tourist): array
     $paid = max(0, (float)($request['amount_paid'] ?? 0));
     $refund = max(0, (float)($request['refundable_amount'] ?? 0));
     $notice = $paid > 0 ? 'Your cancellation request is already approved. The full amount successfully paid is eligible for refund and has been submitted for processing. This notice does not mean that the refund transfer is complete.' : 'Your cancellation request is already approved. No payment was received, so there is no amount to refund.';
-    $html = bookingWorkflowEmailShell('BOOKING REJECTED', 'Booking rejection and cancellation notice',
-        'Dear <strong>'.htmlspecialchars($name, ENT_QUOTES, 'UTF-8').'</strong>,<br>We regret to inform you that the service provider could not approve your booking. The booking has been cancelled. The reason and refund details are shown below.',
+    $cancelledByHotel = ($request['booking_domain'] ?? '') === 'hotel' && ($request['tourist_decision'] ?? '') === 'hotel_booking_cancelled';
+    $html = bookingWorkflowEmailShell($cancelledByHotel ? 'BOOKING CANCELLED' : 'BOOKING REJECTED', $cancelledByHotel ? 'Hotel booking cancellation notice' : 'Booking rejection notice',
+        'Dear <strong>'.htmlspecialchars($name, ENT_QUOTES, 'UTF-8').'</strong>,<br>'.($cancelledByHotel ? 'The property has cancelled your previously accepted hotel booking.' : 'The service provider could not accept your pending booking. The booking has been rejected.').' The reason and refund details are shown below.',
         ['Booking reference'=>$reference, 'Service'=>$request['service_name'] ?? 'Booking service',
-         'Scheduled date'=>$request['service_date'] ?? '', 'Rejection reason'=>$reason,
+         'Scheduled date'=>$request['service_date'] ?? '', ($cancelledByHotel ? 'Cancellation reason' : 'Rejection reason')=>$reason,
          'Cancellation status'=>'Approved', 'Amount paid'=>'PHP '.number_format($paid,2),
          'Eligible refund'=>'PHP '.number_format($refund,2), 'Refund status'=>$refund>0?'Pending processing':'No payment to refund'],
         $notice);
-    $plain = 'Booking '.$reference.' was rejected and cancelled. Reason: '.$reason.'. Cancellation: approved. Amount paid: PHP '.number_format($paid,2).'. Eligible refund: PHP '.number_format($refund,2).'. '.$notice;
-    return ['subject'=>'iTour Mercedes | Booking Rejected ('.$reference.')','html'=>$html,'plain'=>$plain,'name'=>$name];
+    $plain = 'Booking '.$reference.($cancelledByHotel ? ' was cancelled by the property after acceptance.' : ' was rejected before acceptance.').' Reason: '.$reason.'. Cancellation: approved. Amount paid: PHP '.number_format($paid,2).'. Eligible refund: PHP '.number_format($refund,2).'. '.$notice;
+    return ['subject'=>'iTour Mercedes | Booking '.($cancelledByHotel ? 'Cancelled' : 'Rejected').' ('.$reference.')','html'=>$html,'plain'=>$plain,'name'=>$name];
 }
 
 function sendBookingRejectedEmail(array $request, array $tourist): bool

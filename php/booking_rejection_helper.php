@@ -43,19 +43,20 @@ function BookingRejectAndQueue(PDO $pdo, string $role, int $actorId, int $bookin
         $query = $pdo->prepare('SELECT * FROM booking_cancellation_requests WHERE booking_domain=? AND booking_id=?'.$lock);
         $query->execute([$domain,$bookingId]); $existing = $query->fetch(PDO::FETCH_ASSOC);
         $cancelled = $hotel ? strtolower((string)$booking['booking_status'])==='cancelled' : strtolower((string)$booking['is_complete'])==='cancelled';
-        if ($existing && ($existing['tourist_decision']??'')==='booking_rejected' && $cancelled) {
+        if ($existing && in_array($existing['tourist_decision']??'', ['booking_rejected','hotel_booking_cancelled'], true) && $cancelled) {
             $pdo->commit(); return ['request'=>$existing,'booking'=>$booking,'created'=>false];
         }
         if ($hotel) {
-            if (!in_array(strtolower((string)$booking['booking_status']),['pending','confirmed'],true) || !empty($booking['checked_in_at']) || !empty($booking['checked_out_at'])) throw new DomainException('Only pending or confirmed, not checked-in hotel bookings can be rejected.');
+            if (!in_array(strtolower((string)$booking['booking_status']),['pending','confirmed'],true) || !empty($booking['checked_in_at']) || !empty($booking['checked_out_at'])) throw new DomainException('Only pending or accepted hotel bookings that have not checked in can be rejected or cancelled.');
         } elseif (strtolower((string)$booking['status'])!=='pending' || strtolower((string)$booking['is_complete'])!=='uncomplete') {
             throw new DomainException('Only pending bookings can be rejected. Use the provider cancellation workflow for accepted bookings.');
         }
+        $hotelCancellation = $hotel && strtolower((string)$booking['booking_status']) === 'confirmed';
         $paymentDomain = $hotel ? 'hotel' : strtolower((string)$booking['booking_type']);
         if (!in_array($paymentDomain,['hotel','package','boat','tourguide'],true)) throw new DomainException('Unsupported booking type.');
         $active = $pdo->prepare("SELECT COUNT(*) FROM payment_transactions WHERE booking_domain=? AND booking_id=? AND status='pending'");
         $active->execute([$paymentDomain,$bookingId]);
-        if ((int)$active->fetchColumn()>0) throw new DomainException('Finish or cancel the active online payment before rejecting this booking. No booking or refund was changed.');
+        if ((int)$active->fetchColumn()>0) throw new DomainException('Finish or cancel the active online payment before changing this booking. No booking or refund was changed.');
         if ($existing && in_array(strtolower((string)$existing['request_status']),['approved','completed','rescheduled'],true)) throw new DomainException('This booking already has a processed cancellation request. Review that request first.');
         if ($existing && !in_array(strtolower((string)$existing['refund_status']),['not_started','not_applicable','pending'],true)) throw new DomainException('An existing refund must be reviewed before changing this cancellation.');
         if ($existing) {
@@ -70,6 +71,10 @@ function BookingRejectAndQueue(PDO $pdo, string $role, int $actorId, int $bookin
         $reference = trim((string)$booking['booking_reference']) ?: ($hotel?'HR-':'TOUR-').$bookingId;
         $service = $hotel ? (string)($booking['room_type']??'Hotel room') : (string)($booking['package_name']?:($booking['preferred_resource']?:$booking['location']));
         $record = ['tourist_id'=>(int)($booking['tourist_id']??0),'booking_domain'=>$domain,'booking_id'=>$bookingId,'initiated_by'=>'admin_provider','booking_reference'=>$reference,'booking_type'=>$hotel?'Hotel/Resort':$booking['booking_type'],'service_name'=>$service?:'Booking service','service_date'=>$date,'original_service_date'=>$date,'total_amount'=>$total,'amount_paid'=>$paid,'days_before_service'=>$days,'refund_policy'=>$policy['refund_policy'],'refundable_amount'=>$paid,'non_refundable_amount'=>0,'request_status'=>'approved','refund_status'=>$policy['refund_status'],'cancellation_reason'=>$reason,'admin_note'=>'Rejected by '.$role.' #'.$actorId,'reschedule_offered'=>0,'tourist_decision'=>'booking_rejected','reviewed_by_admin_id'=>$role==='admin'?$actorId:null];
+        if ($hotelCancellation) {
+            $record['tourist_decision'] = 'hotel_booking_cancelled';
+            $record['admin_note'] = 'Cancelled by hotel_admin #'.$actorId;
+        }
         if ($existing) {
             $parts=[]; foreach(array_keys($record) as $column)$parts[]=$column.'=?';
             $save=$pdo->prepare('UPDATE booking_cancellation_requests SET '.implode(',',$parts).', reviewed_at=CURRENT_TIMESTAMP, refund_updated_at=CURRENT_TIMESTAMP, refund_request_created_at=CURRENT_TIMESTAMP, decision_deadline=NULL, rescheduled_service_date=NULL WHERE cancellation_request_id=?');
@@ -118,12 +123,14 @@ function BookingRejectionPost(PDO $pdo, string $role, int $actorId, int $propert
         $reason=BookingRejectionReason($_POST);
         $result=BookingRejectAndQueue($pdo,$role,$actorId,$id,$reason,$propertyId);
         $sent=BookingRejectionNotify($pdo,$result);
-        if($result['created'])logActivity($pdo,$role==='admin'?'Admin':($role==='operator'?'Tour Operator':'Hotel Owner'),$actorId,$actorName,$role==='hotel_admin'?'Hotel Booking Rejected':'Booking Rejected','Rejected booking #'.$id.'. Reason: '.$reason.'. Approved cancellation request #'.$result['request']['cancellation_request_id'].'.',$role==='hotel_admin'?'Hotel Bookings':'Bookings',$id);
-        $message='Booking cancelled. Cancellation request approved. '.((float)$result['request']['refundable_amount']>0?'The full amount paid is queued for refund processing.':'No payment to refund.');
-        $message.=$sent?' The rejection email was sent with the reason.':' The rejection email was not sent. Use Resend Tourist Email in the main admin cancellation requests.';
-        $_SESSION['booking_rejection_flash']=['icon'=>$sent?'success':'warning','message'=>$message];
+        $cancelledByHotel = ($result['request']['tourist_decision'] ?? '') === 'hotel_booking_cancelled';
+        $verb = $cancelledByHotel ? 'cancelled' : 'rejected';
+        if($result['created'])logActivity($pdo,$role==='admin'?'Admin':($role==='operator'?'Tour Operator':'Hotel Owner'),$actorId,$actorName,$role==='hotel_admin'?($cancelledByHotel?'Hotel Booking Cancelled':'Hotel Booking Rejected'):'Booking Rejected',ucfirst($verb).' booking #'.$id.'. Reason: '.$reason.'. Approved cancellation request #'.$result['request']['cancellation_request_id'].'.',$role==='hotel_admin'?'Hotel Bookings':'Bookings',$id);
+        $message='Booking '.$verb.'. Cancellation request approved. '.((float)$result['request']['refundable_amount']>0?'The full amount paid is queued for refund processing.':'No payment to refund.');
+        $message.=$sent?' The '.$verb.' booking email was sent with the reason.':' The '.$verb.' booking email was not sent. Use Resend Tourist Email in the main admin cancellation requests.';
+        $_SESSION['booking_rejection_flash']=['icon'=>$sent?'success':'warning','title'=>$cancelledByHotel?'Booking cancelled':'Booking rejected','message'=>$message];
     } catch(Throwable $e) {
-        $_SESSION['booking_rejection_flash']=['icon'=>'error','message'=>!($e instanceof PDOException) && ($e instanceof DomainException||$e instanceof InvalidArgumentException||$e instanceof RuntimeException) ? $e->getMessage() : 'The booking could not be rejected. No cancellation was saved.'];
+        $_SESSION['booking_rejection_flash']=['icon'=>'error','message'=>!($e instanceof PDOException) && ($e instanceof DomainException||$e instanceof InvalidArgumentException||$e instanceof RuntimeException) ? $e->getMessage() : 'The booking decision could not be saved. No cancellation was saved.'];
     }
     header('Location: '.$redirect);exit;
 }
