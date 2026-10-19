@@ -2673,3 +2673,21 @@ body.no-scroll {
     min-height: 310px;
   }
 }
+.hotel-details-page .review-filters{align-items:end}
+.hotel-details-page .review-filters .filter-group{min-width:0}
+.hotel-details-page .review-filters .filter-select{width:100%;min-width:0;box-sizing:border-box;min-height:42px}
+.review-pagination a{color:#176b58;text-underline-offset:3px;font-size:13px;font-weight:600}
+.review-results-count{margin:0;color:#60766d;font-size:13px}
+.review-pagination{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:16px;margin-top:18px;font-size:13px;color:#60766d}
+.reviews-carousel.is-empty,.reviews-carousel.is-empty .reviews-track{display:block}
+.reviews-carousel.is-empty .reviews-nav{display:none}
+.review-filter-notice{color:#93402d;font-size:13px}
+.review-filter-notice[hidden]{display:none}
+
+/* Guest counters keep a fixed horizontal control group beside age-range labels. */
+#detailsSearchWrap .guest-box .guest-row{display:grid;grid-template-columns:minmax(0,1fr) 96px;align-items:center;gap:12px;width:100%;min-width:0}
+#detailsSearchWrap .guest-box .guest-row>span{min-width:0;margin:0;line-height:1.35}
+#detailsSearchWrap .guest-box .guest-row>span small{display:block;margin-top:3px;font-size:11px;white-space:nowrap;color:#64776f}
+#detailsSearchWrap .guest-box .guest-row>div{display:grid!important;grid-template-columns:28px 24px 28px;align-items:center;justify-content:end;gap:8px;width:96px;min-width:96px}
+#detailsSearchWrap .guest-box .guest-row>div>span{margin:0;text-align:center;line-height:28px;min-width:0}
+#detailsSearchWrap .guest-box .guest-row>div>button{width:28px;height:28px;min-width:28px;padding:0;display:grid;place-items:center;line-height:1}

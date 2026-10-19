@@ -204,6 +204,7 @@ class UnifiedSearch {
           ${icon}
           <input type="date" data-type="date" name="${fieldKey}" value="${value}" min="${window.SearchDatePolicy.minimumDate(this.currentTab)}" required />
         </div>
+        ${this.buildBookingNote()}
       </div>
     `;
   }
@@ -226,8 +227,14 @@ class UnifiedSearch {
             <input type="date" data-type="date" name="checkout" value="${checkoutValue}" min="${window.SearchDatePolicy.minimumDate(this.currentTab)}" required />
           </div>
         </div>
+        ${this.buildBookingNote()}
       </div>
     `;
+  }
+
+  buildBookingNote() {
+    const message = window.SearchDatePolicy.bookingNote(this.currentTab);
+    return message ? `<p class="search-booking-note">${this.escapeHtml(message)}</p>` : '';
   }
 
   buildCounterField(field) {

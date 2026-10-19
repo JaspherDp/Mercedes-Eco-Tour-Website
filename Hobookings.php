@@ -45,6 +45,29 @@ if ($hoPushCsrf === '') {
 }
 $hoFirebaseConfiguration = firebase_public_configuration();
 $hotelBookingCsrf = AppCsrfToken('hotel_admin', 'booking_management');
+require_once __DIR__ . '/php/hotel_cancellation_review.php';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'hotel_cancellation_review') {
+    try {
+        if (!AppVerifyCsrf('hotel_admin', 'booking_management', $_POST['csrf_token'] ?? null)) throw new DomainException('Your session expired. Refresh and try again.');
+        $reviewId = ItourValidationInt($_POST['cancellation_request_id'] ?? null, 'Cancellation request', 1, PHP_INT_MAX);
+        $decision = ItourValidationText($_POST['decision'] ?? '', 'Decision', 20, true);
+        $note = ItourValidationText($_POST['review_note'] ?? '', 'Review reason', 1500);
+        $reviewResult = HotelCancellationReview($pdo, $hoHotelResortId, (int)$hoAdmin['hotel_admin_id'], $reviewId, $decision, $note);
+        $emailSent = HotelCancellationNotify($pdo, $reviewResult);
+        if ($reviewResult['changed']) logActivity($pdo, 'Hotel Owner', (int)$hoAdmin['hotel_admin_id'], $hoOwnerName, $decision === 'approve' ? 'Cancellation Approved' : 'Cancellation Rejected', 'Reviewed hotel cancellation request #'.$reviewId.'. Reason: '.$note, 'Hotel Bookings', (int)$reviewResult['request']['booking_id'], 'hotel');
+        $message = !$reviewResult['changed'] ? 'This request has already been reviewed.' : ($decision === 'approve' ? 'Cancellation approved. The room reservation is cancelled; main admin can now process any eligible refund.' : 'Cancellation request rejected. The room reservation remains active.');
+        if ($reviewResult['changed']) $message .= $emailSent ? ' The guest was notified by email.' : ' The review was saved, but the guest email could not be sent.';
+        $_SESSION['hotel_cancellation_flash'] = ['icon'=>!$reviewResult['changed']?'info':($emailSent?'success':'warning'),'message'=>$message];
+    } catch (Throwable $error) {
+        $_SESSION['hotel_cancellation_flash'] = ['icon'=>'error','message'=>$error instanceof PDOException ? 'The cancellation review could not be saved. Please retry.' : $error->getMessage()];
+    }
+    header('Location: Hobookings.php?tab=cancellations&focus_request='.max(0,(int)($_POST['cancellation_request_id']??0))); exit;
+}
+$hotelCancellationTab = ($_GET['tab'] ?? '') === 'cancellations';
+$hotelCancellationPendingQuery = $pdo->prepare("SELECT COUNT(*) FROM booking_cancellation_requests cr JOIN hotel_room_bookings b ON b.hotel_booking_id=cr.booking_id WHERE cr.booking_domain='hotel' AND b.hotel_resort_id=? AND cr.request_status='pending' AND cr.initiated_by='tourist'");
+$hotelCancellationPendingQuery->execute([$hoHotelResortId]);
+$hotelCancellationPending = (int)$hotelCancellationPendingQuery->fetchColumn();
+
 $hotelNotificationCsrf = AppCsrfToken('hotel_admin', 'notifications');
 
 if (isset($_GET['ho_action']) && $_GET['ho_action'] === 'paymongo_payment_status') {
@@ -150,6 +173,7 @@ if (isset($_GET['ho_action']) && $_GET['ho_action'] === 'walkin_available_rooms'
         $checkin = trim((string)($_GET['checkin'] ?? ''));
         $checkout = trim((string)($_GET['checkout'] ?? ''));
         $capacityGuests = ItourValidationInt($_GET['capacity_guests'] ?? 1, 'Guest capacity', 1, 100);
+        $party = HoChildParty($_GET['adults'] ?? $capacityGuests, $_GET['children'] ?? 0, $_GET['child_ages'] ?? []);
         $checkin = ItourValidationDate($checkin, 'Check-in date');
         $checkout = ItourValidationDate($checkout, 'Check-out date');
         if ($checkout <= $checkin) {
@@ -157,7 +181,7 @@ if (isset($_GET['ho_action']) && $_GET['ho_action'] === 'walkin_available_rooms'
         }
 
         $rooms = array_values(array_filter(
-            HoGetAvailableHotelRooms($pdo, $hoHotelResortId, $checkin, $checkout, $capacityGuests),
+            HoGetAvailableHotelRooms($pdo, $hoHotelResortId, $checkin, $checkout, $capacityGuests, $party),
             static fn(array $room): bool => !empty($room['is_available'])
         ));
         echo json_encode([
@@ -167,6 +191,7 @@ if (isset($_GET['ho_action']) && $_GET['ho_action'] === 'walkin_available_rooms'
                 'name' => (string)$room['room_name'],
                 'price' => (float)$room['price'],
                 'capacity' => HoRoomCapacityTotal($room),
+                'occupancyPolicy' => $room['occupancy_policy'],
                 'adultCapacity' => (int)$room['capacity_adults'],
                 'childCapacity' => (int)$room['capacity_children'],
             ], $rooms),
@@ -199,6 +224,7 @@ if (isset($_GET['ho_action']) && $_GET['ho_action'] === 'billing_details') {
         $billingStmt->execute([$bookingId, $hoHotelResortId]);
         $booking = $billingStmt->fetch(PDO::FETCH_ASSOC);
         if (!$booking) throw new RuntimeException('Billing details could not be found.');
+        $booking['child_policy'] = HoChildSnapshot($pdo, $bookingId);
 
         $expenseStmt = $pdo->prepare("
             SELECT expense_type, expense_name, quantity, unit_price, total_amount, notes, created_at
@@ -325,6 +351,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_walkin_booking
     $adults = 1;
     $children = 0;
     $childAges = [];
+    $hotelWalkinLock = '';
     $paymentOption = strtolower(trim((string)($_POST['walkin_payment_option'] ?? 'full')));
     $paymentMethod = strtolower(trim((string)($_POST['walkin_payment_method'] ?? '')));
     $partialAmount = 0.0;
@@ -420,10 +447,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_walkin_booking
     }
 
     if ($walkinError === '' && $selectedRoom) {
-        $chargeableChildren = count(array_filter($childAges, static fn(int $age): bool => $age >= 8));
-        $capacityGuests = $adults + $chargeableChildren;
-        if ($capacityGuests > HoRoomCapacityTotal($selectedRoom)) {
-            $walkinError = 'The selected room cannot accommodate this number of guests.';
+        try {
+            HoChildRequireStorage($pdo);
+            $hotelWalkinLock = HoChildReservationLock($pdo, $hoHotelResortId, $roomId);
+            $walkinChildQuote = HoChildQuote($selectedRoom, $adults, $children, $childAges, max(1, (int)(new DateTime($checkin))->diff(new DateTime($checkout))->days));
+        } catch (InvalidArgumentException|DomainException $exception) { $walkinError = $exception->getMessage(); }
+        if ($walkinError !== '') {
+            // Validation errors use the existing walk-in response path.
         } elseif (!HoIsHotelRoomAvailable(
             $pdo,
             $hoHotelResortId,
@@ -441,7 +471,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_walkin_booking
         $checkoutDate = new DateTime($checkout);
         $nights = max(1, (int)$checkinDate->diff($checkoutDate)->days);
         $unitPrice = max(0, (float)$selectedRoom['price']);
-        $totalAmount = round($unitPrice * $nights, 2);
+        $totalAmount = $walkinChildQuote['total_before_addons'];
+        try { HoChildCheckClientTotal($_POST, $walkinChildQuote); HoChildCheckSubmittedTotal($_POST, $totalAmount); } catch (DomainException|InvalidArgumentException $exception) { $walkinError = $exception->getMessage(); }
         $amountPaid = match ($paymentOption) {
             'full' => $totalAmount,
             'partial' => round($partialAmount, 2),
@@ -454,6 +485,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_walkin_booking
     }
 
     if ($walkinError !== '') {
+        HoChildReservationUnlock($pdo, $hotelWalkinLock);
         if ($walkinAjax) {
             header('Content-Type: application/json; charset=utf-8');
             http_response_code(422);
@@ -505,6 +537,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_walkin_booking
             $recordedAmountPaid > 0 ? $paymentMethod : null,
         ]);
         $newBookingId = (int)$pdo->lastInsertId();
+        HoChildSaveSnapshot($pdo, $newBookingId, $walkinChildQuote);
         if ($paymentMethod === 'cash' && $recordedAmountPaid > 0) {
             $cashUnique = bin2hex(random_bytes(16));
             $cashMetadata = json_encode([
@@ -532,6 +565,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_walkin_booking
             ]);
         }
         $pdo->commit();
+        HoChildReservationUnlock($pdo, $hotelWalkinLock);
+        $hotelWalkinLock = '';
         logActivity(
             $pdo,
             'Hotel Owner',
@@ -557,6 +592,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_walkin_booking
         exit;
     } catch (Throwable $e) {
         if ($pdo->inTransaction()) $pdo->rollBack();
+        HoChildReservationUnlock($pdo, $hotelWalkinLock);
         if ($walkinAjax) {
             error_log('Walk-in hotel booking creation failed: ' . $e->getMessage());
             header('Content-Type: application/json; charset=utf-8');
@@ -569,6 +605,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['create_walkin_booking
         header('Location: Hobookings.php?add_booking=1');
         exit;
     }
+}
+
+require_once __DIR__ . '/php/booking_rejection_helper.php';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'cancel') {
+    BookingRejectionPost($pdo, 'hotel_admin', (int)$hoAdmin['hotel_admin_id'], (int)$hoHotelResortId, (string)$hoOwnerName, 'Hobookings.php?status=cancelled');
 }
 
 /* =========================================================
@@ -602,10 +643,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['boo
             ? 'confirmed'
             : ($action === 'cancel' ? 'cancelled' : 'no-show');
 
-        $stateStmt = $pdo->prepare('SELECT booking_status FROM hotel_room_bookings WHERE hotel_booking_id = ? AND hotel_resort_id = ? LIMIT 1');
+        $stateStmt = $pdo->prepare('SELECT booking_status, adults, children FROM hotel_room_bookings WHERE hotel_booking_id = ? AND hotel_resort_id = ? LIMIT 1');
         $stateStmt->execute([$bookingId, $hoHotelResortId]);
         $currentStatus = strtolower((string)$stateStmt->fetchColumn());
-        $allowedCurrentStatuses = [
+        if ($action === 'confirm') {
+        $snapshotQuery = $pdo->prepare('SELECT adults, children FROM hotel_room_bookings WHERE hotel_booking_id=? AND hotel_resort_id=?');
+        $snapshotQuery->execute([$bookingId, $hoHotelResortId]);
+        $snapshotBooking = $snapshotQuery->fetch(PDO::FETCH_ASSOC);
+        $savedPolicy = HoChildSnapshot($pdo, $bookingId);
+        try { if ($savedPolicy && $snapshotBooking) HoChildValidateSnapshot($snapshotBooking, $savedPolicy); }
+        catch (DomainException|InvalidArgumentException $exception) { $currentStatus = 'policy-invalid'; }
+    }
+    $allowedCurrentStatuses = [
             'confirm' => ['pending'],
             'cancel' => ['pending', 'confirmed'],
             'no_show' => ['confirmed'],
@@ -802,6 +851,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['boo
                         'Number of nights' => (string)max(1, (int)($b['nights'] ?? 1)),
                         'Rooms reserved' => (string)max(1, (int)($b['rooms_booked'] ?? 1)),
                         'Guests' => $guestSummary,
+                        'Child accommodation' => ($emailChildPolicy = HoChildSnapshot($pdo, (int)$b['hotel_booking_id'])) ? HoChildSummary($emailChildPolicy) : 'Original reservation terms',
                         'Guest contact' => (string)($b['phone_number'] ?? ''),
                         'Special request' => (string)($b['special_request'] ?? ''),
                     ],
@@ -1444,10 +1494,13 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
   <title>Hobookings | Hotel Owner Bookings</title>
   <link rel="icon" type="image/png" href="img/newlogo.png" />
   <link rel="stylesheet" href="styles/Ho_panel.css?v=notifications-5" />
+<link rel="stylesheet" href="styles/booking-status-colors.css?v=1">
+<link rel="stylesheet" href="styles/hotel-cancellation-requests.css?v=4">
   <link rel="stylesheet" href="styles/admin_receipt.css?v=3" />
   <link rel="stylesheet" href="styles/required-fields.css" />
   <script src="js/required-fields.js" defer></script>
   <script src="js/paymongo-return-navigation.js"></script>
+<script src="js/hotel-child-policy.js?v=<?= (int)filemtime(__DIR__ . '/js/hotel-child-policy.js') ?>"></script>
 </head>
 <style>
   .ho-walkin-partial-field select{width:100%;min-height:46px;margin-top:8px;padding:10px 12px;border:1px solid #cfded8;border-radius:9px;background:#fff;color:#294b41;font-size:14px}
@@ -1671,16 +1724,17 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
         </div>
 
         <article class="ho-card ho-table-card">
-          <div class="ho-table-head">
-            <h2 class="ho-section-title">All Bookings</h2>
+          <div class="ho-table-head<?= $hotelCancellationTab ? ' hc-table-head' : '' ?>">
+            <h2 class="ho-section-title"><?= $hotelCancellationTab ? 'Cancellation' : 'All Bookings' ?></h2>
             <div class="ho-booking-head-actions">
               <div class="ho-booking-tabs" role="tablist" aria-label="Booking status quick tabs">
-                <a href="Hobookings.php?<?= htmlspecialchars(http_build_query(['status' => 'all', 'q' => $search, 'range' => $rangeFilter, 'year' => $selectedYear, 'month' => $selectedMonth, 'date' => $selectedDate, 'sort' => $sortBy, 'rows' => $rowsPerPage])) ?>" class="<?= $statusFilter === 'all' ? 'active' : '' ?>">All</a>
-                <a href="Hobookings.php?<?= htmlspecialchars(http_build_query(['status' => 'pending', 'q' => $search, 'range' => $rangeFilter, 'year' => $selectedYear, 'month' => $selectedMonth, 'date' => $selectedDate, 'sort' => $sortBy, 'rows' => $rowsPerPage])) ?>" class="<?= $statusFilter === 'pending' ? 'active' : '' ?>">Pending</a>
-                <a href="Hobookings.php?<?= htmlspecialchars(http_build_query(['status' => 'confirmed', 'q' => $search, 'range' => $rangeFilter, 'year' => $selectedYear, 'month' => $selectedMonth, 'date' => $selectedDate, 'sort' => $sortBy, 'rows' => $rowsPerPage])) ?>" class="<?= $statusFilter === 'confirmed' ? 'active' : '' ?>">Accepted</a>
-                <a href="Hobookings.php?<?= htmlspecialchars(http_build_query(['status' => 'completed', 'q' => $search, 'range' => $rangeFilter, 'year' => $selectedYear, 'month' => $selectedMonth, 'date' => $selectedDate, 'sort' => $sortBy, 'rows' => $rowsPerPage])) ?>" class="<?= $statusFilter === 'completed' ? 'active' : '' ?>">Completed</a>
-                <a href="Hobookings.php?<?= htmlspecialchars(http_build_query(['status' => 'cancelled', 'q' => $search, 'range' => $rangeFilter, 'year' => $selectedYear, 'month' => $selectedMonth, 'date' => $selectedDate, 'sort' => $sortBy, 'rows' => $rowsPerPage])) ?>" class="<?= $statusFilter === 'cancelled' ? 'active' : '' ?>">Cancelled</a>
-                <a href="Hobookings.php?<?= htmlspecialchars(http_build_query(['status' => 'no-show', 'q' => $search, 'range' => $rangeFilter, 'year' => $selectedYear, 'month' => $selectedMonth, 'date' => $selectedDate, 'sort' => $sortBy, 'rows' => $rowsPerPage])) ?>" class="<?= $statusFilter === 'no-show' ? 'active' : '' ?>">No-show</a>
+                <a href="Hobookings.php?<?= htmlspecialchars(http_build_query(['status' => 'all', 'q' => $search, 'range' => $rangeFilter, 'year' => $selectedYear, 'month' => $selectedMonth, 'date' => $selectedDate, 'sort' => $sortBy, 'rows' => $rowsPerPage])) ?>" class="<?= !$hotelCancellationTab && $statusFilter === 'all' ? 'active' : '' ?>">All</a>
+                <a href="Hobookings.php?<?= htmlspecialchars(http_build_query(['status' => 'pending', 'q' => $search, 'range' => $rangeFilter, 'year' => $selectedYear, 'month' => $selectedMonth, 'date' => $selectedDate, 'sort' => $sortBy, 'rows' => $rowsPerPage])) ?>" class="<?= !$hotelCancellationTab && $statusFilter === 'pending' ? 'active' : '' ?>">Pending</a>
+                <a href="Hobookings.php?<?= htmlspecialchars(http_build_query(['status' => 'confirmed', 'q' => $search, 'range' => $rangeFilter, 'year' => $selectedYear, 'month' => $selectedMonth, 'date' => $selectedDate, 'sort' => $sortBy, 'rows' => $rowsPerPage])) ?>" class="<?= !$hotelCancellationTab && $statusFilter === 'confirmed' ? 'active' : '' ?>">Accepted</a>
+                <a href="Hobookings.php?tab=cancellations" class="<?= $hotelCancellationTab ? 'active' : '' ?>">Cancellation Requests<?php if ($hotelCancellationPending > 0): ?><span class="hc-tab-count"><?= $hotelCancellationPending ?></span><?php endif; ?></a>
+                <a href="Hobookings.php?<?= htmlspecialchars(http_build_query(['status' => 'completed', 'q' => $search, 'range' => $rangeFilter, 'year' => $selectedYear, 'month' => $selectedMonth, 'date' => $selectedDate, 'sort' => $sortBy, 'rows' => $rowsPerPage])) ?>" class="<?= !$hotelCancellationTab && $statusFilter === 'completed' ? 'active' : '' ?>">Completed</a>
+                <a href="Hobookings.php?<?= htmlspecialchars(http_build_query(['status' => 'cancelled', 'q' => $search, 'range' => $rangeFilter, 'year' => $selectedYear, 'month' => $selectedMonth, 'date' => $selectedDate, 'sort' => $sortBy, 'rows' => $rowsPerPage])) ?>" class="<?= !$hotelCancellationTab && $statusFilter === 'cancelled' ? 'active' : '' ?>">Cancelled</a>
+                <a href="Hobookings.php?<?= htmlspecialchars(http_build_query(['status' => 'no-show', 'q' => $search, 'range' => $rangeFilter, 'year' => $selectedYear, 'month' => $selectedMonth, 'date' => $selectedDate, 'sort' => $sortBy, 'rows' => $rowsPerPage])) ?>" class="<?= !$hotelCancellationTab && $statusFilter === 'no-show' ? 'active' : '' ?>">No-show</a>
               </div>
               <button type="button" class="ho-btn confirm ho-add-booking-btn ho-payment-phone-btn" id="hoOpenPhoneSetup" title="View the phone registered for PayMongo QR notifications">
                 <svg aria-hidden="true" viewBox="0 0 24 24"><rect x="6" y="2" width="12" height="20" rx="2"></rect><path d="M10 18h4"></path></svg>
@@ -1693,6 +1747,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
             </div>
           </div>
 
+          <div<?= $hotelCancellationTab ? ' hidden' : '' ?>>
           <form method="get" class="ho-toolbar">
             <input type="hidden" name="range" value="<?= htmlspecialchars($rangeFilter) ?>" />
             <input type="hidden" name="year" value="<?= (int)$selectedYear ?>" />
@@ -1710,12 +1765,12 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
               <option value="300"></option>
             </datalist>
             <select name="status">
-              <option value="all" <?= $statusFilter === 'all' ? 'selected' : '' ?>>All Statuses</option>
-              <option value="pending" <?= $statusFilter === 'pending' ? 'selected' : '' ?>>Pending</option>
-              <option value="confirmed" <?= $statusFilter === 'confirmed' ? 'selected' : '' ?>>Accepted</option>
-              <option value="completed" <?= $statusFilter === 'completed' ? 'selected' : '' ?>>Completed</option>
-              <option value="cancelled" <?= $statusFilter === 'cancelled' ? 'selected' : '' ?>>Cancelled</option>
-              <option value="no-show" <?= $statusFilter === 'no-show' ? 'selected' : '' ?>>No-show</option>
+              <option value="all" <?= !$hotelCancellationTab && $statusFilter === 'all' ? 'selected' : '' ?>>All Statuses</option>
+              <option value="pending" <?= !$hotelCancellationTab && $statusFilter === 'pending' ? 'selected' : '' ?>>Pending</option>
+              <option value="confirmed" <?= !$hotelCancellationTab && $statusFilter === 'confirmed' ? 'selected' : '' ?>>Accepted</option>
+              <option value="completed" <?= !$hotelCancellationTab && $statusFilter === 'completed' ? 'selected' : '' ?>>Completed</option>
+              <option value="cancelled" <?= !$hotelCancellationTab && $statusFilter === 'cancelled' ? 'selected' : '' ?>>Cancelled</option>
+              <option value="no-show" <?= !$hotelCancellationTab && $statusFilter === 'no-show' ? 'selected' : '' ?>>No-show</option>
             </select>
             <select name="sort">
               <option value="time" <?= $sortBy === 'time' ? 'selected' : '' ?>>Sort: Latest (Default)</option>
@@ -1912,6 +1967,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
                                   'rooms' => (int)$row['rooms_booked'],
                                   'adults' => (int)$row['adults'],
                                   'children' => (int)$row['children'],
+                                  'child_policy_summary' => ($childSnapshot = HoChildSnapshot($pdo, (int)$row['hotel_booking_id'])) ? HoChildSummary($childSnapshot) : '',
                                   'phone' => $row['phone_number'],
                                   'email' => $row['email'],
                                   'special_request' => $row['special_request'] ?: '-',
@@ -2033,6 +2089,8 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
               </nav>
             <?php endif; ?>
           </div>
+          </div>
+          <?php if ($hotelCancellationTab) include __DIR__ . '/php/hotel_cancellation_requests_view.php'; ?>
         </article>
       </section>
 
@@ -2199,7 +2257,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
               </label>
             </div>
             <div class="ho-walkin-child-ages" id="hoWalkinChildAges" data-saved-ages="<?= htmlspecialchars(json_encode($walkinSavedChildAges), ENT_QUOTES) ?>"></div>
-            <p class="ho-walkin-child-policy"><strong>Child policy:</strong> Children 7 years old and below stay free and do not count toward room capacity. Children aged 8 and above count as guests.</p>
+            <p class="ho-walkin-child-policy"><strong>Child policy:</strong> Ages 0–5 stay free; ages 6–17 add PHP 250 per child per night. Every occupant must fit the approved room policy. Existing bedding is shared.</p>
 
             <div class="ho-walkin-room-results-head">
               <div><strong>Available rooms</strong><small id="hoWalkinRoomStatus">Complete the stay dates and guest details to see rooms.</small></div>
@@ -2216,7 +2274,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
             <label class="ho-walkin-request">Special request <span>(optional)</span>
               <textarea name="walkin_special_request" rows="3" placeholder="Accessibility needs, arrival notes, or guest preferences"><?= htmlspecialchars((string)($walkinForm['walkin_special_request'] ?? '')) ?></textarea>
             </label>
-            <p class="ho-walkin-capacity-note" id="hoWalkinCapacityNote">Only children aged 8 and above count toward room capacity.</p>
+            <p class="ho-walkin-capacity-note" id="hoWalkinCapacityNote">Adults, children, and approved total occupancy are checked separately.</p>
           <?php else: ?>
             <div class="ho-walkin-empty">No active rooms are available to book. Add or activate a room first.</div>
           <?php endif; ?>
@@ -2243,6 +2301,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
           <div class="ho-checkin-finance-grid">
             <div><small>Nightly rate</small><strong id="hoWalkinReviewRate">₱0.00</strong></div>
             <div><small>Length of stay</small><strong id="hoWalkinReviewNights">0 nights</strong></div>
+            <div><small>Child accommodation</small><strong id="hoWalkinReviewChildFee">-</strong></div>
             <div class="balance"><small>Booking total</small><strong id="hoWalkinReviewTotal">₱0.00</strong></div>
           </div>
 
@@ -3073,16 +3132,16 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
       const getWalkinChildAges = () => getWalkinChildAgeInputs().map(input => input.value === '' ? null : Number(input.value));
       const getWalkinCapacityGuests = () => {
         const adults = Math.max(0, Number(document.getElementById('hoWalkinAdults')?.value || 0));
-        const chargeableChildren = getWalkinChildAges().filter(age => age !== null && age >= 8).length;
-        return { adults, chargeableChildren, total: adults + chargeableChildren };
+        const chargeableChildren = getWalkinChildAges().filter(age => age !== null && age >= 6).length;
+        return { adults, chargeableChildren, total: adults + Math.max(0, Number(document.getElementById('hoWalkinChildren')?.value || 0)) };
       };
       const updateWalkinChildAgeLabels = () => {
         getWalkinChildAgeInputs().forEach(input => {
           const note = input.closest('label')?.querySelector('small');
           if (!note) return;
           const age = input.value === '' ? null : Number(input.value);
-          note.textContent = age === null ? 'Enter age' : (age <= 7 ? 'Free · does not count as a guest' : 'Counts toward room capacity');
-          note.classList.toggle('free', age !== null && age <= 7);
+          note.textContent = age === null ? 'Enter age' : (age <= 5 ? 'Free accommodation' : 'PHP 250 per night');
+          note.classList.toggle('free', age !== null && age <= 5);
         });
       };
       const scheduleWalkinRoomSearch = () => {
@@ -3168,7 +3227,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
             ho_action: 'walkin_available_rooms',
             checkin: dates.checkinValue,
             checkout: dates.checkoutValue,
-            capacity_guests: String(capacity.total)
+            capacity_guests: String(capacity.total), adults: String(capacity.adults), children: String(children), child_ages: childAges.join(",")
           });
           const response = await fetch(`Hobookings.php?${params.toString()}`, { headers: { Accept: 'application/json' }, cache: 'no-store' });
           const result = await response.json();
@@ -3181,6 +3240,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
             option.dataset.name = room.name;
             option.dataset.price = String(room.price);
             option.dataset.totalCapacity = String(room.capacity);
+            option.dataset.occupancyPolicy = JSON.stringify(room.occupancyPolicy);
             option.dataset.adultCapacity = String(room.adultCapacity);
             option.dataset.childCapacity = String(room.childCapacity);
             roomSelect.appendChild(option);
@@ -3207,7 +3267,9 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
         const selectedRoom = roomSelect?.selectedOptions?.[0] || null;
         const rate = Number(selectedRoom?.dataset.price || 0);
         const dates = getWalkinDates();
-        return { roomSelect, selectedRoom, rate, dates, total: rate * dates.nights };
+        let childQuote = null;
+        try { childQuote = HotelChildPolicy.quote(JSON.parse(selectedRoom?.dataset.occupancyPolicy || '{}'), Number(document.getElementById('hoWalkinAdults')?.value || 0), Number(document.getElementById('hoWalkinChildren')?.value || 0), getWalkinChildAges(), dates.nights, rate); } catch (_) {}
+        return { roomSelect, selectedRoom, rate, dates, childQuote, total: childQuote?.total || rate * dates.nights };
       };
       const setWalkinStep = step => {
         if (!walkinForm || !walkinModal) return;
@@ -3260,12 +3322,11 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
             if (!roomSelect?.disabled) roomSelect?.focus();
             return false;
           }
-          const guests = getWalkinCapacityGuests().total;
-          const capacity = Number(selectedRoom?.dataset.totalCapacity || 0);
-          if (guests > capacity) {
-            const adultsInput = document.getElementById('hoWalkinAdults');
-            adultsInput?.setCustomValidity(`This room can accommodate up to ${capacity} guest${capacity === 1 ? '' : 's'}.`);
-            adultsInput?.reportValidity();
+          try {
+            HotelChildPolicy.quote(JSON.parse(selectedRoom.dataset.occupancyPolicy || '{}'), Number(document.getElementById('hoWalkinAdults').value), Number(document.getElementById('hoWalkinChildren').value), getWalkinChildAges(), dates.nights, Number(selectedRoom.dataset.price));
+          } catch (error) {
+            const status = document.getElementById('hoWalkinRoomStatus');
+            if (status) status.textContent = error.message;
             return false;
           }
         }
@@ -3284,8 +3345,8 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
         if (rateLabel) rateLabel.textContent = formatWalkinMoney(rate);
         if (capacityNote) {
           capacityNote.textContent = selectedRoom?.value
-            ? `${roomName} accommodates ${capacity} capacity guests. This party uses ${capacityGuests.total}${freeChildren ? `; ${freeChildren} child${freeChildren === 1 ? '' : 'ren'} age 7 or below stay free` : ''}.`
-            : 'Only children aged 8 and above count toward room capacity.';
+            ? `${roomName} accommodates ${capacity} capacity guests. This party uses ${capacityGuests.total}.`
+            : 'Adults, children, and approved total occupancy are checked separately.';
           capacityNote.classList.toggle('warning', Boolean(selectedRoom?.value) && capacityGuests.total > capacity);
         }
         const reviewRate = document.getElementById('hoWalkinReviewRate');
@@ -3294,6 +3355,8 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
         if (reviewRate) reviewRate.textContent = formatWalkinMoney(rate);
         if (reviewNights) reviewNights.textContent = `${dates.nights} night${dates.nights === 1 ? '' : 's'}`;
         if (reviewTotal) reviewTotal.textContent = formatWalkinMoney(total);
+        const childReview = document.getElementById('hoWalkinReviewChildFee');
+        if (childReview) { const quote = getWalkinPricing().childQuote; childReview.textContent = quote ? formatWalkinMoney(quote.childFeeTotal) + ' (' + getWalkinChildAges().map(age => age + ': ' + HotelChildPolicy.ageLabel(age)).join(', ') + ')' : 'Complete guest ages and room selection'; }
       };
       function updateWalkinSummary() {
         if (!walkinForm) return;
@@ -3850,6 +3913,7 @@ $hoPendingBadge = HoGetPendingCount($pdo, $hoHotelResortId);
               <div class="ho-bd-request">${escapeProfileText(data.special_request || 'No special request provided.')}</div>
             </section>
 
+            ${data.child_policy_summary ? `<section class="ho-bd-section"><h4>Child accommodation</h4><p>${escapeProfileText(data.child_policy_summary)}</p></section>` : ""}
             <div class="ho-bd-confidence-note">
               <span>${bookingDetailIcons.hotel}</span>
               <p><strong>Booking record verified</strong>Details shown here are loaded from the current hotel booking record.</p>
@@ -3969,6 +4033,7 @@ const renderHotelBilling = async (bookingId, guestName) => {
     const expenseTotal = expenses.reduce((sum, item) => sum + Number(item.total_amount || 0), 0);
     const checkoutCharges = Number(booking.checkout_additional_charges || 0);
     const roomCharge = Math.max(0, total - expenseTotal - checkoutCharges);
+    const childFee = Number(booking.child_policy?.child_fee_total || 0);
     const checkinPayment = Number(booking.checkin_payment_amount || 0);
     const checkoutPayment = Number(booking.checkout_final_payment_amount || 0);
     const advancePayment = Math.max(0, amountPaid - checkinPayment - checkoutPayment);
@@ -4005,7 +4070,8 @@ const renderHotelBilling = async (bookingId, guestName) => {
       </div>
       <h4 class="ho-billing-section-title">Detailed Charges</h4>
       <div class="ho-billing-lines">
-        <div class="ho-billing-line"><span>Room accommodation<small>${escapeProfileText(`${booking.checkin_date || '-'} to ${booking.checkout_date || '-'}`)}</small></span><strong>${formatBookingMoney(roomCharge)}</strong></div>
+        <div class="ho-billing-line"><span>Room accommodation<small>${escapeProfileText(`${booking.checkin_date || '-'} to ${booking.checkout_date || '-'}`)}</small></span><strong>${formatBookingMoney(roomCharge - childFee)}</strong></div>
+        ${booking.child_policy ? `<div class="ho-billing-line"><span>Child accommodation<small>${escapeProfileText(booking.child_policy.child_ages.map(age => age + (age <= 5 ? " (free)" : " (PHP 250/night)")).join(", "))}</small></span><strong>${formatBookingMoney(childFee)}</strong></div>` : ""}
         ${expenseRows}
         ${checkoutCharges > 0 ? `<div class="ho-billing-line"><span>Check-out additional charges</span><strong>${formatBookingMoney(checkoutCharges)}</strong></div>` : ''}
         <div class="ho-billing-line subtotal"><span>Additional charges total</span><strong>${formatBookingMoney(expenseTotal + checkoutCharges)}</strong></div>
@@ -4483,7 +4549,7 @@ updateHotelExpenseTotals();
 
     })();
   </script>
-<script src="js/booking-payment-summary.js?v=3"></script>
+<script src="js/booking-payment-summary.js?v=<?= (int)filemtime(__DIR__ . '/js/booking-payment-summary.js') ?>"></script>
 <?php
 require_once __DIR__ . '/php/staff_booking_addon_picker.php';
 StaffBookingAddonPicker($pdo, 'hotel_admin', (int)$hoAdmin['hotel_admin_id'], $hoHotelResortId);
@@ -4499,6 +4565,12 @@ StaffBookingAddonPicker($pdo, 'hotel_admin', (int)$hoAdmin['hotel_admin_id'], $h
   </section>
 </div>
 <script src="js/hotel-tourist-submission.js?v=<?= filemtime(__DIR__ . '/js/hotel-tourist-submission.js') ?>"></script>
+<?php $rejectionFlash = $_SESSION['booking_rejection_flash'] ?? null; unset($_SESSION['booking_rejection_flash']); ?>
+<script>window.bookingRejectionFlash = <?= json_encode($rejectionFlash, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
+<script src="js/booking-rejection.js?v=2"></script>
+<?php $hotelReviewFlash = $_SESSION['hotel_cancellation_flash'] ?? null; unset($_SESSION['hotel_cancellation_flash']); ?>
+<script>window.hotelCancellationFlash = <?= json_encode($hotelReviewFlash, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
+<script src="js/hotel-cancellation-requests.js?v=3"></script>
 </body>
 </html>
 

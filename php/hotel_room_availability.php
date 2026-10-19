@@ -16,6 +16,8 @@ function hoNormalizeDateInput(mixed $date): ?string
 try {
     $hotelId = ItourValidationInt($_GET['hotel_id'] ?? null, 'Hotel ID', 1, PHP_INT_MAX);
     $guests = ItourValidationInt($_GET['guests'] ?? 1, 'Guests', 1, 100);
+    $children = ItourValidationInt($_GET['children'] ?? 0, 'Children', 0, 100);
+    $party = HoChildParty($_GET['adults'] ?? max(1, $guests - $children), $children, $_GET['child_ages'] ?? []);
 } catch (InvalidArgumentException $exception) {
     http_response_code(422); echo json_encode(['success' => false, 'message' => $exception->getMessage()]); exit;
 }
@@ -39,8 +41,8 @@ if ($checkout <= $checkin) {
 }
 
 try {
-    $rooms = HoGetAvailableHotelRooms($pdo, $hotelId, $checkin, $checkout, $guests);
-    $formatted = array_map(static function (array $room): array {
+    $rooms = HoGetAvailableHotelRooms($pdo, $hotelId, $checkin, $checkout, $guests, $party);
+    $formatted = array_map(static function (array $room) use ($party, $checkin, $checkout): array {
         return [
             'id' => (int)$room['id'],
             'roomType' => (string)$room['room_name'],
@@ -48,7 +50,10 @@ try {
             'capacityAdults' => (int)$room['capacity_adults'],
             'capacityChildren' => (int)$room['capacity_children'],
             'capacityTotal' => HoRoomCapacityTotal($room),
+            'occupancyPolicy' => $room['occupancy_policy'],
+            'suitabilityReason' => $room['suitability_reason'],
             'price' => (float)$room['price'],
+            'childPricing' => $room['is_available'] ? HoChildQuote($room, $party['adults'], $party['children'], $party['child_ages'], max(1, (int)(new DateTimeImmutable($checkin))->diff(new DateTimeImmutable($checkout))->days)) : null,
             'breakfastFor' => (int)$room['breakfast_for'],
             'inclusions' => (array)$room['inclusions'],
             'galleryImages' => (array)$room['gallery_images'],

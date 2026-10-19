@@ -351,6 +351,11 @@ $notifItemsStmt = $pdo->prepare("
 $notifItemsStmt->execute([$operator_id]);
 $notificationItems = $notifItemsStmt->fetchAll(PDO::FETCH_ASSOC);
 
+require_once __DIR__ . '/../php/booking_rejection_helper.php';
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'cancel') {
+    BookingRejectionPost($pdo, 'operator', (int)$operator_id, 0, (string)$operatorName, 'opbookings.php');
+}
+
 // --- UPDATED POST ACTION: HANDLE ACCEPT/DECLINE & SEND EMAIL ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['booking_id'])) {
     if (!AppVerifyCsrf('operator', 'booking_management', $_POST['csrf_token'] ?? null)) {
@@ -959,6 +964,7 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
   <title>iTour Mercedes - Operator Bookings</title>
   <link rel="icon" type="image/png" href="img/newlogo.png" />
   <link rel="stylesheet" href="styles/Ho_panel.css" />
+<link rel="stylesheet" href="styles/booking-status-colors.css?v=1">
   <link rel="stylesheet" href="styles/operator_booking_drawer.css?v=2" />
   <link rel="stylesheet" href="styles/admin_receipt.css?v=3" />
   <link rel="stylesheet" href="styles/required-fields.css" />
@@ -3960,5 +3966,8 @@ $bookings = $stmt->fetchAll(PDO::FETCH_ASSOC);
 require_once __DIR__ . '/../php/staff_booking_addon_picker.php';
 StaffBookingAddonPicker($pdo, 'operator', $operator_id);
 ?>
+<?php $rejectionFlash = $_SESSION['booking_rejection_flash'] ?? null; unset($_SESSION['booking_rejection_flash']); ?>
+<script>window.bookingRejectionFlash = <?= json_encode($rejectionFlash, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
+<script src="js/booking-rejection.js?v=2"></script>
 </body>
 </html>

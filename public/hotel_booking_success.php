@@ -199,7 +199,7 @@ $paymentLabel = $paymentLabels[$bookingDomain] ?? 'Reservation payment confirmed
       <p class="success-note">Please allow a short time for the service provider to review your reservation.</p>
     </section>
   </main>
-<script src="js/booking-payment-summary.js?v=2"></script>
+<script src="js/booking-payment-summary.js?v=<?= (int)filemtime(__DIR__ . '/../js/booking-payment-summary.js') ?>"></script>
 <script src="js/booking-success-receipt.js?v=1"></script>
 <script src="js/mobile-scroll.js"></script>
 </body>

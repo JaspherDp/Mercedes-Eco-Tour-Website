@@ -1,0 +1,17 @@
+.search-booking-note {
+  box-sizing: border-box;
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #edf7f3;
+  color: #21584b;
+  font: 400 12px/1.5 Inter, sans-serif;
+  white-space: normal;
+  text-align: left;
+}
+.search-booking-note[hidden] { display: none; }
+.flatpickr-calendar > .search-booking-note {
+  clear: both;
+  width: calc(100% - 20px);
+  margin: 10px;
+}

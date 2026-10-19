@@ -7,6 +7,7 @@ require_once __DIR__ . '/../php/tourist_activity_helper.php';
 TouristPreparePageActivity($pdo);
 require_once 'php/admin_auth_helper.php';
 require_once 'php/hotel_reviews_helper.php';
+require_once 'php/hotel_review_filters.php';
 require_once 'php/hotel_rooms_helper.php';
 require_once 'php/hotel_content_helper.php';
 require_once 'php/favorites_helper.php';
@@ -72,6 +73,18 @@ if (!$hotel) {
     http_response_code(404);
     echo "Hotel not found.";
     exit;
+}
+
+$hotelSearchLocations = ['Apuao', 'Malasugui', 'Quinapaguian', 'Cayucyucan', 'Caringo', 'Canimog'];
+$hotelSearchIsland = trim((string)($hotel['island'] ?? ''));
+foreach ($hotelSearchLocations as $knownIsland) {
+    if (stripos($hotelSearchIsland, $knownIsland) !== false) {
+        $hotelSearchIsland = $knownIsland;
+        break;
+    }
+}
+if ($hotelSearchIsland !== '' && !in_array($hotelSearchIsland, $hotelSearchLocations, true)) {
+    $hotelSearchLocations[] = $hotelSearchIsland;
 }
 
 $stmtRegisteredMapHotels = $pdo->query("
@@ -162,6 +175,18 @@ LIMIT 10
 ");
 $stmtReviews->execute([$hotelId]);
 $reviews = $stmtReviews->fetchAll(PDO::FETCH_ASSOC);
+
+// Return only the review list for automatic filters; skip the AI summary and full page.
+if (($_SERVER['HTTP_X_REVIEW_FRAGMENT'] ?? '') === '1') {
+    $reviewFilters = hotelReviewFilterOptions($_GET);
+    $reviewResults = hotelReviewSearch($pdo, $hotelId, $reviewFilters);
+    $reviews = $reviewResults['reviews'];
+    header('Content-Type: text/html; charset=utf-8');
+    header('Cache-Control: private, no-store');
+    include __DIR__ . '/../php/hotel_review_results.php';
+    exit;
+}
+
 
 /* =========================================================
    AI REVIEW SUMMARY
@@ -290,6 +315,11 @@ return $fallback;
 }
 
 $aiSummary = generateReviewSummary($reviews);
+
+// Filtering the review list must not change the property's overall summary.
+$reviewFilters = hotelReviewFilterOptions($_GET);
+$reviewResults = hotelReviewSearch($pdo, $hotelId, $reviewFilters);
+$reviews = $reviewResults['reviews'];
 
 $hotel['id'] = (int)$hotel['id'];
 $hotel['price'] = (float)$hotel['price'];
@@ -1692,6 +1722,7 @@ function ratingValue($value): float {
 }
   </style>
   <?php TouristRenderActivityMonitor(); ?>
+<script src="js/hotel-child-policy.js?v=<?= (int)filemtime(__DIR__ . '/../js/hotel-child-policy.js') ?>"></script>
 </head>
 <body>
   <div id="header"></div>
@@ -1703,7 +1734,7 @@ function ratingValue($value): float {
       </span>
       <span class="details-search-toggle-copy">
         <strong>Search available rooms</strong>
-        <small id="detailsSearchSummary"><?= htmlspecialchars((string)$hotel['island']) ?> &middot; Select dates &middot; Guests &amp; Rooms</small>
+        <small id="detailsSearchSummary"><?= htmlspecialchars((string)$hotel['island']) ?> &middot; Select dates &middot; Guests</small>
       </span>
       <svg class="details-search-toggle-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg>
     </button>
@@ -1712,13 +1743,10 @@ function ratingValue($value): float {
         <label>Where to go?</label>
         <div class="location-input-wrap">
           <select id="island">
-            <option value="" selected disabled>--select a location--</option>
-            <option value="Apuao">Apuao</option>
-            <option value="Malasugui">Malasugui</option>
-            <option value="Quinapaguian">Quinapaguian</option>
-            <option value="Cayucyucan">Cayucyucan</option>
-            <option value="Caringo">Caringo</option>
-            <option value="Canimog">Canimog</option>
+            <option value="" <?= $hotelSearchIsland === '' ? 'selected' : '' ?> disabled>--select a location--</option>
+            <?php foreach ($hotelSearchLocations as $searchIsland): ?>
+              <option value="<?= htmlspecialchars($searchIsland, ENT_QUOTES, 'UTF-8') ?>" <?= $hotelSearchIsland === $searchIsland ? 'selected' : '' ?>><?= htmlspecialchars($searchIsland) ?></option>
+            <?php endforeach; ?>
           </select>
         </div>
       </div>
@@ -1732,13 +1760,13 @@ function ratingValue($value): float {
         <input type="hidden" id="checkout" />
       </div>
       <div class="search-box">
-        <label>Guests & Rooms</label>
+        <label>Guests</label>
         <div class="guest-display" onclick="toggleGuestBox()">
-          <span id="guestText" class="placeholder">Guests & Rooms</span>
+          <span id="guestText" class="placeholder">Guests</span>
         </div>
         <div id="guestBox" class="guest-box">
           <div class="guest-row">
-            <span>Adults</span>
+            <span>Adults <small>(18+ years)</small></span>
             <div>
               <button type="button" onclick="changeValue('adults', -1)">-</button>
               <span id="adults">0</span>
@@ -1746,19 +1774,11 @@ function ratingValue($value): float {
             </div>
           </div>
           <div class="guest-row">
-            <span>Children</span>
+            <span>Children <small>(0–17 years)</small></span>
             <div>
               <button type="button" onclick="changeValue('children', -1)">-</button>
               <span id="children">0</span>
               <button type="button" onclick="changeValue('children', 1)">+</button>
-            </div>
-          </div>
-          <div class="guest-row">
-            <span>Rooms</span>
-            <div>
-              <button type="button" onclick="changeValue('roomsCount', -1)">-</button>
-              <span id="roomsCount">0</span>
-              <button type="button" onclick="changeValue('roomsCount', 1)">+</button>
             </div>
           </div>
           <div id="childAgeRows" class="child-age-list" aria-live="polite"></div>
@@ -2043,11 +2063,6 @@ function ratingValue($value): float {
         <p class="reviews-verified-badge">Provided by verified guests</p>
       </div>
 
-      <!-- Review Sources Tabs -->
-      <div class="reviews-tabs">
-        <button class="reviews-tab active" data-source="all">ALL SOURCES (<?= number_format((int)$hotel['total_reviews']) ?>)</button>
-      </div>
-
       <!-- Main Reviews Container -->
       <div class="reviews-main-container">
         <!-- Left: Overall Rating & Stats -->
@@ -2179,108 +2194,37 @@ function ratingValue($value): float {
   </div>
 </div>
 
-<!-- FILTERS (UNCHANGED) -->
-<div class="review-filters">
+<form class="review-filters" action="hotel_details.php#reviews" method="get" aria-label="Filter guest reviews">
+  <input type="hidden" name="id" value="<?= (int)$hotelId ?>">
+  <?php foreach ($_GET as $queryKey => $queryValue): ?>
+    <?php if ($queryKey === 'id' || str_starts_with((string)$queryKey, 'review_') || !is_scalar($queryValue)) continue; ?>
+    <input type="hidden" name="<?= htmlspecialchars((string)$queryKey, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars((string)$queryValue, ENT_QUOTES, 'UTF-8') ?>">
+  <?php endforeach; ?>
   <div class="filter-group">
-    <label>Guest Type</label>
-    <select class="filter-select">
-      <option>All guests (<?= number_format((int)$hotel['total_reviews']) ?>)</option>
-    </select>
-  </div>
-
-  <div class="filter-group">
-    <label>Room Type</label>
-    <select class="filter-select">
-      <option>All room types</option>
-    </select>
-  </div>
-
-  <div class="filter-group">
-    <label>Language</label>
-    <select class="filter-select">
-      <option>All languages</option>
-    </select>
-  </div>
-</div>
-
-<!-- TAGS -->
-<div class="review-mentions">
-  <p class="mentions-label">Show reviews that mention</p>
-  <div class="mentions-buttons">
-    <button class="mention-btn">All Reviews</button>
-  </div>
-</div>
-
-<!-- INDIVIDUAL REVIEWS -->
-<div class="reviews-carousel <?= count($reviews) <= 2 ? 'is-static' : '' ?>">
-
-  <button type="button" class="reviews-nav prev" id="reviewsPrev">&#8249;</button>
-
-  <div class="reviews-track" id="reviewsTrack">
-
-    <?php if (!empty($reviews)): ?>
-      <?php foreach ($reviews as $review): ?>
-        <?php
-          $name = trim($review['reviewer_name'] ?? '') ?: 'Guest';
-          $rating = (float)($review['rating'] ?? 0);
-
-          $profileImage = resolveReviewProfileImage(
-            $review['profile_picture'] ?? '',
-            (string)($review['google_id'] ?? '')
-          );
-          $dateText = !empty($review['created_at'])
-            ? (new DateTime($review['created_at']))->format('d M Y')
-            : 'Recently';
-        ?>
-
-        <article class="review-card individual">
-
-          <header class="review-card-head">
-            <div class="review-user">
-              <span class="review-avatar">
-                <?php if ($profileImage !== ''): ?>
-                  <img src="<?= htmlspecialchars($profileImage) ?>" alt="<?= htmlspecialchars($name) ?> profile" loading="lazy" decoding="async" referrerpolicy="no-referrer">
-                <?php else: ?>
-                  <?= htmlspecialchars(strtoupper(substr($name, 0, 1))) ?>
-                <?php endif; ?>
-              </span>
-
-              <div>
-                <strong><?= htmlspecialchars($name) ?></strong>
-                <p class="review-date"><?= htmlspecialchars($dateText) ?></p>
-              </div>
-            </div>
-          </header>
-
-          <p class="review-rating-line">
-            <span class="review-stars">
-              <?php for ($i = 1; $i <= 5; $i++): ?>
-                <span class="star <?= reviewStarClass($i, $rating) ?>">★</span>
-              <?php endfor; ?>
-            </span>
-
-            <span><?= number_format($rating, 1) ?>/5</span>
-          </p>
-
-          <p class="review-message">
-            <?= htmlspecialchars($review['review_message'] ?? '') ?>
-          </p>
-
-          <?php if (trim((string)($review['owner_reply'] ?? '')) !== ''): ?>
-            <div class="review-owner-response"><strong>Response from the property</strong><?= nl2br(htmlspecialchars((string)$review['owner_reply'])) ?></div>
-          <?php endif; ?>
-
-        </article>
-
+    <label for="reviewRatingFilter">Rating</label>
+    <select class="filter-select" id="reviewRatingFilter" name="review_rating">
+      <option value="">All ratings</option>
+      <?php foreach ([5, 4, 3, 2, 1] as $stars): ?>
+        <option value="<?= $stars ?>" <?= $reviewFilters['rating'] === (string)$stars ? 'selected' : '' ?>><?= $stars ?> star<?= $stars === 1 ? '' : 's' ?></option>
       <?php endforeach; ?>
-    <?php else: ?>
-      <p class="dummy-text">No reviews yet.</p>
-    <?php endif; ?>
-
+    </select>
   </div>
-
-  <button type="button" class="reviews-nav next" id="reviewsNext">&#8250;</button>
-
+  <div class="filter-group">
+    <label for="reviewSortFilter">Sort by</label>
+    <select class="filter-select" id="reviewSortFilter" name="review_sort">
+      <?php foreach (['newest' => 'Newest first', 'oldest' => 'Oldest first', 'highest' => 'Highest rating', 'lowest' => 'Lowest rating'] as $sortValue => $sortLabel): ?>
+        <option value="<?= $sortValue ?>" <?= $reviewFilters['sort'] === $sortValue ? 'selected' : '' ?>><?= $sortLabel ?></option>
+      <?php endforeach; ?>
+    </select>
+  </div>
+  <div class="filter-group">
+    <label for="reviewSearchFilter">Search reviews</label>
+    <input class="filter-select" id="reviewSearchFilter" type="search" name="review_search" maxlength="120" placeholder="e.g. cleanliness, staff" value="<?= htmlspecialchars($reviewFilters['search'], ENT_QUOTES, 'UTF-8') ?>">
+  </div>
+</form>
+<p id="reviewFilterNotice" class="review-filter-notice" role="alert" hidden></p>
+<div id="hotelReviewResults" aria-live="polite">
+  <?php include __DIR__ . '/../php/hotel_review_results.php'; ?>
 </div>
 
 </div> <!-- END RIGHT COLUMN -->
@@ -2410,7 +2354,7 @@ function ratingValue($value): float {
       if (!detailsSearchSummary) return;
       const location = islandInput.value || hotelData.island || 'Choose location';
       const dates = dateRangeInput.value || 'Select dates';
-      const guests = document.getElementById('guestText')?.textContent?.trim() || 'Guests & Rooms';
+      const guests = document.getElementById('guestText')?.textContent?.trim() || 'Guests';
       detailsSearchSummary.textContent = `${location} · ${dates} · ${guests}`;
     }
 
@@ -2891,12 +2835,13 @@ function ratingValue($value): float {
     }
 
     async function fetchAvailableRooms(searchData) {
+      HotelChildPolicy.ages(searchData.childAges || [], Number(searchData.children || 0));
       const totalGuests = Math.max(1, Number(searchData.adults || 0) + Number(searchData.children || 0));
       const params = new URLSearchParams({
         hotel_id: String(hotelData.id),
         checkin: String(searchData.checkin || ""),
         checkout: String(searchData.checkout || ""),
-        guests: String(totalGuests)
+        guests: String(totalGuests), adults: String(searchData.adults || 0), children: String(searchData.children || 0), child_ages: (searchData.childAges || []).join(",")
       });
 
       const response = await fetch(`php/hotel_room_availability.php?${params.toString()}`, {
@@ -2945,7 +2890,7 @@ function ratingValue($value): float {
           : isBookedForDates
             ? 'Not available for selected dates'
             : insufficientCapacity
-              ? 'Room capacity is below your guest count'
+              ? (room.suitabilityReason || 'Room capacity is below your guest count')
               : 'Room is currently unavailable';
         
         // Determine badge and button state
@@ -2962,7 +2907,7 @@ function ratingValue($value): float {
             buttonText = 'Sold out for your selected date';
           } else if (insufficientCapacity) {
             availabilityBadge = '<span class="room-availability-badge room-availability-badge--insufficient">Not suitable for guest count</span>';
-            buttonText = 'Not suitable for guest count';
+            buttonText = room.suitabilityReason || 'Not suitable for guest count';
           } else {
             availabilityBadge = '<span class="room-availability-badge room-availability-badge--sold-out">Currently unavailable</span>';
             buttonText = 'Currently unavailable';
@@ -2999,7 +2944,7 @@ function ratingValue($value): float {
                   <path d="M16 11a3 3 0 1 0-2.999-3A3 3 0 0 0 16 11Zm-8 0a3 3 0 1 0-3-3A3 3 0 0 0 8 11Zm0 2c-2.761 0-5 1.79-5 4v1h10v-1c0-2.21-2.239-4-5-4Zm8 0c-.333 0-.653.028-.967.075A5.93 5.93 0 0 1 17 17v1h4v-1c0-2.21-2.239-4-5-4Z"></path>
                 </svg>
               </span>
-              Fits up to ${room.capacityTotal || (room.capacityAdults + room.capacityChildren)} guest(s)
+              Up to ${room.occupancyPolicy?.adult_capacity ?? room.capacityAdults} adults, ${room.occupancyPolicy?.child_allowance ?? room.capacityChildren} children; maximum ${room.capacityTotal} occupants
             </p>
             <p class="room-meta">
               <span class="meta-icon" aria-hidden="true">
@@ -3038,7 +2983,6 @@ function ratingValue($value): float {
           <div class="room-right">
             <p>Price per night</p>
             <strong>₱${room.price.toLocaleString()}</strong>
-            <small>No hidden charges</small>
             <button type="button" class="room-book-btn" data-room-index="${Number(roomIndex)}" ${buttonDisabled ? 'disabled' : ''} title="${escapeHotelDetailsText(!isAvailable ? buttonText : 'Book this room')}">${escapeHotelDetailsText(buttonText)}</button>
           </div>
         </article>
@@ -3074,6 +3018,7 @@ function ratingValue($value): float {
             room_type: room.roomType,
             checkin: String(searchData.checkin || ""),
             checkout: String(searchData.checkout || ""),
+            requested_rooms: "1",
             adults: String(searchData.adults || 0),
             children: String(searchData.children || 0),
             child_ages: Array.isArray(searchData.childAges) ? searchData.childAges.join(",") : ""
@@ -3091,6 +3036,11 @@ function ratingValue($value): float {
 
     async function runRoomSearch(searchData) {
       const requestId = ++roomSearchRequestId;
+      try { HotelChildPolicy.ages(searchData.childAges || [], Number(searchData.children || 0)); } catch (error) {
+        roomsContent.innerHTML = `<p class="dummy-text">${escapeHotelDetailsText(error.message)}</p>`;
+        document.getElementById("guestBox").style.display = "block";
+        return;
+      }
       document.getElementById("searchActionLabel").textContent = "Update results";
       roomsContent.innerHTML = `<p class="dummy-text">Checking room availability...</p>`;
       try {
@@ -3118,7 +3068,7 @@ function ratingValue($value): float {
     function applyGuestSelection(shouldValidate = true) {
       const adults = Number(document.getElementById("adults").innerText);
       const children = Number(document.getElementById("children").innerText);
-      const rooms = Number(document.getElementById("roomsCount").innerText);
+      const rooms = 1;
       const guestText = document.getElementById("guestText");
       if (shouldValidate && !validateGuestSelection()) return;
       if (!shouldValidate) {
@@ -3126,10 +3076,10 @@ function ratingValue($value): float {
         clearError(document.querySelector(".guest-display"));
       }
       if ((adults + children) === 0) {
-        guestText.innerText = "Guests & Rooms";
+        guestText.innerText = "Guests";
         guestText.classList.add("placeholder");
       } else {
-        guestText.innerText = `${adults} Adult${adults > 1 ? "s" : ""}, ${children} Child${children !== 1 ? "ren" : ""} • ${rooms} Room${rooms > 1 ? "s" : ""}`;
+        guestText.innerText = `${adults} Adult${adults > 1 ? "s" : ""}, ${children} Child${children !== 1 ? "ren" : ""} •`;
         guestText.classList.remove("placeholder");
       }
       document.getElementById("guestBox").style.display = "none";
@@ -3149,17 +3099,13 @@ function ratingValue($value): float {
 
     function parseChildAges(value) {
       const values = Array.isArray(value) ? value : String(value || "").split(",");
-      return values
-        .map(age => String(age).trim())
-        .filter(age => /^\d+$/.test(age) && Number(age) >= 0 && Number(age) <= 17)
-        .map(Number);
+      if (values.length === 1 && String(values[0]).trim() === "") return [];
+      return values.map(age => /^\d+$/.test(String(age).trim()) && Number(age) >= 0 && Number(age) <= 17 ? Number(age) : "");
     }
 
     function getChildAges() {
       return Array.from(document.querySelectorAll("#childAgeRows .child-age-select"))
-        .map(select => select.value)
-        .filter(value => value !== "")
-        .map(Number);
+        .map(select => select.value === "" ? "" : Number(select.value));
     }
 
     function clearGuestPickerHighlights() {
@@ -3172,7 +3118,7 @@ function ratingValue($value): float {
     function validateGuestSelection() {
       const adults = Number(document.getElementById("adults")?.innerText || 0);
       const children = Number(document.getElementById("children")?.innerText || 0);
-      const rooms = Number(document.getElementById("roomsCount")?.innerText || 0);
+      const rooms = 1;
       const guestDisplay = document.querySelector(".guest-display");
       const messages = [];
       clearGuestPickerHighlights();
@@ -3181,11 +3127,6 @@ function ratingValue($value): float {
         document.getElementById("adults")?.closest(".guest-row")?.classList.add("is-invalid");
         messages.push("add at least 1 adult");
       }
-      if (rooms < 1) {
-        document.getElementById("roomsCount")?.closest(".guest-row")?.classList.add("is-invalid");
-        messages.push("add at least 1 room");
-      }
-
       const missingAgeLabels = [];
       document.querySelectorAll("#childAgeRows .child-age-select").forEach((select, index) => {
         if (select.value !== "") return;
@@ -3218,7 +3159,7 @@ function ratingValue($value): float {
       container.innerHTML = Array.from({ length: count }, (_, index) => {
         const selectedAge = previous[index] ?? "";
         const options = Array.from({ length: 18 }, (__, age) =>
-          `<option value="${age}"${selectedAge === String(age) ? " selected" : ""}>${age} year${age === 1 ? "" : "s"} old${age <= 7 ? " — Free" : ""}</option>`
+          `<option value="${age}"${selectedAge === String(age) ? " selected" : ""}>${age} year${age === 1 ? "" : "s"} old${age <= 5 ? " — Free" : " — PHP 250/night"}</option>`
         ).join("");
         return `<label class="child-age-row">
           <span>Child ${index + 1} age</span>
@@ -3230,7 +3171,7 @@ function ratingValue($value): float {
 
       container.hidden = count === 0;
       if (count > 0) {
-        container.insertAdjacentHTML("beforeend", '<p class="child-age-note">Ages 7 and below: free hotel admission and entrance fees.</p>');
+        container.insertAdjacentHTML("beforeend", '<p class="child-age-note">Ages 0–5: free accommodation. Ages 6–17: PHP 250 per child per night. Existing bedding is shared; extra bedding is optional.</p>');
       }
       container.querySelectorAll(".child-age-select").forEach(select => {
         select.addEventListener("change", () => {
@@ -3247,8 +3188,29 @@ function ratingValue($value): float {
       box.style.display = box.style.display === "block" ? "none" : "block";
     }
 
+    function normalizeDetailsIsland(value) {
+      const raw = String(value || "").trim().toLowerCase();
+      if (!raw) return "";
+      const options = Array.from(islandInput.options).filter(option => option.value);
+      return options.find(option => option.value.toLowerCase() === raw)?.value
+        || options.find(option => raw.includes(option.value.toLowerCase()))?.value || "";
+    }
+
+    function detailsEntrySearchData() {
+      const params = new URLSearchParams(window.location.search);
+      if (!['destination', 'island', 'checkin', 'checkout'].some(key => params.has(key))) return null;
+      const count = (key, fallback, minimum) => Math.max(minimum, Number.parseInt(params.get(key) || String(fallback), 10) || fallback);
+      return {
+        island: normalizeDetailsIsland(params.get('island')) || normalizeDetailsIsland(params.get('destination')) || normalizeDetailsIsland(hotelData.island),
+        checkin: params.get('checkin') || '', checkout: params.get('checkout') || '',
+        adults: count('adults', Math.max(1, (Number.parseInt(params.get('pax'), 10) || 1) - (Number.parseInt(params.get('children'), 10) || 0)), 1),
+        children: count('children', 0, 0), rooms: 1,
+        childAges: parseChildAges(params.get('child_ages') || '')
+      };
+    }
+
     function fillSearchFromData(data) {
-      islandInput.value = data.island || "";
+      islandInput.value = normalizeDetailsIsland(data.island) || normalizeDetailsIsland(hotelData.island);
       checkinInput.value = data.checkin || "";
       checkoutInput.value = data.checkout || "";
       if (data.checkin && data.checkout) {
@@ -3259,7 +3221,6 @@ function ratingValue($value): float {
       }
       document.getElementById("adults").innerText = data.adults ?? 0;
       document.getElementById("children").innerText = data.children ?? 0;
-      document.getElementById("roomsCount").innerText = data.rooms ?? 0;
       renderChildAgeRows(data.childAges || data.child_ages || []);
       applyGuestSelection(false);
       updateIslandFieldState();
@@ -3273,7 +3234,7 @@ function ratingValue($value): float {
         adults: String(data.adults),
         children: String(data.children),
         child_ages: data.childAges.join(","),
-        rooms: String(data.rooms)
+        rooms: "1"
       });
       window.location.assign(`hotel_resorts.php?${params.toString()}`);
     }
@@ -3286,7 +3247,7 @@ function ratingValue($value): float {
         adults: Number(document.getElementById("adults").innerText),
         children: Number(document.getElementById("children").innerText),
         childAges: getChildAges(),
-        rooms: Number(document.getElementById("roomsCount").innerText)
+        rooms: 1
       };
     }
 
@@ -3388,7 +3349,7 @@ function ratingValue($value): float {
         return;
       }
 
-      if (data.island && data.island !== (hotelData.island || "")) {
+      if (data.island && normalizeDetailsIsland(data.island) !== normalizeDetailsIsland(hotelData.island)) {
         showResortsSearchResults(data);
         return;
       }
@@ -3699,7 +3660,12 @@ function ratingValue($value): float {
         Number(draftData.hotelId || hotelData.id) === Number(hotelData.id)
       );
 
-      if (savedDataIsForCurrentHotel) {
+      const entryData = detailsEntrySearchData();
+      if (entryData && (navigationType === 'navigate' || (!savedDataIsForCurrentHotel && !draftDataIsForCurrentHotel))) {
+        fillSearchFromData(entryData);
+        if (entryData.checkin && entryData.checkout) runRoomSearch(collectSearchData());
+        else renderRoomsSearchPrompt();
+      } else if (savedDataIsForCurrentHotel) {
         fillSearchFromData(savedData);
         runRoomSearch(savedData);
       } else if (draftDataIsForCurrentHotel) {
@@ -3709,7 +3675,7 @@ function ratingValue($value): float {
         if (pageSource === "featured") {
           const featuredIsland = hotelData.island || "";
           if (featuredIsland) {
-            islandInput.value = featuredIsland;
+            islandInput.value = normalizeDetailsIsland(featuredIsland);
             updateIslandFieldState();
           }
           localStorage.removeItem("hotelDetailsFeaturedIsland");
@@ -3758,27 +3724,6 @@ function ratingValue($value): float {
         persistSearchFormDraft();
         updateDetailsSearchSummary();
       });
-
-      const reviewsTrack = document.getElementById("reviewsTrack");
-      const reviewsPrev = document.getElementById("reviewsPrev");
-      const reviewsNext = document.getElementById("reviewsNext");
-      if (reviewsTrack && reviewsPrev && reviewsNext) {
-        const updateReviewNav = () => {
-          const maxScroll = Math.max(0, reviewsTrack.scrollWidth - reviewsTrack.clientWidth - 2);
-          reviewsPrev.disabled = reviewsTrack.scrollLeft <= 2;
-          reviewsNext.disabled = reviewsTrack.scrollLeft >= maxScroll;
-        };
-        const scrollStep = () => Math.max(280, Math.floor(reviewsTrack.clientWidth / (window.innerWidth <= 768 ? 1 : 2)));
-        reviewsPrev.addEventListener("click", () => {
-          reviewsTrack.scrollBy({ left: -scrollStep(), behavior: "smooth" });
-        });
-        reviewsNext.addEventListener("click", () => {
-          reviewsTrack.scrollBy({ left: scrollStep(), behavior: "smooth" });
-        });
-        reviewsTrack.addEventListener("scroll", updateReviewNav, { passive: true });
-        window.addEventListener("resize", updateReviewNav);
-        requestAnimationFrame(updateReviewNav);
-      }
 
       document.addEventListener("click", function (e) {
         const box = document.getElementById("guestBox");
@@ -3885,6 +3830,7 @@ function ratingValue($value): float {
       }
     }, true);
   </script>
+<script src="js/hotel-review-filters.js?v=<?= (int)filemtime(__DIR__ . '/../js/hotel-review-filters.js') ?>"></script>
 <script src="js/booking-payment-confirmation.js"></script>
 <script src="js/back-to-top.js?v=<?= (int)@filemtime(__DIR__ . '/../js/back-to-top.js') ?>"></script>
 </body>

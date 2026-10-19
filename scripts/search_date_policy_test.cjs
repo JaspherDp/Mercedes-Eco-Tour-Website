@@ -30,6 +30,7 @@ const elements = Object.fromEntries(['checkin', 'checkout', 'dateRangePicker', '
 let options;
 const pickerContext = vm.createContext({
   window: { innerWidth: 1000, SearchDatePolicy: {
+    updateCalendarNote: context.window.SearchDatePolicy.updateCalendarNote,
     minimumDate: tab => minimum(tab, new Date('2026-10-19T12:00:00+08:00'))
   } },
   document: { getElementById: id => elements[id] },

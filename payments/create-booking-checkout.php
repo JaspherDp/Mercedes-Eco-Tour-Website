@@ -82,8 +82,10 @@ $payload = [];
 $total = 0.0;
 $serviceName = '';
 $lineDescription = '';
+$hotelReservationLock = '';
 try {
     if ($domain === 'hotel') {
+        HoChildRequireStorage($pdo);
         HoEnsureHotelBookingsTable($pdo);
         $hotelId = ItourValidationInt($input['hotel_id'] ?? null, 'Hotel ID', 1, PHP_INT_MAX);
         $roomId = ItourValidationInt($input['room_id'] ?? null, 'Room ID', 1, PHP_INT_MAX);
@@ -112,9 +114,7 @@ try {
         if ($hotelName === '' || !$room) {
             throw new DomainException('The selected hotel room is no longer available.');
         }
-        if ($adults + $children > HoRoomCapacityTotal($room)) {
-            throw new DomainException('The selected room cannot accommodate this number of guests.');
-        }
+        $hotelReservationLock = HoChildReservationLock($pdo, $hotelId, $roomId);
         if (!HoIsHotelRoomAvailable($pdo, $hotelId, $roomId, (string)$room['room_name'], $checkin, $checkout)) {
             throw new DomainException('This room is no longer available for the selected dates.');
         }
@@ -131,7 +131,10 @@ try {
             throw new DomainException('Another customer is currently paying for this room. Please try again shortly.');
         }
         $nights = (int)(new DateTimeImmutable($checkin))->diff(new DateTimeImmutable($checkout))->days;
-        $total = round((float)$room['price'] * max(1, $nights), 2);
+        $childQuote = HoChildQuote($room, $adults, $children, $hotelChildAges, max(1, $nights));
+        HoChildCheckClientTotal($input, $childQuote);
+        $childQuote['requested_rooms'] = ItourValidationInt($input['requested_rooms'] ?? 1, 'Rooms requested', 1, 100);
+        $total = $childQuote['total_before_addons'];
         $payload = [
             'hotel_resort_id' => $hotelId, 'hotel_room_id' => $roomId,
             'room_type' => (string)$room['room_name'], 'checkin_date' => $checkin,
@@ -141,6 +144,8 @@ try {
             'special_request' => bookingCheckoutText($input['special_request'] ?? '', 2000),
             'unit_price' => (float)$room['price'], 'hotel_name' => $hotelName,
             'child_ages' => $hotelChildAges,
+            'hotel_child_policy' => $childQuote,
+            'requested_rooms' => ItourValidationInt($input['requested_rooms'] ?? 1, 'Rooms requested', 1, 100),
         ];
         $serviceName = $hotelName . ' - ' . (string)$room['room_name'];
         $lineDescription = $checkin . ' to ' . $checkout . ' | ' . $nights . ' night(s)';
@@ -380,6 +385,7 @@ try {
         $total = round($total + $selectedAddons['total'], 2);
     }
 
+    if ($domain === 'hotel') HoChildCheckSubmittedTotal($input, $total);
     if ($total <= 0) throw new DomainException('This booking has no payable amount.');
 
     $bookingLimit = requestRateLimitConsume($pdo, 'booking_submission', 'tourist:' . $touristId, 5, 3600);
@@ -441,6 +447,8 @@ try {
     $pdo->commit();
     tourResourceUnlock($pdo, $resourceLock ?? '');
     foreach ($resourceLocks ?? [] as $heldLock) tourResourceUnlock($pdo, $heldLock);
+    HoChildReservationUnlock($pdo, $hotelReservationLock);
+    $hotelReservationLock = '';
 
     session_write_close();
     $publicAppUrl = ItourAppIsProduction() ? ItourPaymentPhoneAppUrl() : PaymentHelper::env('PUBLIC_APP_URL');
@@ -479,11 +487,15 @@ try {
     if ($pdo->inTransaction()) $pdo->rollBack();
     tourResourceUnlock($pdo, $resourceLock ?? '');
     foreach ($resourceLocks ?? [] as $heldLock) tourResourceUnlock($pdo, $heldLock);
+    HoChildReservationUnlock($pdo, $hotelReservationLock);
+    $hotelReservationLock = '';
     bookingCheckoutResponse(400, ['success' => false, 'message' => $exception->getMessage()]);
 } catch (PayMongoException $exception) {
     if ($pdo->inTransaction()) $pdo->rollBack();
     tourResourceUnlock($pdo, $resourceLock ?? '');
     foreach ($resourceLocks ?? [] as $heldLock) tourResourceUnlock($pdo, $heldLock);
+    HoChildReservationUnlock($pdo, $hotelReservationLock);
+    $hotelReservationLock = '';
     if (isset($transactionId)) {
         $pdo->prepare("UPDATE payment_transactions SET status='failed', failed_at=NOW(), failure_message=? WHERE payment_transaction_id=? AND status='pending'")->execute([mb_substr($exception->getMessage(), 0, 1000), $transactionId]);
         $pdo->prepare("UPDATE booking_checkout_drafts SET status='failed' WHERE booking_draft_id=? AND status='pending'")->execute([$draftId]);
@@ -494,6 +506,8 @@ try {
     if ($pdo->inTransaction()) $pdo->rollBack();
     tourResourceUnlock($pdo, $resourceLock ?? '');
     foreach ($resourceLocks ?? [] as $heldLock) tourResourceUnlock($pdo, $heldLock);
+    HoChildReservationUnlock($pdo, $hotelReservationLock);
+    $hotelReservationLock = '';
     if (isset($transactionId, $draftId)) {
         try {
             $pdo->prepare("UPDATE payment_transactions SET status='failed', failed_at=NOW(), failure_message=? WHERE payment_transaction_id=? AND status='pending'")

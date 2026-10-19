@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/hotel_child_policy.php';
 require_once __DIR__ . '/session_security.php';
 AppSessionStart();
 require_once __DIR__ . '/db_connection.php';
@@ -196,6 +197,7 @@ function profileBillingRecord(PDO $pdo, int $touristId, string $type, int $booki
         $stmt->execute([$bookingId, $touristId]);
         $booking = $stmt->fetch(PDO::FETCH_ASSOC);
         if (!$booking) throw new RuntimeException('Hotel booking not found.');
+        $booking['child_policy'] = HoChildSnapshot($pdo, $bookingId);
         $expenseStmt = $pdo->prepare("
             SELECT expense_type, expense_name, quantity, unit_price, total_amount, notes
             FROM hotel_booking_expenses WHERE hotel_booking_id = ? AND hotel_resort_id = ? ORDER BY created_at ASC
@@ -292,6 +294,7 @@ if (($_GET['billing_action'] ?? '') === 'download_receipt') {
             . '<hr style="color:#b9d6cc"><table cellpadding="6" style="font-size:11px"><tr><td><b>Billed to</b><br>' . htmlspecialchars($guest) . '</td><td><b>Service</b><br>' . htmlspecialchars($service) . '</td></tr><tr><td><b>Booking type</b><br>' . ($isHotel ? 'Hotel reservation' : 'Tour reservation') . '</td><td><b>Issued</b><br>' . date('F j, Y') . '</td></tr></table>'
             . '<br><table cellpadding="8" border="1" style="border-color:#d7e4df;font-size:11px"><tr style="background-color:#edf6f2"><td><b>Payment summary</b></td><td align="right"><b>Amount</b></td></tr><tr><td>Booking total</td><td align="right">PHP ' . number_format($total, 2) . '</td></tr><tr><td>Amount paid</td><td align="right">PHP ' . number_format($paid, 2) . '</td></tr><tr style="background-color:#e4f1ec"><td><b>Remaining balance</b></td><td align="right"><b>PHP ' . number_format($balance, 2) . '</b></td></tr></table>'
             . '<br><div style="padding:12px;background-color:#f4f8f6;font-size:10px;color:#526b64">This computer-generated receipt confirms the payment record for the completed booking above.</div></div>';
+        if ($isHotel && !empty($b['child_policy'])) $html .= '<p>' . htmlspecialchars(HoChildSummary($b['child_policy']), ENT_QUOTES, 'UTF-8') . '</p>';
         $pdf->writeHTML($html, true, false, true, false, '');
         $pdf->Output('itour-receipt-' . preg_replace('/[^A-Za-z0-9_-]/', '-', $reference) . '.pdf', 'D');
     } catch (Throwable $e) {
@@ -988,6 +991,7 @@ while ($row = $feedback_stmt->fetch(PDO::FETCH_ASSOC)) {
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="icon" type="image/png" href="../img/newlogo.png" />
 <link rel="stylesheet" href="../styles/favorites.css" />
+<link rel="stylesheet" href="../styles/booking-status-colors.css?v=1">
 <link rel="stylesheet" href="../styles/complaint-modal.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/complaint-modal.css') ?>" />
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
 <script>
@@ -4289,6 +4293,7 @@ document.addEventListener("DOMContentLoaded", function () {
               <div class="meta-tags">
                 <span>Adults: <?= (int)($h['adults'] ?? 0) ?></span>
                 <span>Children: <?= (int)($h['children'] ?? 0) ?></span>
+                <?php if ($savedChildPolicy = HoChildSnapshot($pdo, (int)$h['hotel_booking_id'])): ?><span><?= htmlspecialchars(HoChildSummary($savedChildPolicy), ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
               </div>
             </div>
 
@@ -6474,13 +6479,14 @@ document.querySelectorAll('.cancel-booking-btn').forEach(button => {
     const serviceDate = button.dataset.serviceDate || '-';
     const refundPolicy = button.dataset.refundPolicy || 'Refund eligibility will be reviewed.';
     const refundPolicyCode = button.dataset.refundPolicyCode || '';
+    const collectRefundDestination = button.dataset.bookingDomain !== 'hotel' && refundPolicyCode === 'partial_refund';
     const refundAmount = Number(button.dataset.refundAmount || 0);
     const refundText = refundAmount > 0
       ? `${refundPolicy}. Estimated refundable amount: ₱${refundAmount.toLocaleString('en-PH', {minimumFractionDigits:2, maximumFractionDigits:2})}.`
       : `${refundPolicy}. No refundable amount is currently estimated.`;
 
     let institutions = [];
-    if (refundPolicyCode === 'partial_refund') {
+    if (collectRefundDestination) {
       Swal.fire({title:'Loading refund channels',text:'Getting the available banks and e-wallets from PayMongo...',allowOutsideClick:false,didOpen:()=>Swal.showLoading()});
       try {
         const institutionResponse = await fetch('refund_institutions.php', {headers:{'Accept':'application/json'}});
@@ -6496,7 +6502,7 @@ document.querySelectorAll('.cancel-booking-btn').forEach(button => {
     }
     const escapeCancellationField = value => String(value ?? '').replace(/[&<>"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[character]));
     const institutionOptions = institutions.map(item => `<option value="${escapeCancellationField(item.bic)}" data-name="${escapeCancellationField(item.name)}">${escapeCancellationField(item.name)}</option>`).join('');
-    const destinationFields = refundPolicyCode === 'partial_refund' ? `
+    const destinationFields = collectRefundDestination ? `
       <div style="margin-top:16px;padding-top:14px;border-top:1px solid #dce8e3;text-align:left">
         <strong style="display:block;margin-bottom:5px;color:#174f40;font-size:13px">Refund destination</strong>
         <small style="display:block;margin-bottom:10px;color:#6e7f78;line-height:1.45">Your eligible refund will be sent automatically from the iTour Mercedes PayMongo Wallet after approval.</small>
@@ -6529,7 +6535,7 @@ document.querySelectorAll('.cancel-booking-btn').forEach(button => {
           const refundInstitution = selectedInstitution?.dataset?.name || '';
           const refundAccountName = document.getElementById('cancelRefundAccountName')?.value.trim() || '';
           const refundAccountNumber = document.getElementById('cancelRefundAccountNumber')?.value.trim() || '';
-          if (refundPolicyCode === 'partial_refund' && (!refundBic || !refundAccountName || !refundAccountNumber)) {
+          if (collectRefundDestination && (!refundBic || !refundAccountName || !refundAccountNumber)) {
             throw new Error('Complete the refund bank or e-wallet destination.');
           }
           const response = await fetch('request_booking_cancellation.php', {
@@ -6991,6 +6997,7 @@ function profileBillingNormalized(record) {
   const expenseTotal = expenses.reduce((sum, expense) => sum + Number(isHotel ? expense.total_amount : expense.amount || 0), 0);
   const checkoutCharges = isHotel ? Number(booking.checkout_additional_charges || 0) : 0;
   const serviceAmount = Math.max(0, total - expenseTotal - checkoutCharges);
+  const childFee = isHotel ? Number(booking.child_policy?.child_fee_total || 0) : 0;
   const guest = isHotel ? (booking.guest_name || 'Tourist') : (booking.guest_name || 'Tourist');
   const service = isHotel ? (booking.service_name || booking.room_type || 'Hotel reservation') : (booking.package_name || booking.location || booking.preferred_resource || 'Tour reservation');
   const reference = booking.booking_reference || (isHotel ? booking.hotel_booking_id : booking.booking_id);
@@ -6998,7 +7005,7 @@ function profileBillingNormalized(record) {
   const terminal = isHotel
     ? ['completed', 'cancelled', 'no-show'].includes(String(booking.booking_status || '').toLowerCase())
     : String(booking.is_complete || '').toLowerCase() !== 'uncomplete';
-  return {booking, isHotel, expenses, total, paid, balance, expenseTotal, checkoutCharges, serviceAmount, guest, service, reference, paymentStatus, terminal};
+  return {booking, childFee, isHotel, expenses, total, paid, balance, expenseTotal, checkoutCharges, serviceAmount, guest, service, reference, paymentStatus, terminal};
 }
 
 async function openProfileBilling(type, id) {
@@ -7031,7 +7038,7 @@ async function openProfileBilling(type, id) {
       <div class="profile-bill-top"><div class="profile-bill-ref"><small>BOOKING REFERENCE</small><strong>${profileSafe(bill.reference)}</strong></div><span class="profile-bill-status ${bill.paymentStatus.toLowerCase()}">${bill.paymentStatus}</span></div>
       <div class="profile-bill-party"><div><small>BILLED TO</small><strong>${profileSafe(bill.guest)}</strong></div><div><small>SERVICE</small><strong>${profileSafe(bill.service)}</strong></div></div>
       <h4 class="profile-bill-title">Detailed Charges</h4>
-      <div class="profile-bill-lines"><div class="profile-bill-line"><span>${bill.isHotel ? 'Room accommodation' : 'Tour service amount'}</span><strong>${profileMoney(bill.serviceAmount)}</strong></div>${expenseRows}${bill.checkoutCharges > 0 ? `<div class="profile-bill-line"><span>Check-out charges</span><strong>${profileMoney(bill.checkoutCharges)}</strong></div>` : ''}<div class="profile-bill-line total"><span>Total amount due</span><strong>${profileMoney(bill.total)}</strong></div></div>
+      <div class="profile-bill-lines"><div class="profile-bill-line"><span>${bill.isHotel ? 'Room accommodation' : 'Tour service amount'}</span><strong>${profileMoney(bill.serviceAmount - bill.childFee)}</strong></div>${bill.booking.child_policy ? `<div class="profile-bill-line"><span>Child accommodation (ages 6-17)</span><strong>${profileMoney(bill.childFee)}</strong></div><p>${profileSafe(bill.booking.child_policy.child_ages.map(age => age + (age <= 5 ? " (free)" : " (PHP 250/night)")).join(", "))}</p>` : ""}${expenseRows}${bill.checkoutCharges > 0 ? `<div class="profile-bill-line"><span>Check-out charges</span><strong>${profileMoney(bill.checkoutCharges)}</strong></div>` : ''}<div class="profile-bill-line total"><span>Total amount due</span><strong>${profileMoney(bill.total)}</strong></div></div>
       <h4 class="profile-bill-title">Payment Summary</h4>
       <div class="profile-bill-stats"><div class="profile-bill-stat"><small>AMOUNT PAID</small><strong>${profileMoney(bill.paid)}</strong></div><div class="profile-bill-stat balance ${bill.balance <= .009 ? 'zero' : ''}"><small>CURRENT BALANCE</small><strong>${profileMoney(bill.balance)}</strong></div><div class="profile-bill-stat"><small>PAYMENT STATUS</small><strong>${bill.paymentStatus}</strong></div></div>`;
     document.getElementById('profilePayRemaining').disabled = bill.balance <= .009 || bill.terminal;
@@ -7048,7 +7055,7 @@ function openProfileReceipt() {
   paper.innerHTML = `
     <div class="receipt-brand"><div><h2>iTour Mercedes</h2><p>OFFICIAL BOOKING RECEIPT</p></div><div class="receipt-number"><small>RECEIPT REFERENCE</small><strong>${profileSafe(bill.reference)}</strong>${profileBillingState.completed ? '<span class="receipt-paid-stamp">COMPLETED</span>' : ''}</div></div>
     <div class="receipt-meta"><div><small>BILLED TO</small><strong>${profileSafe(bill.guest)}</strong></div><div><small>SERVICE</small><strong>${profileSafe(bill.service)}</strong></div><div><small>BOOKING TYPE</small><strong>${bill.isHotel ? 'Hotel reservation' : 'Tour reservation'}</strong></div><div><small>RECEIPT STATUS</small><strong>${profileBillingState.completed ? 'Final receipt' : 'Preview only'}</strong></div></div>
-    <table class="receipt-table"><thead><tr><th>DESCRIPTION</th><th>AMOUNT</th></tr></thead><tbody><tr><td>${bill.isHotel ? 'Room accommodation' : 'Tour service'}</td><td>${profileMoney(bill.serviceAmount)}</td></tr>${expenseRows}${bill.checkoutCharges > 0 ? `<tr><td>Check-out charges</td><td>${profileMoney(bill.checkoutCharges)}</td></tr>` : ''}<tr class="receipt-total"><td>TOTAL</td><td>${profileMoney(bill.total)}</td></tr></tbody></table>
+    <table class="receipt-table"><thead><tr><th>DESCRIPTION</th><th>AMOUNT</th></tr></thead><tbody><tr><td>${bill.isHotel ? 'Room accommodation' : 'Tour service'}</td><td>${profileMoney(bill.serviceAmount - bill.childFee)}</td></tr>${bill.booking.child_policy ? `<tr><td>Child accommodation (ages 6-17)</td><td>${profileMoney(bill.childFee)}</td></tr>` : ""}${expenseRows}${bill.checkoutCharges > 0 ? `<tr><td>Check-out charges</td><td>${profileMoney(bill.checkoutCharges)}</td></tr>` : ''}<tr class="receipt-total"><td>TOTAL</td><td>${profileMoney(bill.total)}</td></tr></tbody></table>
     <div class="receipt-summary"><div><small>AMOUNT PAID</small><strong>${profileMoney(bill.paid)}</strong></div><div><small>BALANCE</small><strong>${profileMoney(bill.balance)}</strong></div><div><small>PAYMENT STATUS</small><strong>${bill.paymentStatus}</strong></div></div>
     <div class="receipt-foot">This receipt preview reflects the current booking account. The final downloadable PDF becomes available when the booking is marked completed.</div>`;
   const download = document.getElementById('profileDownloadReceipt');

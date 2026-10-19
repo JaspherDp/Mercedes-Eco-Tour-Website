@@ -225,6 +225,7 @@ function NotificationDestination(PDO $pdo, array $item, array $booking, string $
         $completed = $domain === 'hotel' ? in_array(HotelBookingStatus($booking), ['completed', 'cancelled'], true) : in_array(strtolower((string)$booking['is_complete']), ['completed','cancelled','declined'], true) || strtolower((string)$booking['status']) === 'declined';
         return 'php/profile.php?section=' . ($completed ? 'history' : 'bookings') . '&notification_booking=' . $id . '&notification_domain=' . $domain . (str_starts_with($type, 'payment_') ? '&notification_action=billing' : '');
     }
+    if ($role === 'hotel_admin' && $domain === 'hotel' && $cancellation && $request) return 'Hobookings.php?tab=cancellations&focus_request=' . (int)$request['cancellation_request_id'];
     $page = $role === 'hotel_admin' ? 'Hobookings.php' : 'opbookings.php';
     return $page . '?notification_booking=' . $id;
 }

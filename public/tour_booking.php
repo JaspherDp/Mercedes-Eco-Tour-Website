@@ -380,7 +380,7 @@ $locations = [
   #durationHint.needs-tour-type { color: #9a5b10; font-weight: 650; }
   #tourDuration.needs-tour-type { border-color: #d49a50 !important; box-shadow: 0 0 0 3px rgba(212,154,80,.14) !important; }
 </style>
-  <link rel="stylesheet" href="styles/booking-addon-picker.css?v=2">
+  <link rel="stylesheet" href="styles/booking-addon-picker.css?v=<?= (int)filemtime(__DIR__ . '/../styles/booking-addon-picker.css') ?>">
   <?php TouristRenderActivityMonitor(); ?>
 </head>
 <body>
@@ -591,31 +591,24 @@ $locations = [
           <section class="booking-step-panel" data-booking-step="3" hidden>
             <div class="step-section-heading">
               <b>3</b>
-              <div><h2>Review and confirm</h2><p>Review your payment summary and acknowledge the booking policies.</p></div>
+              <div><h2>Review and confirm</h2><p>Review your trip details and acknowledge the booking policies.</p></div>
             </div>
 
-          <div class="preview-block totals step-payment-summary">
-            <h3><span class="preview-heading-icon" aria-hidden="true">₱</span> Payment summary</h3>
-            <details class="fee-breakdown">
-              <summary>View fee breakdown <span aria-hidden="true"></span></summary>
-              <div class="fee-breakdown-content">
-                <p><span>Environmental Fee</span><strong id="previewEcoFee">-</strong></p>
-                <p><span>Total Discount</span><strong id="previewDiscountTotal">-</strong></p>
-                <p><span>Entrance Fee</span><strong id="previewEntranceFee">-</strong></p>
-                <p><span>Docking/Landing Fee</span><strong id="previewDockingFee">-</strong></p>
-                <p><span>Total Boat Bill</span><strong id="previewBoatBill">-</strong></p>
-                <small id="previewFeesNote">Other fees vary by selected locations and tour type.</small>
-              </div>
-            </details>
-            <p><span>Service Subtotal</span><strong id="previewServiceTotal">-</strong></p>
-            <p><span>Other Fees Subtotal</span><strong id="previewOtherFeesTotal">-</strong></p>
-            <div class="booking-addon-summary" data-addon-summary hidden></div>
-            <p><span>Optional add-ons</span><strong id="previewCatalogAddonsTotal">₱0.00</strong></p>
-            <p class="grand-total-row"><span>Estimated total</span><strong id="previewEstimatedTotal">-</strong></p>
-            <p><span>Payment Option</span><strong id="previewPaymentOption">20% Partial</strong></p>
-            <p class="pay-now-row"><span>Amount to pay now</span><strong id="previewAmountPayable">-</strong></p>
-            <small id="previewPricingNote">Select your booking type and details to view your estimate.</small>
-          </div>
+        <div class="preview-block preview-main">
+          <h3><span class="preview-heading-icon" aria-hidden="true">1</span> Trip overview</h3>
+          <p><span>Booking Type</span><strong id="previewType">Not selected</strong></p>
+          <p class="preview-optional-row"><span>Package</span><strong id="previewPackage">-</strong></p>
+          <p class="preview-optional-row"><span>Preferred</span><strong id="previewPreferred">-</strong></p>
+          <p class="preview-optional-row"><span>Add-on Service</span><strong id="previewAddon">-</strong></p>
+          <p><span>Tour Type</span><strong id="previewTourType">-</strong></p>
+          <p><span>Duration</span><strong id="previewDuration">-</strong></p>
+          <p class="preview-optional-row"><span>Locations</span><strong id="previewLocations">-</strong></p>
+          <p><span>Jump-Off Port</span><strong id="previewPort">-</strong></p>
+          <p><span>Date</span><strong id="previewDate">-</strong></p>
+          <p class="preview-optional-row"><span>Contact</span><strong id="previewContact">-</strong></p>
+          <p><span>Guests</span><strong id="previewGuests">0</strong></p>
+          <p class="preview-optional-row"><span>Required Boats</span><strong id="previewRequiredBoats">-</strong></p>
+        </div>
 
           <button type="button" class="other-fees-button" id="openOtherFeesModal" aria-haspopup="dialog" aria-controls="otherFeesModal" aria-expanded="false">
             <span aria-hidden="true">i</span>
@@ -694,26 +687,33 @@ $locations = [
         <div class="preview-card-header">
           <div>
             <span class="preview-eyebrow">Live summary</span>
-            <h2>Your booking</h2>
+            <h2>Your payment</h2>
           </div>
           <span class="preview-live-badge"><i aria-hidden="true"></i> Updates automatically</span>
         </div>
 
-        <div class="preview-block preview-main">
-          <h3><span class="preview-heading-icon" aria-hidden="true">1</span> Trip overview</h3>
-          <p><span>Booking Type</span><strong id="previewType">Not selected</strong></p>
-          <p class="preview-optional-row"><span>Package</span><strong id="previewPackage">-</strong></p>
-          <p class="preview-optional-row"><span>Preferred</span><strong id="previewPreferred">-</strong></p>
-          <p class="preview-optional-row"><span>Add-on Service</span><strong id="previewAddon">-</strong></p>
-          <p><span>Tour Type</span><strong id="previewTourType">-</strong></p>
-          <p><span>Duration</span><strong id="previewDuration">-</strong></p>
-          <p class="preview-optional-row"><span>Locations</span><strong id="previewLocations">-</strong></p>
-          <p><span>Jump-Off Port</span><strong id="previewPort">-</strong></p>
-          <p><span>Date</span><strong id="previewDate">-</strong></p>
-          <p class="preview-optional-row"><span>Contact</span><strong id="previewContact">-</strong></p>
-          <p><span>Guests</span><strong id="previewGuests">0</strong></p>
-          <p class="preview-optional-row"><span>Required Boats</span><strong id="previewRequiredBoats">-</strong></p>
-        </div>
+          <div class="preview-block totals payment-summary">
+            <h3><span class="preview-heading-icon" aria-hidden="true">₱</span> Payment summary</h3>
+            <details class="fee-breakdown">
+              <summary>View fee breakdown <span aria-hidden="true"></span></summary>
+              <div class="fee-breakdown-content">
+                <p><span>Environmental Fee</span><strong id="previewEcoFee">-</strong></p>
+                <p><span>Total Discount</span><strong id="previewDiscountTotal">-</strong></p>
+                <p><span>Entrance Fee</span><strong id="previewEntranceFee">-</strong></p>
+                <p><span>Docking/Landing Fee</span><strong id="previewDockingFee">-</strong></p>
+                <p><span>Total Boat Bill</span><strong id="previewBoatBill">-</strong></p>
+                <small id="previewFeesNote">Other fees vary by selected locations and tour type.</small>
+              </div>
+            </details>
+            <p><span>Service Subtotal</span><strong id="previewServiceTotal">-</strong></p>
+            <p><span>Other Fees Subtotal</span><strong id="previewOtherFeesTotal">-</strong></p>
+            <div class="booking-addon-summary" data-addon-summary hidden></div>
+            <p><span>Optional add-ons</span><strong id="previewCatalogAddonsTotal">₱0.00</strong></p>
+            <p class="grand-total-row"><span>Estimated total</span><strong id="previewEstimatedTotal">-</strong></p>
+            <p><span>Payment Option</span><strong id="previewPaymentOption">20% Partial</strong></p>
+            <p class="pay-now-row"><span>Amount to pay now</span><strong id="previewAmountPayable">-</strong></p>
+            <small id="previewPricingNote">Select your booking type and details to view your estimate.</small>
+          </div>
 
       </aside>
       </div>
@@ -2098,7 +2098,7 @@ preferredSelect.addEventListener("change", function () {
       const bookingSidebar = document.querySelector(".booking-sidebar");
       const bookingPreviewCard = document.querySelector(".booking-preview-card");
       const reviewStepPanel = bookingForm.querySelector('[data-booking-step="3"]');
-      const paymentSummaryBlock = reviewStepPanel?.querySelector(".step-payment-summary");
+      const reviewSummaryAnchor = reviewStepPanel?.querySelector(".other-fees-button");
       const previousStepButton = document.getElementById("tourPreviousStep");
       const nextStepButton = document.getElementById("tourNextStep");
       const stepStatus = document.getElementById("tourStepStatus");
@@ -2117,14 +2117,14 @@ preferredSelect.addEventListener("change", function () {
         const summaryHeading = bookingPreviewCard.querySelector(".preview-card-header h2");
         if (mobileLayout) {
           if (bookingPreviewCard.parentElement !== reviewStepPanel) {
-            reviewStepPanel.insertBefore(bookingPreviewCard, paymentSummaryBlock || reviewStepPanel.firstChild);
+            reviewStepPanel.insertBefore(bookingPreviewCard, reviewSummaryAnchor || null);
           }
           bookingPreviewCard.classList.add("is-mobile-review-summary");
-          if (summaryHeading) summaryHeading.textContent = "Booking summary";
+          if (summaryHeading) summaryHeading.textContent = "Payment summary";
         } else {
           if (bookingSidebar && bookingPreviewCard.parentElement !== bookingSidebar) bookingSidebar.appendChild(bookingPreviewCard);
           bookingPreviewCard.classList.remove("is-mobile-review-summary");
-          if (summaryHeading) summaryHeading.textContent = "Your booking";
+          if (summaryHeading) summaryHeading.textContent = "Your payment";
         }
       };
 

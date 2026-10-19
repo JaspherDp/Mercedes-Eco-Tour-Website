@@ -1,0 +1,11 @@
+﻿'use strict';
+const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
+const source=fs.readFileSync(require('path').join(__dirname,'../js/hotel-cancellation-requests.js'),'utf8');
+const owner={appendChild(node){node.parentNode=this;}},menu={hidden:true,style:{},parentNode:owner,getBoundingClientRect(){return{width:205,height:130};},querySelector(){return{focus(){}};},contains(){return false;}};
+const button={attrs:{'aria-controls':'menu'},setAttribute(n,v){this.attrs[n]=v;},getAttribute(n){return this.attrs[n];},getBoundingClientRect(){return{right:1100,top:650,bottom:680};},addEventListener(_,fn){this.click=fn;},focus(){this.focused=true;}};
+const reason={dataset:{hcReason:JSON.stringify({reference:'HR-TEST',reason:'Reason <script>unsafe</script>',review_note:'Not approved',non_refundable:400})},addEventListener(_,fn){this.click=fn;}};let modal,events={};
+const context={document:{querySelectorAll(s){return s==='[data-hc-actions]'?[button]:s==='[data-hc-reason]'?[reason]:[];},getElementById(){return menu;},body:{appendChild(node){node.parentNode=this;}},addEventListener(type,fn){events[type]=fn;}},window:{Swal:true,innerWidth:1200,innerHeight:750,addEventListener(){}},Swal:{fire(options){modal=options;}}};vm.createContext(context);vm.runInContext(source,context);
+button.click({stopPropagation(){}});assert.equal(menu.hidden,false);assert.equal(button.attrs['aria-expanded'],'true');assert.equal(menu.style.top,'514px','Menu flips above viewport bottom');assert.equal(menu.style.left,'895px');assert.equal(menu.parentNode,context.document.body,'Menu portaled out of scrolling table');
+events.keydown({key:'Escape'});assert.equal(menu.hidden,true);assert.equal(menu.parentNode,owner);assert.equal(button.attrs['aria-expanded'],'false');assert.equal(button.focused,true);
+button.click({stopPropagation(){}});reason.click();assert.equal(menu.hidden,true);assert.equal(modal.title,'Cancellation reason');assert.match(modal.text,/Reason <script>unsafe<\/script>/);assert.equal(modal.html,undefined,'Reason uses text, never injected HTML');assert.equal(modal.confirmButtonColor,'#176b58');assert.match(modal.text,/400.00/);
+console.log('PASS: cancellation Actions menu opens outside table clipping, flips within viewport, closes/restores focus on Escape, and safely shows reason/review note in modal.');

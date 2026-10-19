@@ -69,10 +69,12 @@ for (const tab of ['tours','guides','boats']) {
 scope.activeSearchTab='hotels'; scope.syncSearchGuestClassification(); scope.renderChildAgeRows();
 assert.equal(ageBox.hidden,false); assert.equal(ages[0].value,'5','Switching tabs must retain prior hotel age selections');
 assert.equal(ages[1].value,'','A new child must not be assigned a default age');
-assert.equal(nodes.guestAdultsLabel.innerHTML,'Adults'); assert.equal(nodes.guestChildrenLabel.innerHTML,'Children');
+assert.match(nodes.guestAdultsLabel.innerHTML,/18\+/); assert.match(nodes.guestChildrenLabel.innerHTML,/0.*17/);
 ages[1].value='9'; assert.equal(scope.validateGuestSelection(),true);
 scope.redirectToUnifiedSearch();
 const hotelUrl=new URL(scope.window.location.href,'https://fixture.invalid/');
 assert.equal(hotelUrl.searchParams.get('child_ages'),'5,9'); assert.equal(hotelUrl.searchParams.get('rooms'),'1');
-nodes.rooms.innerText='0'; assert.equal(scope.validateGuestSelection(),false,'Hotel room validation must stay required');
-console.log('PASS: all three tour tabs use count-only search with age-range labels; no default/stale child ages; tab switching preserves hotel ages, rooms and validation.');
+delete nodes.rooms; assert.equal(scope.validateGuestSelection(),true,'Hotel searches must work without a room selector');
+assert(!source.includes('id="roomsGuestRow"'));
+scope.redirectToUnifiedSearch(); assert.equal(new URL(scope.window.location.href,'https://fixture.invalid/').searchParams.get('rooms'),'1');
+console.log('PASS: all three tour tabs use count-only search with age-range labels; no default/stale child ages; tab switching preserves hotel ages and one-room searches.');

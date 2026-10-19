@@ -4,6 +4,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/../php/booking_reference_helper.php';
 require_once __DIR__ . '/../php/activity_logger.php';
 require_once __DIR__ . '/../php/booking_addon_catalog.php';
+require_once __DIR__ . '/../php/hotel_child_policy.php';
 
 final class BookingCheckoutService
 {
@@ -77,6 +78,10 @@ final class BookingCheckoutService
                 (string)$draft['payment_type'], $balance <= 0 ? 'paid' : 'partial', $paymentMethod,
             ]);
             $bookingId = (int)$pdo->lastInsertId();
+            if (isset($payload['hotel_child_policy'])) {
+                HoChildValidateSnapshot($payload, $payload['hotel_child_policy']);
+                HoChildSaveSnapshot($pdo, $bookingId, $payload['hotel_child_policy']);
+            }
             $activity = 'Hotel Booking Submitted';
             $description = 'Submitted ' . $reference . ' after verified PayMongo payment for ' . (string)$payload['room_type'] . '.';
             $module = 'Hotel Bookings';

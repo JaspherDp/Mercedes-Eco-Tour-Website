@@ -1,5 +1,6 @@
 <?php
 require_once __DIR__ . '/hotel_booking_status.php';
+require_once __DIR__ . '/hotel_child_policy.php';
 function HoRoomsTableExists(PDO $pdo, string $tableName): bool
 {
     $stmt = $pdo->prepare("
@@ -298,7 +299,7 @@ function HoGetHotelRooms(PDO $pdo, int $hotelResortId, bool $onlyActive = true):
     usort($rooms, static function (array $a, array $b): int {
         return strcmp((string)$a['room_name'], (string)$b['room_name']);
     });
-    return $rooms;
+    return HoChildAttachRooms($pdo, $rooms);
 }
 
 function HoGetHotelRoomById(PDO $pdo, int $hotelResortId, int $hotelRoomId, bool $onlyActive = true): ?array
@@ -319,7 +320,7 @@ function HoGetHotelRoomById(PDO $pdo, int $hotelResortId, int $hotelRoomId, bool
         ':hotel_resort_id' => $hotelResortId,
     ]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    return $row ? HoHydrateHotelRoom($row) : null;
+    return $row ? HoChildAttachRooms($pdo, [HoHydrateHotelRoom($row)])[0] : null;
 }
 
 function HoGetHotelRoomByName(PDO $pdo, int $hotelResortId, string $roomName, bool $onlyActive = true): ?array
@@ -340,12 +341,12 @@ function HoGetHotelRoomByName(PDO $pdo, int $hotelResortId, string $roomName, bo
         ':hotel_resort_id' => $hotelResortId,
     ]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC);
-    return $row ? HoHydrateHotelRoom($row) : null;
+    return $row ? HoChildAttachRooms($pdo, [HoHydrateHotelRoom($row)])[0] : null;
 }
 
 function HoRoomCapacityTotal(array $room): int
 {
-    return max(1, (int)($room['capacity_adults'] ?? 0) + (int)($room['capacity_children'] ?? 0));
+    return HoChildRoomPolicy($room)['max_occupancy'];
 }
 
 /** Unfinished check-ins reserve tonight, not every future stay indefinitely. */
@@ -427,9 +428,10 @@ function HoGetUnavailableRoomLookup(PDO $pdo, int $hotelResortId, string $checki
     return ['ids' => $ids, 'names' => $names];
 }
 
-function HoGetAvailableHotelRooms(PDO $pdo, int $hotelResortId, string $checkin, string $checkout, int $guests): array
+function HoGetAvailableHotelRooms(PDO $pdo, int $hotelResortId, string $checkin, string $checkout, int $guests, ?array $party = null): array
 {
     $guests = max(1, $guests);
+    $party = $party ?? HoChildParty($guests, 0, []);
     $rooms = HoGetHotelRooms($pdo, $hotelResortId, true);
     $unavailable = HoGetUnavailableRoomLookup($pdo, $hotelResortId, $checkin, $checkout);
 
@@ -440,7 +442,10 @@ function HoGetAvailableHotelRooms(PDO $pdo, int $hotelResortId, string $checkin,
 
         // Check availability status
         $isBooked = isset($unavailable['ids'][$roomId]) || isset($unavailable['names'][$roomNameKey]);
-        $hasCapacity = HoRoomCapacityTotal($room) >= $guests;
+        $suitability = HoChildEligibility($room, $party);
+        $hasCapacity = $suitability['eligible'];
+        $room['suitability_reason'] = $suitability['reason'];
+        $room['occupancy_policy'] = $suitability['occupancy'];
 
         // Mark room with availability status
         $room['is_available'] = !$isBooked && $hasCapacity;

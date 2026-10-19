@@ -1,0 +1,15 @@
+﻿'use strict';
+const fs=require('fs'),vm=require('vm'),assert=require('assert/strict');
+const source=fs.readFileSync(require('path').join(__dirname,'../js/adpaymenttransactions.js'),'utf8');
+const options=[{value:'',dataset:{}},{value:'tourguide:8',dataset:{balance:'2864',reference:'TG26-0008',customer:'Guest A'}},{value:'boat:7',dataset:{balance:'3096',reference:'TB26-0007',customer:'Guest B'}}];
+const selection={value:'',options,focus(){},get selectedIndex(){return options.findIndex(o=>o.value===this.value);}};
+const paymentAmount={value:'',max:'',setCustomValidity(){},focus(){}};
+const scope={selection,paymentAmount,paymentDomain:{},paymentBookingId:{},amountHelp:{},selectedBooking:{},collectionMethod:{value:'cash'},recordModal:{classList:{add(){},remove(){}},setAttribute(){}},setPageLock(){},setTimeout:fn=>fn(),escapeHtml:v=>String(v)};
+vm.createContext(scope);vm.runInContext(source.slice(source.indexOf('  function openRecordModal('),source.indexOf('  async function readPaymentJson(')),scope);
+scope.openRecordModal('tourguide:8');assert.equal(paymentAmount.value,'2864.00');assert.equal(scope.collectionMethod.value,'');
+paymentAmount.value='200';scope.collectionMethod.value='qr_code';scope.openRecordModal('boat:7');assert.equal(paymentAmount.value,'3096.00');assert.equal(paymentAmount.max,'3096.00');assert.equal(scope.paymentDomain.value,'boat');assert.equal(scope.paymentBookingId.value,'7');assert.equal(scope.collectionMethod.value,'');
+selection.value='tourguide:8';scope.updateBookingSelection();assert.equal(paymentAmount.value,'2864.00');
+paymentAmount.value='4000';scope.clampCollectionAmountToBalance();assert.equal(paymentAmount.value,'2864.00');
+paymentAmount.value='500';scope.clampCollectionAmountToBalance();assert.equal(paymentAmount.value,'500','Intentional partial payments remain allowed');
+scope.openRecordModal('');assert.equal(selection.value,'');assert.equal(paymentAmount.value,'');assert.equal(scope.paymentDomain.value,'');assert.equal(scope.paymentBookingId.value,'');
+console.log('PASS: collection modal resets booking/method/amount across rows, dropdown changes and generic open; partial payments and balance clamp preserved.');

@@ -19,6 +19,7 @@ require_once __DIR__ . '/../php/firebase_config.php';
 require_once __DIR__ . '/../php/admin_auth_helper.php';
 AdminRequireLogin();
 require_once __DIR__ . '/../php/admin_walkin_manifest.php';
+require_once __DIR__ . '/../payments/AdminCheckoutResume.php';
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['fetch_walkin_manifest','save_walkin_manifest'], true)) {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store');
@@ -43,6 +44,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && in_array($_POST['action'] ?? '', ['
     exit;
 }
 require_once __DIR__ . '/../php/booking_cancellations_helper.php';
+require_once __DIR__ . '/../php/hotel_cancellation_review.php';
+require_once __DIR__ . '/../php/booking_rejection_helper.php';
 require_once __DIR__ . '/../php/tour_resource_availability_helper.php';
 require_once __DIR__ . '/../php/hotel_rooms_helper.php';
 require_once __DIR__ . '/../php/input_validation.php';
@@ -557,11 +560,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'retry
         }
         $requestId = (int)($_POST['cancellation_request_id'] ?? 0);
         $statement = $pdo->prepare("SELECT cr.*, t.full_name, t.email FROM booking_cancellation_requests cr
-            JOIN tourist t ON t.tourist_id=cr.tourist_id
+            LEFT JOIN tourist t ON t.tourist_id=cr.tourist_id
             WHERE cr.cancellation_request_id=? AND cr.initiated_by='admin_provider' LIMIT 1");
         $statement->execute([$requestId]);
         $request = $statement->fetch(PDO::FETCH_ASSOC);
         if (!$request) throw new RuntimeException('Provider cancellation record not found.');
+        if (($request['tourist_decision'] ?? '') === 'booking_rejected') $request = array_merge($request, BookingRejectionRecipient($pdo, $request));
         $status = strtolower((string)$request['request_status']);
         if (!in_array($status, ['decision_required', 'approved', 'rescheduled'], true)) {
             throw new RuntimeException('This notification is not available for the current cancellation status.');
@@ -612,6 +616,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['cancellation_action']
         $requestStatement->execute([$requestId]);
         $cancellation = $requestStatement->fetch(PDO::FETCH_ASSOC);
         if (!$cancellation) throw new RuntimeException('Cancellation request not found.');
+        if (!HotelCancellationMainAdminCanDecide($cancellation) && in_array($action, ['approve','reject'], true)) throw new DomainException('Hotel cancellation requests must be reviewed by the hotel administrator. Main admin can view the status and process an approved refund.');
 
         $requestStatus = strtolower((string)$cancellation['request_status']);
         $refundableAmount = (float)$cancellation['refundable_amount'];
@@ -727,8 +732,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && ($_GET['action'] ?? '') === 'paymong
         $metadata = $transaction ? json_decode((string)($transaction['metadata'] ?? ''), true) : null;
         if (!$transaction
             || !is_array($metadata)
-            || ($metadata['source'] ?? '') !== 'admin_booking_payment'
-            || (int)($metadata['admin_id'] ?? 0) !== (int)($_SESSION['admin_id'] ?? 0)) {
+            || (!(($metadata['source'] ?? '') === 'admin_booking_payment'
+                && (int)($metadata['admin_id'] ?? 0) === (int)($_SESSION['admin_id'] ?? 0))
+                && !AdminCheckoutResume::granted($metadata, (int)($_SESSION['admin_id'] ?? 0)))) {
             http_response_code(404);
             echo json_encode(['success' => false, 'message' => 'Staff payment transaction not found.']);
             exit;
@@ -1393,6 +1399,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST'
     exit;
 }
 
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'decline') {
+    $rejectionTab = in_array($_POST['return_tab'] ?? '', ['pending','accepted','completed','all'], true) ? $_POST['return_tab'] : 'pending';
+    BookingRejectionPost($pdo, 'admin', (int)$_SESSION['admin_id'], 0, (string)($_SESSION['admin_name'] ?? 'Administrator'), 'adbookings.php?tab='.rawurlencode($rejectionTab));
+}
+
 // --- Handle POST actions with decision note ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['id'])) {
     try {
@@ -1746,6 +1758,11 @@ $totalFilteredBookings = (int)$countStmt->fetchColumn();
 // ----------------------
 $sql = "SELECT 
             b.*,
+            (SELECT MAX(completion_log.created_at) FROM admin_activity_logs completion_log
+             WHERE completion_log.reference_id = b.booking_id
+               AND completion_log.module = 'Bookings'
+               AND completion_log.action = 'Booking Completed'
+               AND completion_log.actor_type IN ('Admin','Tour Operator')) AS marked_completed_at,
             b.phone_number AS booking_phone,
             b.location AS booking_location,
             b.booking_type AS booking_type,
@@ -2201,6 +2218,7 @@ if(isset($_GET['action']) && $_GET['action'] === 'fetchBookings') {
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
 <link rel="stylesheet" href="styles/admin_panel_theme.css" />
 <link rel="stylesheet" href="styles/adbookings.css?v=<?= (int)filemtime(__DIR__ . '/../styles/adbookings.css') ?>" />
+<link rel="stylesheet" href="styles/booking-status-colors.css?v=1">
 <link rel="stylesheet" href="styles/tourist-manifest-form.css?v=1" />
 <link rel="stylesheet" href="styles/admin-booking-addons.css?v=2" />
 <link rel="stylesheet" href="styles/tourist-booking-history.css?v=1" />
@@ -2980,7 +2998,8 @@ function renderBookings($bookings, $filter_status){
     });
 
     if(count($filteredBookings) === 0){
-        echo "<tr><td colspan='8' style='text-align:center; color:#777;'>No bookings found.</td></tr>";
+        $emptyColspan = $filter_status === 'completed' ? 9 : 8;
+        echo "<tr><td colspan='{$emptyColspan}' style='text-align:center; color:#777;'>No bookings found.</td></tr>";
         return;
     }
 
@@ -3200,8 +3219,20 @@ if ($filter_status !== 'accepted') {
     </td>";
 }
 
-echo "<td><span class='booking-date'>".htmlspecialchars($b['booking_date'])."</span></td>
-    <td>{$paymentPill}</td>
+echo "<td><span class='booking-date'>".htmlspecialchars($b['booking_date'])."</span></td>";
+if ($filter_status === 'completed') {
+    $completionTimestamp = $is_complete === 'completed' && !empty($b['marked_completed_at'])
+        ? strtotime((string)$b['marked_completed_at']) : false;
+    echo "<td class='booking-completed-date'>";
+    if ($completionTimestamp !== false) {
+        echo '<span class="booking-date">' . htmlspecialchars(date('M j, Y', $completionTimestamp)) . '</span>';
+        echo '<small>' . htmlspecialchars(date('g:i A', $completionTimestamp)) . '</small>';
+    } else {
+        echo $is_complete === 'completed' ? 'Not recorded' : '&mdash;';
+    }
+    echo '</td>';
+}
+echo "<td>{$paymentPill}</td>
     <td>{$state_pill}</td>
     {$touristSubmissionTd}
     <td class='booking-history-actions' style='width:auto;'>";
@@ -3426,7 +3457,9 @@ function renderAdminCancellationRequests(array $requests): void
               </form>";
         }
 
-        if ($requestStatus === 'pending') {
+        if ($requestStatus === 'pending' && !HotelCancellationMainAdminCanDecide($request)) {
+            echo "<span class='cancel-subtext'>Awaiting hotel review</span>";
+        } elseif ($requestStatus === 'pending') {
             echo "<form method='post' class='cancellation-action-form' data-action='approve'>
                 <input type='hidden' name='csrf_token' value='" . htmlspecialchars((string)$_SESSION['cancellation_admin_csrf']) . "'>
                 <input type='hidden' name='cancellation_request_id' value='{$requestId}'>
@@ -3469,7 +3502,7 @@ $columnsPending = $columnsBase . "<th>Actions</th>";
 $columnsAccepted = "<th>Tourist</th><th>ID</th><th>Type</th><th>Date</th><th>Payment Status</th><th>Status</th><th>Tourist Submission</th><th>Actions</th>";
 
 // Completed tab: include Actions for View Details
-$columnsCompleted = $columnsBase . "<th>Actions</th>";
+$columnsCompleted = "<th>Tourist</th><th>ID</th><th>Type</th><th>Pax</th><th>Date</th><th>Completed On</th><th>Payment Status</th><th>Status</th><th>Actions</th>";
 ?>
 
 <div id="all" class="tab-page <?= $activeTab==='all'?'active':'' ?>">
@@ -6695,7 +6728,7 @@ function openDecisionModal(event, form, action, returnTab) {
         categoryField.addEventListener("change", updateSubmitButton);
     }
 
-    submitBtn.onclick = () => {
+    submitBtn.onclick = async () => {
         const bookingId = document.getElementById("decisionBookingId").value;
         const action = document.getElementById("decisionAction").value;
         const returnTab = document.getElementById("decisionReturnTab").value;
@@ -6705,15 +6738,15 @@ function openDecisionModal(event, form, action, returnTab) {
         const form = document.createElement("form");
         form.method = "POST";
         form.style.display = "none";
-        form.innerHTML = `
-            <input name="id" value="${bookingId}">
-            <input name="action" value="${action}">
-            <input name="return_tab" value="${returnTab}">
-            <input name="csrf_token" value="${adminBookingCsrf}">
-            <input name="decision_category" value="${category}">
-            <input name="decision_note" value="${note}">
-        `;
+        if (category === 'Other' && !note) { window.alert('Enter a rejection reason when selecting Other.'); return; }
+        for (const [name, value] of Object.entries({ id: bookingId, action, return_tab: returnTab, csrf_token: adminBookingCsrf, decision_category: category, decision_note: note })) {
+            const field = document.createElement('input'); field.type = 'hidden'; field.name = name; field.value = value; form.appendChild(field);
+        }
         document.body.appendChild(form);
+        submitBtn.disabled = true;
+        decisionModal.style.display = 'none';
+        if (window.showBookingDecisionProcessing) await window.showBookingDecisionProcessing('Rejecting booking', 'Please wait while the cancellation is saved and the rejection email is sent.');
+        else if (window.Swal) { Swal.fire({title:'Rejecting booking',text:'Please wait while the rejection email is sent.',allowOutsideClick:false,allowEscapeKey:false,showConfirmButton:false,didOpen:()=>Swal.showLoading()}); await new Promise(resolve=>window.setTimeout(resolve,80)); }
         form.submit();
     };
 
@@ -7203,6 +7236,7 @@ document.querySelectorAll('.cancellation-action-form').forEach(form => {
       });
       if (!result.isConfirmed) return;
       form.querySelector('[name="admin_note"]').value = result.value;
+      if (window.showBookingDecisionProcessing) await window.showBookingDecisionProcessing('Saving cancellation decision', 'Please wait while the cancellation request is updated.');
       form.submit();
       return;
     }
@@ -8125,6 +8159,9 @@ require_once __DIR__ . '/../php/staff_booking_addon_picker.php';
 StaffBookingAddonPicker($pdo, 'admin', (int)$_SESSION['admin_id']);
 ?>
 <script src="js/booking-payment-summary.js?v=3"></script>
+<?php $rejectionFlash = $_SESSION['booking_rejection_flash'] ?? null; unset($_SESSION['booking_rejection_flash']); ?>
+<script>window.bookingRejectionFlash = <?= json_encode($rejectionFlash, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;</script>
+<script src="js/booking-rejection.js?v=2"></script>
 </body>
 </html>
 

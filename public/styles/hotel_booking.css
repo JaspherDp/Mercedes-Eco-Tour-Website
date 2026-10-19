@@ -669,6 +669,135 @@ textarea {
   border: 1px solid #e0e9e6;
 }
 
+/* Keep the desktop stay preview compact enough to see its payment totals. */
+@media (min-width: 1101px) {
+  .booking-room-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .booking-room-card > .selection-kicker,
+  .booking-room-card > .room-gallery-block,
+  .booking-room-card > .summary-block,
+  .booking-room-card > .policy-block {
+    grid-column: 1 / -1;
+  }
+
+  .booking-room-card > .room-gallery-block {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    padding: 16px 18px 0;
+  }
+
+  .booking-room-card .room-thumb-row {
+    display: contents;
+  }
+
+  .booking-room-card .room-gallery-block img {
+    width: 100%;
+    height: 88px;
+    min-width: 0;
+    border-radius: 9px;
+    object-fit: cover;
+    border: 1px solid #e0e9e6;
+    box-shadow: none;
+  }
+
+  .booking-room-card > .room-info-block {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: baseline;
+    column-gap: 16px;
+    min-width: 0;
+    padding: 16px 18px 0;
+  }
+
+  .booking-room-card > .room-info-block h2 {
+    grid-column: 1 / -1;
+    margin: 0 0 6px;
+    font-size: 19px;
+    line-height: 1.35;
+    letter-spacing: -0.015em;
+  }
+
+  .booking-room-card > .room-info-block .room-meta-line {
+    grid-column: 1 / -1;
+    margin: 0 0 12px;
+    font-weight: 500;
+  }
+
+  .booking-room-card > .room-info-block .room-type-label {
+    grid-column: 1;
+    grid-row: 3;
+    margin: 0;
+    padding-top: 10px;
+    border-top: 1px solid #e5eeea;
+    color: #61776f;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+  }
+
+  .booking-room-card > .room-info-block h3 {
+    grid-column: 2;
+    grid-row: 3;
+    margin: 0;
+    padding-top: 10px;
+    border-top: 1px solid #e5eeea;
+    font-size: 15px;
+    text-align: right;
+  }
+
+  .booking-room-card > .room-info-block .room-description {
+    grid-column: 1 / -1;
+    margin: 5px 0 0;
+    color: #61716b;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .booking-room-card > .inclusions-block {
+    min-width: 0;
+    margin: 14px 18px 0;
+    padding: 12px 14px;
+    border-radius: 10px;
+    background: #f7faf9;
+  }
+
+  .booking-room-card > .inclusions-block h4 {
+    margin: 0 0 10px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .booking-room-card > .inclusions-block h4::before {
+    display: none;
+  }
+
+  .booking-room-card > .inclusions-block ul {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px 10px;
+  }
+
+  .booking-room-card > .summary-block {
+    margin-top: 12px;
+    padding: 12px;
+  }
+
+  .booking-room-card > .summary-block h4 {
+    margin-bottom: 7px;
+  }
+
+  .booking-room-card > .summary-block p {
+    padding: 5px 0;
+  }
+
+  .booking-room-card > .summary-block .overall-total {
+    padding: 10px;
+  }
+}
+
 .room-info-block {
   padding: 17px 18px 2px;
 }
@@ -1564,3 +1693,31 @@ textarea {
     font-size: 8.5px;
   }
 }
+
+/* Final hotel review follows the shared tour booking card/acknowledgement layout. */
+.hotel-stay-overview{margin:0 0 16px;padding:16px;border:1px solid var(--border);border-radius:14px;background:#fff}
+.hotel-stay-overview h3{display:flex;align-items:center;gap:9px;margin:0 0 12px;color:#153f31;font-size:15px;font-weight:800}
+.hotel-review-heading-icon{display:inline-grid;place-items:center;width:27px;height:27px;flex:0 0 27px;border-radius:8px;background:var(--primary);color:#fff;font-size:12px}
+.hotel-stay-overview p{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin:0;padding:8px 0;border-bottom:1px solid #edf2f0;font-size:12px;line-height:1.5}
+.hotel-stay-overview p:last-child{border-bottom:0;padding-bottom:0}
+.hotel-stay-overview p>span{flex:0 0 34%;color:#687e75}
+.hotel-stay-overview p>strong{min-width:0;color:#173c2e;text-align:right;font-weight:750;overflow-wrap:anywhere}
+.hotel-policy-reference{display:flex;align-items:center;justify-content:center;gap:10px;min-height:44px;margin:0 0 14px;padding:10px;border:1px solid #c8ded4;border-radius:10px;background:#f4faf7;color:#175d47;text-decoration:none;font-size:13px;font-weight:750}
+.hotel-policy-reference>span{display:grid;place-items:center;width:21px;height:21px;border-radius:50%;background:var(--primary);color:#fff}
+.hotel-booking-acknowledgements{display:grid;gap:10px;margin:0 0 14px;padding:14px 16px;border:1px solid var(--border);border-radius:12px;background:#f8fbfa}
+.hotel-booking-acknowledgements label{display:flex!important;align-items:flex-start;flex-wrap:wrap;gap:8px 10px;margin:0;color:#243d33;font-size:13px;line-height:1.55;font-weight:500}
+.hotel-booking-acknowledgements input[type=checkbox]{flex:0 0 16px;width:16px;height:16px;margin:3px 0 0;padding:0;accent-color:var(--primary);cursor:pointer}
+.hotel-booking-acknowledgements label{width:100%;min-width:0}
+.hotel-booking-acknowledgements label>.required-label-text{flex:1 1 0;min-width:0;max-width:none;color:inherit}
+.hotel-booking-acknowledgements label>.required-mark{flex:0 0 auto}
+.hotel-booking-acknowledgements a{color:#175d47;font-weight:750;text-decoration:underline;text-underline-offset:2px}
+.hotel-booking-acknowledgements .field-error{flex-basis:100%;margin:0 0 0 26px}
+.hotel-booking-acknowledgements+.submit-btn{margin-top:0}
+.booking-room-card>.hotel-payment-summary{margin:0 16px 14px;padding:14px;border-radius:13px;gap:0;background:#fff}
+.hotel-payment-summary h3{margin:0 0 10px;padding-bottom:10px;border-bottom:1px solid var(--border);font-size:15px;color:#173f31}
+.hotel-payment-summary p{align-items:flex-start;padding:8px 0;border-bottom:1px solid #edf2f0;font-size:12px;line-height:1.5}
+.hotel-payment-summary p>span{color:#687e75}.hotel-payment-summary p>strong{min-width:0;text-align:right;overflow-wrap:anywhere}.hotel-payment-summary p:last-child{border-bottom:0}
+.hotel-payment-summary .grand-total{margin-top:6px;padding-top:12px;font-size:14px}.hotel-payment-summary #dueNowText{font-size:17px;color:#176b52}
+#cancelPolicyBlock{scroll-margin-top:90px}
+@media(max-width:1100px){.booking-room-card.is-mobile-review-summary>.hotel-payment-summary{margin:0 0 12px;padding:15px}.booking-room-card.is-mobile-review-summary{margin-bottom:14px}.hotel-stay-overview p>span{flex-basis:38%}}
+.hotel-booking-acknowledgements+.submit-btn{width:100%}

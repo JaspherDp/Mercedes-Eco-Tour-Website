@@ -58,6 +58,13 @@
       baseRows = [{ description: `Room accommodation — ${booking.room_type || 'Reserved room'}`, amount: data.serviceAmount,
         detail: `${rateDetail}${booking.checkin_date || ''} — ${booking.checkout_date || ''}` }];
     }
+    if (hotel && booking.child_policy) {
+      const child = booking.child_policy;
+      const fee = Number(child.child_fee_total || 0);
+      baseRows[0].amount = Math.max(0, Number(data.serviceAmount) - fee);
+      baseRows.push({ description: 'Child accommodation (ages 6-17)', amount: fee,
+        detail: child.paying_children + ' paying child(ren) x ' + child.nights + ' night(s) x PHP 250. Ages: ' + child.child_ages.map(age => age + (age <= 5 ? ' (free)' : ' (PHP 250/night)')).join(', ') + '. Extra bedding is optional.' });
+    }
     if (!Array.isArray(baseRows) || !baseRows.length || Math.abs(baseRows.reduce((sum, row) => sum + Number(row.amount || 0), 0) - Number(data.serviceAmount)) > 0.009) {
       baseRows = [{ description: `Recorded ${String(booking.booking_type || 'reservation').toLowerCase()} charge`, amount: data.serviceAmount }];
       breakdownNote = 'The original component prices were not saved for this reservation. Separately recorded charges and add-ons are listed below.';

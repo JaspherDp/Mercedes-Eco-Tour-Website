@@ -1,0 +1,35 @@
+/* Shared booking status palette. Payment/payout state calculations are unchanged. */
+:root {
+  --booking-pending-bg: #fff3cd;
+  --booking-pending-text: #855900;
+  --booking-pending-border: #f1d47a;
+  --booking-accepted-bg: #e5f5eb;
+  --booking-accepted-text: #17633f;
+  --booking-accepted-border: #b4ddc5;
+  --booking-completed-bg: #e7f0ff;
+  --booking-completed-text: #225ca3;
+  --booking-completed-border: #b8ceee;
+  --booking-cancelled-bg: #fde8eb;
+  --booking-cancelled-text: #a52e40;
+  --booking-cancelled-border: #edbdc5;
+}
+html:root body :is(.record-state, .he-booking-status, .pill, .ho-status, .ho-room-history-status, .status-pill, .tourist-history-status, .bd-status-pill, .ho-bd-status-pill):is(.pending, .bd-status-pending, .ho-bd-status-pending, [data-status="pending"]) {
+  background: var(--booking-pending-bg) !important;
+  color: var(--booking-pending-text) !important;
+  border-color: var(--booking-pending-border) !important;
+}
+html:root body :is(.record-state, .he-booking-status, .pill, .ho-status, .ho-room-history-status, .status-pill, .tourist-history-status, .bd-status-pill, .ho-bd-status-pill):is(.accepted, .confirmed, .bd-status-accepted, .bd-status-confirmed, .ho-bd-status-accepted, .ho-bd-status-confirmed, [data-status="accepted"], [data-status="confirmed"]) {
+  background: var(--booking-accepted-bg) !important;
+  color: var(--booking-accepted-text) !important;
+  border-color: var(--booking-accepted-border) !important;
+}
+html:root body :is(.record-state, .he-booking-status, .pill, .ho-status, .ho-room-history-status, .status-pill, .tourist-history-status, .bd-status-pill, .ho-bd-status-pill):is(.completed, .finished, .bd-status-completed, .ho-bd-status-completed, [data-status="completed"]) {
+  background: var(--booking-completed-bg) !important;
+  color: var(--booking-completed-text) !important;
+  border-color: var(--booking-completed-border) !important;
+}
+html:root body :is(.record-state, .he-booking-status, .pill, .ho-status, .ho-room-history-status, .status-pill, .tourist-history-status, .bd-status-pill, .ho-bd-status-pill):is(.cancelled, .canceled, .cancel, .declined, .rejected, .no-show, .bd-status-cancelled, .bd-status-declined, .ho-bd-status-cancelled, .ho-bd-status-declined, .ho-bd-status-no-show, [data-status="cancelled"], [data-status="declined"]) {
+  background: var(--booking-cancelled-bg) !important;
+  color: var(--booking-cancelled-text) !important;
+  border-color: var(--booking-cancelled-border) !important;
+}

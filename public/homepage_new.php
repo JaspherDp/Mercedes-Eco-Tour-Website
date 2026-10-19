@@ -127,6 +127,7 @@ $activeTab = isset($SEARCH_TABS[$requestedTab]) ? $requestedTab : 'hotels';
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles/homepage.css" />
   <link rel="stylesheet" href="styles/unified_search.css" />
+  <link rel="stylesheet" href="styles/search-date-policy.css?v=<?= (int)filemtime(__DIR__ . '/../styles/search-date-policy.css') ?>" />
   <?php TouristRenderActivityMonitor(); ?>
 </head>
 

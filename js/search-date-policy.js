@@ -12,5 +12,26 @@
       .toISOString().slice(0, 10);
   }
 
-  window.SearchDatePolicy = Object.freeze({ minimumDate });
+  function bookingNote(tab) {
+    return ['tours', 'guides', 'boats', 'bundle'].includes(tab)
+      ? 'Booking at least 2 days in advance is required to give providers time to prepare and arrange availability.'
+      : '';
+  }
+
+  function updateCalendarNote(instance, tab) {
+    if (!instance?.calendarContainer) return;
+    let note = instance.calendarContainer.querySelector('.search-booking-note');
+    const message = bookingNote(tab);
+    if (!note && message) {
+      note = document.createElement('p');
+      note.className = 'search-booking-note';
+      instance.calendarContainer.appendChild(note);
+    }
+    if (note) {
+      note.textContent = message;
+      note.hidden = !message;
+    }
+  }
+
+  window.SearchDatePolicy = Object.freeze({ minimumDate, bookingNote, updateCalendarNote });
 })();

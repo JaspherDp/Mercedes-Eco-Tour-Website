@@ -1,0 +1,13 @@
+﻿'use strict';
+const fs=require('fs'),vm=require('vm'),assert=require('assert/strict'),path=require('path');
+const source=fs.readFileSync(path.join(__dirname,'../public/hotel_booking.php'),'utf8');
+const snippet=source.slice(source.indexOf('      const validateForm = () =>'),source.indexOf('      const renderValidationErrors ='));
+let payload={adults:2,children:0,child_ages:[],checkin:'2099-01-01',checkout:'2099-01-02',agree_privacy:false,agree_hotel_policy:false};
+const ctx={window:{},HotelChildPolicy:{quote(){}},hotelOccupancyPolicy:{},unitPrice:2000,collectPayload:()=>payload};vm.createContext(ctx);vm.runInContext(snippet+'\nglobalThis.validate=validateForm;',ctx);
+assert(ctx.validate().agree_privacy);assert(ctx.validate().agree_hotel_policy);payload.agree_privacy=true;assert(!ctx.validate().agree_privacy);assert(ctx.validate().agree_hotel_policy);payload.agree_hotel_policy=true;assert.equal(Object.keys(ctx.validate()).length,0);
+for(const id of ['summaryDates','summaryNights','summaryGuests','summaryChildFee','summaryPaymentType','unitPriceText','hotelChildFeeTotal','hotelRoomSubtotal','nightsText','totalText','dueNowText','remainingBalanceText','hotelAgreePrivacy','hotelAgreePolicy'])assert.equal(source.split('id="'+id+'"').length-1,1,'Exactly one '+id);
+const sidebar=source.slice(source.indexOf('<aside class="booking-room-card">'),source.indexOf('</aside>',source.indexOf('<aside class="booking-room-card">')));assert(sidebar.includes('totals-panel hotel-payment-summary'));assert(!sidebar.includes('hotel-stay-overview'));assert(source.indexOf('class="hotel-stay-overview"')<source.indexOf('class="hotel-booking-acknowledgements"'));assert(!source.includes('booking-legal-note'));assert(source.includes('`Pay ${formatMoney(dueNow)}`'));
+const anchor={parentNode:{insertBefore(node,target){assert.equal(node,card);assert.equal(target,anchor);assert.notEqual(node,target);mobileCalls++;}}};let mobileCalls=0,desktopCalls=0;const card={classList:{add(){},remove(){}}};
+const layout=source.slice(source.indexOf('      const syncMobileBookingLayout = () =>'),source.indexOf('      mobileBookingQuery.addEventListener'));
+const layoutCtx={bookingGrid:{appendChild(node){assert.equal(node,card);desktopCalls++;}},bookingRoomCard:card,reviewSummaryAnchor:anchor,mobileBookingQuery:{matches:true}};vm.createContext(layoutCtx);vm.runInContext(layout+'\nglobalThis.sync=syncMobileBookingLayout;',layoutCtx);layoutCtx.sync();assert.equal(mobileCalls,1);layoutCtx.mobileBookingQuery.matches=false;layoutCtx.sync();assert.equal(desktopCalls,1);
+console.log('PASS: hotel review acknowledgments, unique summary targets, desktop payment placement, mobile relocation and Pay label.');

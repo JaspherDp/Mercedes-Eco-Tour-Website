@@ -46,6 +46,40 @@
 .directory-select-filter>svg{width:16px;height:16px;flex:0 0 16px;fill:none;stroke:#26745f;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .directory-select-filter:after{content:'⌄';position:absolute;right:12px;top:50%;transform:translateY(-57%);color:#527168;font-size:15px;pointer-events:none}
 .directory-type-filter{width:180px}
+
+/* Draw both dropdown arrows consistently instead of using a font-dependent
+   character, and let the native select cover the entire control. */
+.destination-admin-main .directory-select-filter{padding:0}
+.destination-admin-main .directory-select-filter>svg{
+  position:absolute;
+  top:50%;
+  left:13px;
+  width:16px;
+  height:16px;
+  transform:translateY(-50%);
+  pointer-events:none;
+}
+.destination-admin-main .directory-select-filter::after{
+  content:'';
+  position:absolute;
+  top:50%;
+  right:15px;
+  width:7px;
+  height:7px;
+  border-right:2px solid #527168;
+  border-bottom:2px solid #527168;
+  transform:translateY(-70%) rotate(45deg);
+  pointer-events:none;
+}
+.destination-admin-main .directory-tools .directory-select-filter select,
+.destination-admin-main .directory-tools .directory-select-filter select:focus{
+  position:absolute;
+  inset:0;
+  width:100% !important;
+  height:100% !important;
+  padding:0 34px 0 40px !important;
+  text-indent:0;
+}
 .destination-admin-main .directory-select-filter select,
 .destination-admin-main .directory-select-filter select:focus{width:100% !important;height:auto !important;min-height:0 !important;margin:0 !important;padding:0 2px 0 4px !important;border:0 !important;border-radius:0 !important;outline:0 !important;box-shadow:none !important;background:transparent !important;background-image:none !important;color:#29473d;font:600 10.5px Poppins;cursor:pointer;appearance:none !important;-webkit-appearance:none !important;text-indent:2px}
 .card-title-row .destination-type-badge{display:inline-flex;align-items:center;width:max-content;max-width:100%;padding:4px 8px;border:1px solid #cfe7df;border-radius:6px;background:#edf7f3;color:#176b58;font-size:8.5px;line-height:1;text-transform:uppercase;letter-spacing:.08em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}

@@ -14,6 +14,8 @@ require_once __DIR__ . '/../php/firebase_admin_messaging.php';
 require_once __DIR__ . '/../php/app_url_helper.php';
 require_once __DIR__ . '/../php/input_validation.php';
 require_once __DIR__ . '/PayMongoService.php';
+require_once __DIR__ . '/BalanceCheckoutPending.php';
+require_once __DIR__ . '/AdminCheckoutResume.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -259,6 +261,9 @@ if (($_POST['action'] ?? '') === 'cancel_pending') {
     $allowedSources = $isHotelAdminStaff
         ? ['admin_booking_payment', 'hotel_checkin_payment', 'hotel_checkout_payment']
         : [$isOperatorStaff ? 'operator_booking_payment' : ($isAdminStaff ? 'admin_booking_payment' : 'tourist_profile_balance')];
+    if ($isAdminStaff && is_array($pendingMetadata) && AdminCheckoutResume::granted($pendingMetadata, $requestAdminId)) {
+        $allowedSources[] = 'operator_booking_payment';
+    }
     if (!is_array($pendingMetadata) || !in_array((string)($pendingMetadata['source'] ?? ''), $allowedSources, true)) {
         balanceCheckoutResponse(200, ['success' => true, 'cancelled' => false]);
     }
@@ -367,8 +372,11 @@ $touristPhone = '';
 $reusedTransaction = false;
 $checkoutDescription = '';
 $lineItemDescription = '';
+$verifiedPendingCheckouts = [];
+$checkoutPrepared = false;
 
 try {
+    for ($preparationAttempt = 0; $preparationAttempt < 3; $preparationAttempt++) {
     $pdo->beginTransaction();
 
     if ($requestedType === 'hotel') {
@@ -434,7 +442,7 @@ try {
             ? ($isOperatorStaff ? ' AND b.operator_id = ?' : '')
             : ' AND b.tourist_id = ?';
         $stmt = $pdo->prepare(
-            "SELECT b.booking_id, b.tourist_id, b.booking_reference, b.booking_type,
+            "SELECT b.booking_id, b.operator_id, b.tourist_id, b.booking_reference, b.booking_type,
                     b.remaining_balance, b.is_paid, b.status, b.is_complete,
                     b.package_name, b.location, b.preferred_resource,
                     b.booking_date, b.pax, b.num_adults, b.num_children,
@@ -528,7 +536,7 @@ try {
         : 'Official remaining balance payment for Booking ' . $bookingReference . '.';
 
     $existingStmt = $pdo->prepare(
-        "SELECT payment_transaction_id, merchant_reference, idempotency_key,
+        "SELECT payment_transaction_id, booking_domain, booking_id, merchant_reference, idempotency_key,
                 return_token, amount_minor, status, checkout_url,
                 provider_checkout_session_id, metadata
          FROM payment_transactions
@@ -542,10 +550,36 @@ try {
 
     if ($existing) {
         PaymentHelper::assertPayMongoTransactionMode($existing['metadata'] ?? null);
+        $pendingId = (int)$existing['payment_transaction_id'];
+        if (trim((string)$existing['provider_checkout_session_id']) !== '' && !isset($verifiedPendingCheckouts[$pendingId])) {
+            // Ownership and booking eligibility were checked under the lock above.
+            // Re-read the booking balance after verification/reconciliation.
+            $pdo->commit();
+            try {
+                $pendingState = BalanceCheckoutPending::refresh($pdo, $existing,
+                    static fn(string $id): array => $service->retrieveCheckoutSession($id));
+            } catch (Throwable $exception) {
+                error_log('Pending balance checkout verification failed: transaction=' . $pendingId . ' reason=' . get_class($exception));
+                throw new DomainException('The existing online payment could not be verified. Retry shortly; no new payment was created.');
+            }
+            $verifiedPendingCheckouts[$pendingId] = $pendingState;
+            if ($pendingState === 'processing') {
+                throw new DomainException('An online payment is being processed for this booking. Wait for verification before collecting again.');
+            }
+            continue;
+        }
         $existingMetadata = json_decode((string)($existing['metadata'] ?? ''), true);
         $existingSource = is_array($existingMetadata) ? (string)($existingMetadata['source'] ?? '') : '';
         $expectedSource = $isStaffPayment ? $staffPaymentSource : 'tourist_profile_balance';
-        if ($existingSource !== $expectedSource) {
+        $adminResumingOperator = $isAdminStaff && !$completeAfterPayment
+            && AdminCheckoutResume::eligible($existing, $booking, $balanceMinor, $requestAdminId);
+        if ($adminResumingOperator) {
+            $existingMetadata = AdminCheckoutResume::grant($existingMetadata, $requestAdminId);
+            $grantResume = $pdo->prepare('UPDATE payment_transactions SET metadata = ? WHERE payment_transaction_id = ? AND status = ?');
+            $grantResume->execute([json_encode($existingMetadata, JSON_THROW_ON_ERROR), (int)$existing['payment_transaction_id'], 'pending']);
+            $existing['metadata'] = json_encode($existingMetadata, JSON_THROW_ON_ERROR);
+        }
+        if ($existingSource !== $expectedSource && !$adminResumingOperator) {
             throw new DomainException('Another online payment is already active for this booking. Cancel or finish it before starting a new one.');
         }
         if ($isHotelAdminStaff && (
@@ -585,7 +619,7 @@ try {
         $hasProviderSession = trim((string)$existing['provider_checkout_session_id']) !== ''
             || trim((string)$existing['checkout_url']) !== '';
         if ($hasProviderSession) {
-            throw new DomainException('The booking balance changed while an online Checkout Session is active. Please contact support before paying.');
+            throw new DomainException('A checkout for a different amount is still active. Resume or cancel that payment before collecting a different amount.');
         }
 
         // The previous API attempt failed before a Checkout Session was
@@ -710,6 +744,10 @@ try {
     }
 
     $pdo->commit();
+    $checkoutPrepared = true;
+    break;
+    }
+    if (!$checkoutPrepared) throw new DomainException('The payment changed during verification. Please retry this booking.');
 } catch (DomainException|InvalidArgumentException $exception) {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();
@@ -720,7 +758,11 @@ try {
         $pdo->rollBack();
     }
     error_log('Balance checkout database error: ' . $exception->getMessage());
-    balanceCheckoutResponse(409, ['success' => false, 'message' => 'An online payment is already active or the payment record could not be created.']);
+    $duplicate = (int)($exception->errorInfo[1] ?? 0) === 1062
+        && str_contains($exception->getMessage(), 'uq_payment_active_booking');
+    balanceCheckoutResponse($duplicate ? 409 : 500, ['success' => false, 'message' => $duplicate
+        ? 'Another request is preparing a payment for this booking. Retry shortly to resume it.'
+        : 'The payment record could not be prepared. No payment was recorded; please retry or contact the administrator.']);
 } catch (Throwable $exception) {
     if ($pdo->inTransaction()) {
         $pdo->rollBack();

@@ -582,9 +582,42 @@ select:focus {
   white-space: nowrap;
 }
 
-.step-payment-summary {
+.payment-summary {
   background: linear-gradient(180deg, #ffffff, #fbfdfc);
   box-shadow: 0 7px 20px rgba(25, 79, 62, .06);
+}
+
+/* Keep regular rows and dynamically inserted add-ons on the same rhythm. */
+.booking-preview-card .payment-summary > p,
+.booking-preview-card .payment-summary .booking-addon-summary > p {
+  margin: 0;
+  padding: 9px 0;
+  align-items: baseline;
+  line-height: 1.45;
+  border-bottom: 1px solid #edf2f0;
+}
+
+.booking-preview-card .payment-summary .booking-addon-summary {
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.booking-preview-card .payment-summary .booking-addon-summary > p {
+  gap: 16px;
+}
+
+.booking-preview-card .payment-summary .grand-total-row {
+  margin: 0;
+  padding: 11px 0;
+  border-top: 0;
+}
+
+.booking-preview-card .payment-summary .pay-now-row {
+  margin: 10px 0 0;
+  padding: 13px 12px;
+  align-items: center;
+  border: 0;
 }
 
 .other-fees-button {
@@ -1337,7 +1370,7 @@ body.other-fees-modal-open {
     font-size: 15px;
   }
 
-  .booking-preview-card.is-mobile-review-summary .preview-main {
+  .booking-preview-card.is-mobile-review-summary .payment-summary {
     padding: 13px;
     border-radius: 12px;
   }
@@ -1613,7 +1646,7 @@ body.other-fees-modal-open {
     display: inline-flex;
   }
 
-  .booking-preview-card.is-mobile-review-summary .preview-main {
+  .booking-preview-card.is-mobile-review-summary .payment-summary {
     max-height: none;
     padding: 15px;
     overflow: visible;

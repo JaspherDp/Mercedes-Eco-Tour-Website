@@ -115,7 +115,12 @@ try {
     $destinationCipher = null;
     $destinationLast4 = null;
     $destinationVerifiedAt = null;
-    if ($policy['refund_policy'] === 'partial_refund') {
+    // Hotel requests collect only the cancellation reason. Refund details, if
+    // needed, are collected after hotel approval through the refund workflow.
+    if ($domain === 'hotel') {
+        $refundInstitution = $refundBic = $refundAccountName = $refundAccountNumber = '';
+    }
+    if ($domain !== 'hotel' && $policy['refund_policy'] === 'partial_refund') {
         if ($refundInstitution === '' || $refundBic === '' || $refundAccountName === '' || $refundAccountNumber === '') {
             throw new RuntimeException('Add the bank or e-wallet account that will receive your partial refund.');
         }

@@ -64,7 +64,11 @@ foreach ($catalog as &$categoryItems) {
                 'return' => $destinationReturnUrl,
             ]);
         } elseif (stripos($itemUrl, 'hotel_details.php') !== false) {
-            $categoryItem['url'] = appendQueryToUrl($itemUrl, ['source' => 'result']);
+            $categoryItem['url'] = appendQueryToUrl($itemUrl, [
+                'source' => 'result',
+                'destination' => $searchTerm,
+                'island' => (string)($categoryItem['location'] ?? $searchTerm),
+            ]);
         } elseif (stripos($itemUrl, 'package_details.php') !== false) {
             $categoryItem['url'] = appendQueryToUrl($itemUrl, ['destination' => $displayDestination]);
         }

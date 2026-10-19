@@ -192,14 +192,7 @@ $roomType = (string)$selectedRoom['room_name'];
 $requestedGuests = max(1, $adults + $children);
 $roomInitiallyUnavailable = false;
 if (!HoIsHotelRoomAvailable($pdo, (int)$hotel['id'], $roomId, $roomType, $checkin, $checkout)) {
-    $fallbackRooms = HoGetAvailableHotelRooms($pdo, (int)$hotel['id'], $checkin, $checkout, $requestedGuests);
-    if (!empty($fallbackRooms)) {
-        $selectedRoom = $fallbackRooms[0];
-        $roomId = (int)$selectedRoom['id'];
-        $roomType = (string)$selectedRoom['room_name'];
-    } else {
-        $roomInitiallyUnavailable = true;
-    }
+    $roomInitiallyUnavailable = true;
 }
 
 $roomData = [
@@ -216,6 +209,7 @@ if (count($roomGalleryImages) < 3) {
 }
 $unitPrice = (float)$roomData['price'];
 $computedTotal = $unitPrice * $nights;
+try { $initialChildQuote = HoChildQuote($selectedRoom, $adults, $children, $childAges, $nights); $computedTotal = $initialChildQuote['total_before_addons']; } catch (InvalidArgumentException|DomainException $exception) { $initialChildQuote = null; }
 $amountDueNow = $selectedPaymentType === 'partial' ? round($computedTotal * 0.20, 2) : $computedTotal;
 $remainingBalance = max($computedTotal - $amountDueNow, 0);
 
@@ -301,13 +295,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
     if ($lastName === '') $pushFieldError('last_name', 'This field is required. Please enter your last name.');
     if (!filter_var($email, FILTER_VALIDATE_EMAIL)) $pushFieldError('email', 'Please enter a valid email address (example: name@email.com).');
     if ($phoneNumber === '') $pushFieldError('phone_number', 'This field is required. Please enter your phone number.');
-    if ((int)$adults + (int)$children > HoRoomCapacityTotal($selectedRoom)) {
-        $pushFieldError('adults', 'Please reduce the number of guests. This room cannot accommodate the current total.');
-        $pushFieldError('children', 'Please reduce the number of guests. This room cannot accommodate the current total.');
-    }
-    if (count($childAges) !== (int)$children) {
-        $pushFieldError('child_ages', 'Please select an age for every child.');
-    }
+    try { HoChildQuote($selectedRoom, $adults, $children, $childAges, max(1, (int)(new DateTime($checkin))->diff(new DateTime($checkout))->days)); }
+    catch (InvalidArgumentException|DomainException $exception) { $pushFieldError('child_ages', $exception->getMessage()); }
     if (!HoIsHotelRoomAvailable($pdo, (int)$hotel['id'], $roomId, $roomType, $checkin, $checkout)) {
         $pushFieldError('checkin', 'This room is no longer available on the selected dates. Please choose different dates.');
         $pushFieldError('checkout', 'This room is no longer available on the selected dates. Please choose different dates.');
@@ -317,7 +306,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
     $checkoutDt = new DateTime($checkout);
     $nights = (int)$checkinDt->diff($checkoutDt)->days;
     if ($nights < 1) $nights = 1;
-    $computedTotal = $unitPrice * $nights;
+    try { $postChildQuote = HoChildQuote($selectedRoom, $adults, $children, $childAges, $nights); $computedTotal = $postChildQuote['total_before_addons']; } catch (InvalidArgumentException|DomainException $exception) { $computedTotal = $unitPrice * $nights; }
     $cancelDeadline = (clone $checkinDt)->modify('-3 days');
     $amountDueNow = $selectedPaymentType === 'partial' ? round($computedTotal * 0.20, 2) : $computedTotal;
     $remainingBalance = max($computedTotal - $amountDueNow, 0);
@@ -353,8 +342,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
   <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   <script src="https://cdn.jsdelivr.net/npm/zod@3.23.8/lib/index.umd.min.js"></script>
   <script src="js/booking-validation-schemas.js?v=<?= (int)@filemtime(__DIR__ . '/../js/booking-validation-schemas.js') ?>"></script>
-  <link rel="stylesheet" href="styles/booking-addon-picker.css?v=2">
+  <link rel="stylesheet" href="styles/booking-addon-picker.css?v=<?= (int)filemtime(__DIR__ . '/../styles/booking-addon-picker.css') ?>">
   <?php TouristRenderActivityMonitor(); ?>
+<script src="js/hotel-child-policy.js?v=<?= (int)filemtime(__DIR__ . '/../js/hotel-child-policy.js') ?>"></script>
 </head>
 <body>
   <header class="booking-header">
@@ -439,16 +429,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
 
           <div class="field-row two">
             <label>
-              Adults
+              Adults (18+ years)
               <input type="number" min="1" name="adults" id="adultsCount" value="<?= (int)$adults ?>" required />
             </label>
             <label>
-              Children
+              Children (0–17 years)
               <input type="number" min="0" name="children" id="childrenCount" value="<?= (int)$children ?>" required />
             </label>
           </div>
           <div id="hotelChildAgeRows" class="hotel-child-age-list" tabindex="-1" aria-live="polite"></div>
-          <p class="step-inline-note">Room capacity: up to <?= (int)HoRoomCapacityTotal($selectedRoom) ?> guests. Hotel pricing is per room and night.</p>
+          <p class="step-inline-note">Room capacity: up to <?= (int)HoRoomCapacityTotal($selectedRoom) ?> guests. Hotel pricing is per room and night. Ages 6–17 add PHP 250 per child per night; extra bedding is optional. This reservation covers one room.</p>
           </section>
 
           <section class="booking-step-panel" data-booking-step="2" hidden>
@@ -490,7 +480,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
           <section class="booking-step-panel" data-booking-step="3" hidden>
             <div class="step-section-heading">
               <b>3</b>
-              <div><h2>Review and payment</h2><p>Choose how much to pay now and review the total.</p></div>
+              <div><h2>Review and payment</h2><p>Review your stay details, payment option and booking policies.</p></div>
             </div>
           <div class="payment-option-grid">
             <p class="payment-option-title" data-required-label>Payment Option</p>
@@ -510,19 +500,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
             </label>
           </div>
 
-          <div class="totals-panel">
-            <h3>Payment summary</h3>
-            <div class="booking-addon-summary" data-addon-summary hidden></div>
-            <p><span>Optional add-ons</span><strong id="hotelCatalogAddonsTotal">₱0.00</strong></p>
-            <p><span>Rate per night</span><strong id="unitPriceText">₱<?= number_format($unitPrice, 2) ?></strong></p>
-            <p><span>Number of nights</span><strong id="nightsText"><?= (int)$nights ?></strong></p>
-            <p class="grand-total"><span>Total amount</span><strong id="totalText">₱<?= number_format($computedTotal, 2) ?></strong></p>
-            <p><span>Amount due now</span><strong id="dueNowText">₱<?= number_format($amountDueNow, 2) ?></strong></p>
-            <p><span>Remaining balance</span><strong id="remainingBalanceText">₱<?= number_format($remainingBalance, 2) ?></strong></p>
+          <div class="hotel-stay-overview">
+            <h3><span class="hotel-review-heading-icon" aria-hidden="true">1</span> Stay overview</h3>
+            <p><span>Booking type</span><strong>Hotel / Resort</strong></p>
+            <p><span>Property</span><strong><?= htmlspecialchars($hotelName) ?></strong></p>
+            <p><span>Selected room</span><strong><?= htmlspecialchars($roomType) ?></strong></p>
+            <p><span>Stay dates</span><strong id="summaryDates"><?= htmlspecialchars($checkin) ?> to <?= htmlspecialchars($checkout) ?></strong></p>
+            <p><span>Number of nights</span><strong id="summaryNights"><?= (int)$nights ?></strong></p>
+            <p><span>Guests</span><strong id="summaryGuests"><?= (int)$adults ?> adult(s), <?= (int)$children ?> child(ren)</strong></p>
+            <p><span>Child accommodation</span><strong id="summaryChildFee">-</strong></p>
+            <p><span>Guest name</span><strong id="hotelReviewGuest">-</strong></p>
+            <p><span>Contact number</span><strong id="hotelReviewPhone">-</strong></p>
+            <p><span>Payment option</span><strong id="summaryPaymentType"><?= $selectedPaymentType === 'partial' ? 'Partial (20%)' : 'Full (100%)' ?></strong></p>
           </div>
-
-          <p class="booking-legal-note">By proceeding, you agree to the <a href="#legalPolicyModal" data-legal-policy="terms">Terms &amp; Conditions</a> and acknowledge the <a href="#legalPolicyModal" data-legal-policy="privacy">Privacy Policy</a>.</p>
-          <button type="submit" class="submit-btn">Proceed to Payment</button>
+          <a class="hotel-policy-reference" href="#cancelPolicyBlock"><span aria-hidden="true">i</span> View cancellation policy</a>
+          <div class="hotel-booking-acknowledgements">
+            <label data-required-label>
+              <input type="checkbox" id="hotelAgreePrivacy" name="agree_privacy" required>
+              <span class="required-label-text">I acknowledge the <a href="#legalPolicyModal" data-legal-policy="privacy">Privacy Policy</a> and agree to the <a href="#legalPolicyModal" data-legal-policy="terms">Terms &amp; Conditions</a>.<span class="required-mark" aria-hidden="true">*</span></span>
+            </label>
+            <label data-required-label>
+              <input type="checkbox" id="hotelAgreePolicy" name="agree_hotel_policy" required>
+              <span class="required-label-text">I acknowledge the cancellation policy and applicable child accommodation and optional add-on charges.<span class="required-mark" aria-hidden="true">*</span></span>
+            </label>
+          </div>
+          <button type="submit" class="submit-btn">Pay</button>
           </section>
 
           <div class="booking-step-actions">
@@ -572,21 +574,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
           </ul>
         </div>
 
-        <div class="summary-block">
-          <h4>Booking Summary</h4>
-          <p><span>Stay Dates</span><strong id="summaryDates"><?= htmlspecialchars($checkin) ?> to <?= htmlspecialchars($checkout) ?></strong></p>
-          <p><span>Nights</span><strong id="summaryNights"><?= (int)$nights ?></strong></p>
-          <p><span>Guests</span><strong id="summaryGuests"><?= (int)$adults ?> adult(s), <?= (int)$children ?> child(ren)</strong></p>
-          <p><span>Payment Option</span><strong id="summaryPaymentType"><?= $selectedPaymentType === 'partial' ? 'Partial (20%)' : 'Full (100%)' ?></strong></p>
-          <p><span>Amount Due Now</span><strong id="summaryDueNow">₱<?= number_format($amountDueNow, 2) ?></strong></p>
-          <p><span>Price per night</span><strong>₱<?= number_format($unitPrice, 2) ?></strong></p>
-          <p class="overall-total"><span>Booking Total</span><strong id="summaryTotal">₱<?= number_format($computedTotal, 2) ?></strong></p>
-        </div>
+          <div class="totals-panel hotel-payment-summary">
+            <h3>Payment summary</h3>
+            <div class="booking-addon-summary" data-addon-summary hidden></div>
+            <p><span>Optional add-ons</span><strong id="hotelCatalogAddonsTotal">₱0.00</strong></p>
+            <p><span>Rate per night</span><strong id="unitPriceText">₱<?= number_format($unitPrice, 2) ?></strong></p>
+            <p><span>Child accommodation (ages 6–17)</span><strong id="hotelChildFeeTotal">-</strong></p>
+            <p><span>Room subtotal</span><strong id="hotelRoomSubtotal">-</strong></p>
+            <p><span>Number of nights</span><strong id="nightsText"><?= (int)$nights ?></strong></p>
+            <p class="grand-total"><span>Total amount</span><strong id="totalText">₱<?= number_format($computedTotal, 2) ?></strong></p>
+            <p><span>Amount due now</span><strong id="dueNowText">₱<?= number_format($amountDueNow, 2) ?></strong></p>
+            <p><span>Remaining balance</span><strong id="remainingBalanceText">₱<?= number_format($remainingBalance, 2) ?></strong></p>
+          </div>
 
         <div class="policy-block" id="cancelPolicyBlock" data-checkin="<?= htmlspecialchars($checkin) ?>">
           <h4>Cancellation Policy</h4>
           <p id="cancelPolicyText">
-            Free cancellation is allowed up to <?= htmlspecialchars($cancelDeadline->format('F d, Y')) ?> (3 days before check-in date) with a full refund. If the booking is cancelled less than 3 days before check-in, the guest is eligible for a 50% refund of the total booking amount.
+            Free cancellation is allowed up to <?= htmlspecialchars($cancelDeadline->format('F d, Y')) ?> (3 days before check-in date) with a full refund. For cancellations less than 3 days before check-in, 20% of the booking total is non-refundable. Any amount paid above that 20% is refundable (80% of the total if fully paid; no refund if only the 20% deposit was paid).
           </p>
         </div>
       </aside>
@@ -609,8 +613,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
       const email = bookingForm.querySelector('input[name="email"]');
       const phoneNumber = bookingForm.querySelector('input[name="phone_number"]');
       const submitButton = bookingForm.querySelector(".submit-btn");
+      const agreePrivacy = document.getElementById("hotelAgreePrivacy");
+      const agreeHotelPolicy = document.getElementById("hotelAgreePolicy");
       const paymentTypeInputs = document.querySelectorAll('input[name="payment_type"]');
       const unitPrice = <?= json_encode($unitPrice) ?>;
+      const hotelOccupancyPolicy = <?= json_encode(HoChildRoomPolicy($selectedRoom), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
       const maxRoomCapacity = <?= json_encode(HoRoomCapacityTotal($selectedRoom)) ?>;
       const initialChildAges = <?= json_encode(array_map('intval', $childAges), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
       const serverFieldErrors = <?= json_encode($fieldErrors, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
@@ -623,7 +630,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
       let stayDurationPicker = null;
       const touchedFields = new Set();
       const errorIconSvg = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="7.25" x2="12" y2="13.25"></line><circle cx="12" cy="16.5" r="1"></circle></svg>';
-      const fieldOrder = ["checkin", "checkout", "adults", "children", "child_ages", "payment_type", "first_name", "last_name", "email", "phone_number"];
+      const fieldOrder = ["checkin", "checkout", "adults", "children", "child_ages", "payment_type", "first_name", "last_name", "email", "phone_number", "agree_privacy", "agree_hotel_policy"];
       const fieldTargets = {
         checkin,
         checkout: stayDuration,
@@ -634,7 +641,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
         first_name: firstName,
         last_name: lastName,
         email,
-        phone_number: phoneNumber
+        phone_number: phoneNumber,
+        agree_privacy: agreePrivacy,
+        agree_hotel_policy: agreeHotelPolicy
       };
       const formErrorMap = new Map();
       let isSubmitting = false;
@@ -650,8 +659,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
       const summaryNights = document.getElementById("summaryNights");
       const summaryGuests = document.getElementById("summaryGuests");
       const summaryPaymentType = document.getElementById("summaryPaymentType");
-      const summaryDueNow = document.getElementById("summaryDueNow");
-      const summaryTotal = document.getElementById("summaryTotal");
       const cancelPolicyText = document.getElementById("cancelPolicyText");
       const mobileStayDates = document.getElementById("mobileStayDates");
       const mobileStayGuests = document.getElementById("mobileStayGuests");
@@ -735,9 +742,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
       const getPaymentType = () => [...paymentTypeInputs].find(el => el.checked)?.value || "full";
 
       const getChildAges = () => [...childAgeRows.querySelectorAll(".hotel-child-age-select")]
-        .map(select => select.value)
-        .filter(value => value !== "")
-        .map(Number);
+        .map(select => select.value === "" ? "" : Number(select.value));
 
       const renderChildAgeRows = (savedAges = null) => {
         const count = Math.max(0, Number(children.value || 0));
@@ -748,7 +753,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
         childAgeRows.innerHTML = Array.from({ length: count }, (_, index) => {
           const selectedAge = previous[index] ?? "";
           const options = Array.from({ length: 18 }, (__, age) =>
-            `<option value="${age}"${selectedAge === String(age) ? " selected" : ""}>${age} year${age === 1 ? "" : "s"} old${age <= 7 ? " — Free" : ""}</option>`
+            `<option value="${age}"${selectedAge === String(age) ? " selected" : ""}>${age} year${age === 1 ? "" : "s"} old${age <= 5 ? " — Free" : " — PHP 250/night"}</option>`
           ).join("");
           return `<label class="hotel-child-age-field">
             <span>Child ${index + 1} age</span>
@@ -760,7 +765,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
 
         childAgeRows.hidden = count === 0;
         if (count > 0) {
-          childAgeRows.insertAdjacentHTML("beforeend", '<p class="hotel-child-age-note">Children age 7 and below are free from child hotel and entrance charges.</p>');
+          childAgeRows.insertAdjacentHTML("beforeend", '<p class="hotel-child-age-note">Ages 0–5: free accommodation. Ages 6–17: PHP 250 per child per night. Existing bedding is shared; extra bedding is optional.</p>');
         }
         childAgeRows.querySelectorAll(".hotel-child-age-select").forEach(select => {
           select.addEventListener("change", () => {
@@ -782,7 +787,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
         first_name: firstName.value.trim(),
         last_name: lastName.value.trim(),
         email: email.value.trim(),
-        phone_number: phoneNumber.value.trim()
+        phone_number: phoneNumber.value.trim(),
+        agree_privacy: agreePrivacy.checked,
+        agree_hotel_policy: agreeHotelPolicy.checked
       });
 
       const validateForm = () => {
@@ -791,13 +798,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
         const schemaResult = typeof validator === "function" ? validator(payload) : { success: true, errors: {} };
         const errors = schemaResult.success ? {} : { ...(schemaResult.errors || {}) };
 
-        if (Number(payload.adults) + Number(payload.children) > Number(maxRoomCapacity || 0)) {
-          errors.adults = "Please reduce guests. This room cannot accommodate the current total.";
-          errors.children = "Please reduce guests. This room cannot accommodate the current total.";
-        }
-        if (payload.children > 0 && payload.child_ages.length !== payload.children) {
-          errors.child_ages = "Please select an age for every child.";
-        }
+        try { HotelChildPolicy.quote(hotelOccupancyPolicy, payload.adults, payload.children, payload.child_ages, Math.max(1, Math.round((new Date(payload.checkout) - new Date(payload.checkin)) / 86400000)), unitPrice); }
+        catch (error) { errors[error.message.includes('adult capacity') ? 'adults' : error.message.includes('child allowance') || error.message.includes('approved occupancy') ? 'children' : 'child_ages'] = error.message; }
+        if (!payload.agree_privacy) errors.agree_privacy = 'Acknowledge the Privacy Policy and Terms & Conditions.';
+        if (!payload.agree_hotel_policy) errors.agree_hotel_policy = 'Acknowledge the cancellation policy and applicable booking charges.';
         return errors;
       };
 
@@ -827,20 +831,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
       const stepStatus = document.getElementById("hotelStepStatus");
       const bookingGrid = document.querySelector(".booking-grid");
       const bookingRoomCard = document.querySelector(".booking-room-card");
-      const reviewTotalsPanel = bookingForm.querySelector(".totals-panel");
+      const reviewSummaryAnchor = bookingForm.querySelector(".hotel-booking-acknowledgements");
       const mobileBookingQuery = window.matchMedia("(max-width: 1100px)");
       const stepFieldKeys = {
         1: ["checkin", "checkout", "adults", "children", "child_ages"],
         2: ["first_name", "last_name", "email", "phone_number"],
-        3: ["payment_type"]
+        3: ["payment_type", "agree_privacy", "agree_hotel_policy"]
       };
       let currentStep = 1;
 
       const syncMobileBookingLayout = () => {
-        if (!bookingGrid || !bookingRoomCard || !reviewTotalsPanel) return;
+        if (!bookingGrid || !bookingRoomCard || !reviewSummaryAnchor) return;
         if (mobileBookingQuery.matches) {
           bookingRoomCard.classList.add("is-mobile-review-summary");
-          reviewTotalsPanel.parentNode.insertBefore(bookingRoomCard, reviewTotalsPanel);
+          reviewSummaryAnchor.parentNode.insertBefore(bookingRoomCard, reviewSummaryAnchor);
         } else {
           bookingRoomCard.classList.remove("is-mobile-review-summary");
           bookingGrid.appendChild(bookingRoomCard);
@@ -1066,6 +1070,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
         }
       };
 
+      const updateStayOverviewContact = () => {
+        document.getElementById('hotelReviewGuest').textContent = [firstName.value.trim(), lastName.value.trim()].filter(Boolean).join(' ') || '-';
+        document.getElementById('hotelReviewPhone').textContent = phoneNumber.value.trim() || '-';
+      };
+      [firstName, lastName, phoneNumber].forEach(field => field.addEventListener('input', updateStayOverviewContact));
+      updateStayOverviewContact();
+
       const recalc = () => {
         enforceDateRules();
         const checkinDate = new Date(checkin.value);
@@ -1079,11 +1090,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
         if (!hasValidStay) nights = 0;
 
         const catalogAddonsTotal = window.BookingAddonPicker.total();
-        const total = unitPrice * nights + catalogAddonsTotal;
+        let childQuote = null;
+        try { childQuote = HotelChildPolicy.quote(hotelOccupancyPolicy, adultQty, childQty, getChildAges(), nights, unitPrice); } catch (_) {}
+        const childFee = childQuote?.childFeeTotal || 0;
+        const total = unitPrice * nights + childFee + catalogAddonsTotal;
+        document.getElementById("hotelChildFeeTotal").textContent = childQuote ? formatMoney(childFee) : "Complete child ages and stay details";
+        document.getElementById("summaryChildFee").textContent = childQuote ? formatMoney(childFee) : "Awaiting valid guest details";
         document.getElementById("hotelCatalogAddonsTotal").textContent = formatMoney(catalogAddonsTotal);
         const dueNow = selectedPaymentType === "partial" ? total * depositRate : total;
         const remaining = Math.max(total - dueNow, 0);
 
+        document.getElementById("hotelRoomSubtotal").textContent = formatMoney(unitPrice * nights);
         nightsText.textContent = String(nights);
         totalText.textContent = formatMoney(total);
         dueNowText.textContent = formatMoney(dueNow);
@@ -1091,26 +1108,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
 
         summaryDates.textContent = hasValidStay ? `${checkin.value} to ${checkout.value}` : "Choose your stay duration";
         summaryNights.textContent = hasValidStay ? String(nights) : "-";
-        const selectedChildAges = getChildAges();
+        const selectedChildAges = getChildAges().filter(age => age !== "");
         const childAgeSummary = childQty > 0 && selectedChildAges.length
-          ? ` · ages ${selectedChildAges.join(", ")}`
+          ? ` · ages ${selectedChildAges.map(age => age + " (" + HotelChildPolicy.ageLabel(age) + ")").join(", ")}`
           : "";
         summaryGuests.textContent = `${adultQty} adult(s), ${childQty} child(ren)${childAgeSummary}`;
         summaryPaymentType.textContent = selectedPaymentType === "partial" ? "Partial (20%)" : "Full (100%)";
-        summaryDueNow.textContent = formatMoney(dueNow);
-        summaryTotal.textContent = formatMoney(total);
         mobileStayDates.textContent = hasValidStay ? `${checkin.value} to ${checkout.value}` : "Choose stay dates";
         mobileStayGuests.textContent = `${adultQty} adult(s), ${childQty} child(ren)`;
         mobileStayEstimate.textContent = formatMoney(total);
         if (!isSubmitting) {
-          submitButton.textContent = `Proceed to Pay ${formatMoney(dueNow)}`;
+          submitButton.textContent = `Pay ${formatMoney(dueNow)}`;
           submitButton.setAttribute("aria-label", `Proceed to payment. Amount due now: ${formatMoney(dueNow)}`);
         }
 
         if (hasValidStay) {
           const deadline = new Date(checkin.value);
           deadline.setDate(deadline.getDate() - 3);
-          cancelPolicyText.textContent = `Free cancellation is allowed up to ${formatLongDate(deadline)} (3 days before check-in date) with a full refund. If the booking is cancelled less than 3 days before check-in, the guest is eligible for a 50% refund of the total booking amount.`;
+          cancelPolicyText.textContent = `Free cancellation is allowed up to ${formatLongDate(deadline)} (3 days before check-in date) with a full refund. For cancellations less than 3 days before check-in, 20% of the booking total is non-refundable. Any amount paid above that 20% is refundable (80% of the total if fully paid; no refund if only the 20% deposit was paid).`;
         } else {
           cancelPolicyText.textContent = "Choose your stay duration to view the cancellation deadline.";
         }
@@ -1149,7 +1164,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
         [firstName, "first_name"],
         [lastName, "last_name"],
         [email, "email"],
-        [phoneNumber, "phone_number"]
+        [phoneNumber, "phone_number"],
+        [agreePrivacy, "agree_privacy"],
+        [agreeHotelPolicy, "agree_hotel_policy"]
       ].forEach(([element, key]) => {
         element.addEventListener("input", () => setTouchedAndValidate(key));
         element.addEventListener("change", () => setTouchedAndValidate(key));
@@ -1183,6 +1200,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
           payload.booking_domain = "hotel";
           payload.bookingType = "hotel";
           payload.child_ages = getChildAges();
+          payload.requested_rooms = <?= json_encode(max(1, (int)($_GET['requested_rooms'] ?? $_GET['rooms'] ?? 1))) ?>;
           payload.catalog_addons = window.BookingAddonPicker.selections();
           payload.payment_type = getPaymentType();
           payload.returnUrl = `hotel_details.php?id=${encodeURIComponent(payload.hotel_id)}`;

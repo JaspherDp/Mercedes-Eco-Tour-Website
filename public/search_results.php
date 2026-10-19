@@ -8,6 +8,7 @@ TouristPreparePageActivity($pdo);
 require_once 'php/unified_search_config.php';
 require_once 'php/tour_resource_availability_helper.php';
 require_once 'php/tour_booking_date_policy.php';
+require_once 'php/hotel_rooms_helper.php';
 
 function normalizeSearchTab(string $tab): string
 {
@@ -280,7 +281,7 @@ function fetchBookedResourceNamesForDate(PDO $pdo, string $bookingType, string $
     return $lookup;
 }
 
-function fetchHotelResults(PDO $pdo, string $destination, int $pax, int $rooms): array
+function fetchHotelResults(PDO $pdo, string $destination, int $pax, int $rooms, ?array $stay = null): array
 {
     $table = tableExists($pdo, 'hotel_resorts') ? 'hotel_resorts' : (tableExists($pdo, 'hotel_resort') ? 'hotel_resort' : null);
     if ($table === null) {
@@ -307,6 +308,10 @@ function fetchHotelResults(PDO $pdo, string $destination, int $pax, int $rooms):
     $results = [];
     foreach ($rows as $row) {
         $id = valueFromRow($row, ['hotel_resort_id', 'id'], '0');
+        if ($stay !== null) {
+            $matching = HoGetAvailableHotelRooms($pdo, (int)$id, $stay['checkin'], $stay['checkout'], $stay['party']['adults'] + $stay['party']['children'], $stay['party']);
+            if (!array_filter($matching, static fn(array $room): bool => $room['is_available'])) continue;
+        }
         $name = valueFromRow($row, ['name', 'hotel_name'], 'Hotel/Resort');
         $location = valueFromRow($row, ['location', 'island', 'destination'], 'Mercedes');
         $image = resolveSearchImage(
@@ -325,7 +330,7 @@ function fetchHotelResults(PDO $pdo, string $destination, int $pax, int $rooms):
             'image' => $image,
             'rating' => $rating,
             'price' => formatPrice($price, '/night'),
-            'description' => $rooms . ' room(s) • ' . $pax . ' pax',
+            'description' => '1 room per booking' . ' - ' . $pax . ' guest(s)',
             'cta' => 'View Details',
             'url' => 'hotel_details.php?id=' . rawurlencode($id)
         ];
@@ -657,7 +662,7 @@ if ($pax <= 0) {
     $children = (int)($_GET['children'] ?? 0);
     $pax = max(1, $adults + $children);
 }
-$rooms = max(1, (int)($_GET['rooms'] ?? 1));
+$rooms = 1;
 
 if (!isset($SEARCH_TABS[$tab])) {
     header('Location: hotel_resorts.php?tab=hotels');
@@ -717,7 +722,16 @@ if ($resultType !== 'hotels' && $handoffTourDuration === '' && $handoffStartDate
 if ($searchDateError === '') {
 switch ($resultType) {
     case 'hotels':
-        $results = fetchHotelResults($pdo, $destination, $pax, $rooms);
+        $hotelStay = null;
+        if ($checkin !== '' && $checkout !== '') {
+            try {
+                $hotelParty = HoChildParty($_GET['adults'] ?? max(1, $pax - (int)($_GET['children'] ?? 0)), $_GET['children'] ?? 0, $_GET['child_ages'] ?? []);
+                $start = ItourValidationDate($checkin, 'Check-in date'); $end = ItourValidationDate($checkout, 'Check-out date');
+                if ($end <= $start || $start < date('Y-m-d')) throw new InvalidArgumentException('Select valid stay dates.');
+                $hotelStay = ['party' => $hotelParty, 'checkin' => $start, 'checkout' => $end];
+            } catch (InvalidArgumentException|DomainException $exception) { $searchDateError = $exception->getMessage(); }
+        }
+        $results = $searchDateError === '' ? fetchHotelResults($pdo, $destination, $pax, $rooms, $hotelStay) : [];
         break;
     case 'tours':
         $results = fetchTourPackageResults($pdo, $destination, $pax, $selectedDate, $requestedTourType);
@@ -744,7 +758,7 @@ $searchContext = array_filter([
     'date' => $resultType !== 'hotels' ? $handoffStartDate : $date,
     'adults' => (string)($_GET['adults'] ?? ''),
     'children' => (string)($_GET['children'] ?? ''),
-    'child_ages' => $childAges,
+    'child_ages' => $resultType === 'hotels' ? $childAges : '',
     'pax' => $pax > 0 ? (string)$pax : '',
     'rooms' => (string)($_GET['rooms'] ?? ''),
     'tour_date_mode' => $resultType !== 'hotels' ? $requestedTourType : $tourDateMode,
@@ -781,6 +795,13 @@ foreach ($results as &$item) {
 
     if (stripos($itemUrl, 'tour_booking.php') !== false) {
         $item['url'] = appendQueryToUrl($itemUrl, $searchContext + ['return' => $returnToResults]);
+        continue;
+    }
+
+    if (stripos($itemUrl, 'hotel_details.php') !== false) {
+        $item['url'] = appendQueryToUrl($itemUrl, $searchContext + [
+            'source' => 'result', 'island' => (string)($item['location'] ?? $destination),
+        ]);
         continue;
     }
 
@@ -837,8 +858,10 @@ if ($resultType !== 'hotels' && $searchStartDate !== '') {
     <link rel="icon" type="image/png" href="<?= is_file(__DIR__ . '/../img/favicon-64-v1.png') ? 'img/favicon-64-v1.png' : 'img/newlogo.png' ?>" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+    <link rel="stylesheet" href="styles/search-date-policy.css?v=<?= (int)filemtime(__DIR__ . '/../styles/search-date-policy.css') ?>" />
     <link rel="stylesheet" href="styles/unified_search.css?v=<?= (int) @filemtime(__DIR__ . '/../styles/unified_search.css') ?>" />
   <?php TouristRenderActivityMonitor(); ?>
+<link rel="stylesheet" href="styles/hotel-child-policy.css?v=<?= (int)filemtime(__DIR__ . '/../styles/hotel-child-policy.css') ?>">
 </head>
 
 <body class="results-page results-type-<?= htmlspecialchars($resultType) ?>">
@@ -963,6 +986,12 @@ if ($resultType !== 'hotels' && $searchStartDate !== '') {
                 </div>
                 <?php endif; ?>
 
+                <?php if ($resultType === 'hotels'): ?>
+                <input type="hidden" name="pax" id="resultsHotelPax" value="<?= $pax ?>">
+                <div class="results-search-field results-search-field--number"><label for="resultsHotelAdults">Adults (18+)</label><div class="results-search-control"><input id="resultsHotelAdults" type="number" name="adults" min="1" max="100" value="<?= max(1, (int)($_GET['adults'] ?? ($pax - max(0, (int)($_GET['children'] ?? 0))))) ?>" required></div></div>
+                <div class="results-search-field results-search-field--number"><label for="resultsHotelChildren">Children (0–17)</label><div class="results-search-control"><input id="resultsHotelChildren" type="number" name="children" min="0" max="100" value="<?= max(0, (int)($_GET['children'] ?? 0)) ?>" required></div></div>
+                <div class="results-search-field" id="resultsHotelChildAges" data-ages="<?= htmlspecialchars($childAges, ENT_QUOTES, 'UTF-8') ?>"></div>
+                <?php else: ?>
                 <div class="results-search-field results-search-field--number">
                     <label for="resultsPax">Guests</label>
                     <div class="results-search-control">
@@ -971,14 +1000,9 @@ if ($resultType !== 'hotels' && $searchStartDate !== '') {
                     </div>
                 </div>
 
+                <?php endif; ?>
                 <?php if ($resultType === 'hotels'): ?>
-                <div class="results-search-field results-search-field--number">
-                    <label for="resultsRooms">Rooms</label>
-                    <div class="results-search-control">
-                        <i data-lucide="bed-double" aria-hidden="true"></i>
-                        <input id="resultsRooms" type="number" name="rooms" min="1" max="10" value="<?= $rooms ?>" required>
-                    </div>
-                </div>
+                <input type="hidden" name="rooms" value="1">
                 <?php endif; ?>
 
                 <div class="results-search-submit">
@@ -1100,6 +1124,7 @@ if ($resultType !== 'hotels' && $searchStartDate !== '') {
     <div id="footer"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <?php if ($resultType === 'hotels'): ?><script src="js/hotel-search-child-fields.js?v=<?= (int)filemtime(__DIR__ . '/../js/hotel-search-child-fields.js') ?>"></script><?php endif; ?>
     <script src="js/search-date-policy.js?v=<?= (int)filemtime(__DIR__ . '/../js/search-date-policy.js') ?>"></script>
     <script>
         function removeFilter(filterType) {
@@ -1146,7 +1171,7 @@ if ($resultType !== 'hotels' && $searchStartDate !== '') {
             const tourModeButtons = Array.from(document.querySelectorAll('[data-tour-mode]'));
             const primaryDestination = document.getElementById('resultsDestination');
             const secondaryDestination = document.getElementById('resultsDestination2');
-            const paxInput = document.getElementById('resultsPax');
+            const paxInput = document.getElementById('resultsPax') || document.getElementById('resultsHotelPax');
             let tourRangePicker = null;
 
             const minimumTourDate = () => window.SearchDatePolicy.minimumDate(<?= json_encode($tab) ?>);
@@ -1212,6 +1237,9 @@ if ($resultType !== 'hotels' && $searchStartDate !== '') {
                     monthSelectorType: 'static',
                     nextArrow: '&#8250;',
                     prevArrow: '&#8249;',
+                    onReady(selectedDates, dateStr, instance) {
+                        window.SearchDatePolicy.updateCalendarNote(instance, <?= json_encode($tab) ?>);
+                    },
                     onOpen() {
                         tourRangePicker.set('minDate', parseIsoDate(minimumTourDate()));
                     },

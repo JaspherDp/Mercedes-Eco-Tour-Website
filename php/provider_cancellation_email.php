@@ -149,6 +149,7 @@ function sendRescheduleOfferEmail(array $request, array $tourist): bool
 
 function sendProviderCancellationEmail(array $request, array $tourist): bool
 {
+    if (($request['tourist_decision'] ?? '') === 'booking_rejected') return sendBookingRejectedEmail($request, $tourist);
     $name = trim((string)($tourist['full_name'] ?? '')) ?: 'Guest';
     $reference = (string)($request['booking_reference'] ?: ('Booking #' . $request['booking_id']));
     $timeframe = trim((string)getenv('REFUND_PROCESSING_TIMEFRAME'));
@@ -178,4 +179,30 @@ function sendRescheduleConfirmationEmail(array $request, array $tourist): bool
         'Remaining balance' => 'Unchanged',
     ], 'Please use the new date shown above. Your original schedule will no longer proceed.', 'View My Bookings', bookingWorkflowProfileUrl((int)$request['cancellation_request_id']));
     return sendBookingWorkflowEmail((string)($tourist['email'] ?? ''), $name, 'iTour Mercedes | Reschedule Confirmed (' . $reference . ')', $html, 'Your booking was moved from ' . $request['original_service_date'] . ' to ' . $request['rescheduled_service_date'] . '. Your existing payment remains applied.');
+}
+
+
+function BookingRejectionEmailContent(array $request, array $tourist): array
+{
+    $name = trim((string)($tourist['full_name'] ?? '')) ?: 'Guest';
+    $reference = (string)($request['booking_reference'] ?? 'Booking');
+    $reason = (string)($request['cancellation_reason'] ?? '');
+    $paid = max(0, (float)($request['amount_paid'] ?? 0));
+    $refund = max(0, (float)($request['refundable_amount'] ?? 0));
+    $notice = $paid > 0 ? 'Your cancellation request is already approved. The full amount successfully paid is eligible for refund and has been submitted for processing. This notice does not mean that the refund transfer is complete.' : 'Your cancellation request is already approved. No payment was received, so there is no amount to refund.';
+    $html = bookingWorkflowEmailShell('BOOKING REJECTED', 'Booking rejection and cancellation notice',
+        'Dear <strong>'.htmlspecialchars($name, ENT_QUOTES, 'UTF-8').'</strong>,<br>We regret to inform you that the service provider could not approve your booking. The booking has been cancelled. The reason and refund details are shown below.',
+        ['Booking reference'=>$reference, 'Service'=>$request['service_name'] ?? 'Booking service',
+         'Scheduled date'=>$request['service_date'] ?? '', 'Rejection reason'=>$reason,
+         'Cancellation status'=>'Approved', 'Amount paid'=>'PHP '.number_format($paid,2),
+         'Eligible refund'=>'PHP '.number_format($refund,2), 'Refund status'=>$refund>0?'Pending processing':'No payment to refund'],
+        $notice);
+    $plain = 'Booking '.$reference.' was rejected and cancelled. Reason: '.$reason.'. Cancellation: approved. Amount paid: PHP '.number_format($paid,2).'. Eligible refund: PHP '.number_format($refund,2).'. '.$notice;
+    return ['subject'=>'iTour Mercedes | Booking Rejected ('.$reference.')','html'=>$html,'plain'=>$plain,'name'=>$name];
+}
+
+function sendBookingRejectedEmail(array $request, array $tourist): bool
+{
+    $content = BookingRejectionEmailContent($request, $tourist);
+    return sendBookingWorkflowEmail((string)($tourist['email'] ?? ''), $content['name'], $content['subject'], $content['html'], $content['plain']);
 }

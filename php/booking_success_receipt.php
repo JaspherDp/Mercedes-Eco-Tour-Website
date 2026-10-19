@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/payment_receipt_breakdown.php';
+require_once __DIR__ . '/hotel_child_policy.php';
 
 /** Read-only receipt for the reservation authorized by the success-page session. */
 function BookingSuccessReceipt(PDO $pdo, array $success): array
@@ -29,6 +30,7 @@ function BookingSuccessReceipt(PDO $pdo, array $success): array
     if (!$booking) throw new RuntimeException('Receipt unavailable.');
 
     if ($hotel) {
+        $booking['child_policy'] = HoChildSnapshot($pdo, (int)$booking['hotel_booking_id']);
         $booking['guest_name'] = trim($booking['first_name'] . ' ' . $booking['last_name']);
         $expensesQuery = $pdo->prepare('SELECT expense_type, expense_name, quantity, unit_price, total_amount, notes FROM hotel_booking_expenses WHERE hotel_booking_id = ? AND hotel_resort_id = ? ORDER BY created_at ASC');
         $expensesQuery->execute([(int)$booking['hotel_booking_id'], (int)$booking['hotel_resort_id']]);

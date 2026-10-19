@@ -66,6 +66,9 @@ foreach ($calendarStmt->fetchAll(PDO::FETCH_ASSOC) as $booking) {
   const bookings = <?= json_encode($calendarBookings, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
   const modal = document.getElementById(prefix + 'Modal');
   if (!modal) return;
+  // Escape the sticky header's stacking context so the sidebar cannot cover
+  // the dialog or clip its leftmost calendar column and navigation controls.
+  document.body.appendChild(modal);
   const grid = modal.querySelector('[data-calendar-grid]');
   const monthLabel = modal.querySelector('[data-calendar-month]');
   const agendaDate = modal.querySelector('[data-agenda-date]');

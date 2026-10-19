@@ -99,7 +99,8 @@
     document.body.style.overflow = locked ? 'hidden' : '';
   }
   function openRecordModal(value) {
-    if (value && selection) selection.value = value;
+    if (selection) selection.value = value || '';
+    if (collectionMethod) collectionMethod.value = '';
     updateBookingSelection();
     recordModal.classList.add('open');
     recordModal.setAttribute('aria-hidden', 'false');
@@ -119,7 +120,8 @@
     paymentBookingId.value = parts[1] || '';
     const balance = Number(option && option.dataset.balance || 0);
     paymentAmount.max = balance ? balance.toFixed(2) : '';
-    if (balance && (!Number(paymentAmount.value) || Number(paymentAmount.value) > balance)) paymentAmount.value = balance.toFixed(2);
+    paymentAmount.value = balance > 0 ? balance.toFixed(2) : '';
+    paymentAmount.setCustomValidity('');
     amountHelp.textContent = balance ? `Maximum collectible amount: ₱${balance.toLocaleString('en-PH', {minimumFractionDigits: 2})}` : 'Cannot exceed the outstanding balance.';
     selectedBooking.innerHTML = selection.value
       ? `<span>${escapeHtml(option.dataset.customer || 'Guest')}</span><strong>${escapeHtml(option.dataset.reference || 'Booking')} · ₱${balance.toLocaleString('en-PH', {minimumFractionDigits: 2})} due</strong>`

@@ -295,6 +295,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['room_action'])) {
             $price = ItourValidationMoney($_POST['price'] ?? null, 'Room price');
             $capacityAdults = ItourValidationInt($_POST['capacity_adults'] ?? null, 'Adult capacity', 1, 100);
             $capacityChildren = ItourValidationInt($_POST['capacity_children'] ?? 0, 'Child capacity', 0, 100);
+            $childApproval = HoChildApprovalInput($pdo, $capacityAdults, $capacityChildren, $_POST);
             $breakfastFor = ItourValidationInt($_POST['breakfast_for'] ?? 0, 'Breakfast capacity', 0, 100);
             $galleryUploadCount = is_array($_FILES['gallery_row_files']['name'] ?? null)
                 ? count($_FILES['gallery_row_files']['name']) : 0;
@@ -308,7 +309,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['room_action'])) {
                 throw new InvalidArgumentException('A room gallery may contain at most 20 uploaded images.');
             }
         }
-    } catch (InvalidArgumentException $exception) {
+    } catch (InvalidArgumentException|DomainException $exception) {
         $inputValidationError = $exception->getMessage();
     }
     $existingRoom = null;
@@ -432,9 +433,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['room_action'])) {
                         $error = 'Guest name is required for check-in.';
                     } elseif ($checkinGuestCount < 1) {
                         $error = 'Number of guests is required for check-in.';
+                    } elseif (($savedChildPolicy = HoChildSnapshot($pdo, $bookingId)) && !HoChildSnapshotValid($booking, $savedChildPolicy)) {
+                        $error = 'The booking occupancy is invalid.';
                     } elseif ($checkinGuestCount > min(
                         max(1, (int)($booking['adults'] ?? 0) + (int)($booking['children'] ?? 0)),
-                        max(1, (int)($room['capacity_adults'] ?? 0) + (int)($room['capacity_children'] ?? 0))
+                        ($savedChildPolicy ? (int)$savedChildPolicy['occupancy']['max_occupancy'] : max(1, (int)($room['capacity_adults'] ?? 0) + (int)($room['capacity_children'] ?? 0)))
                     )) {
                         $error = 'Guest count exceeds the booking or room capacity.';
                     } elseif ($checkinDateTime === null) {
@@ -794,6 +797,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['room_action'])) {
                     $mainImagePath,
                     json_encode($galleryImages, JSON_UNESCAPED_UNICODE),
                 ]);
+                if ($childApproval) HoChildSaveApproval($pdo, (int)$pdo->lastInsertId(), (int)$hoAdmin['hotel_admin_id'], $childApproval);
                 $flash = 'Room added successfully.';
                 logActivity(
                     $pdo, 'Hotel Owner', (int)$hoAdmin['hotel_admin_id'], (string)$hoOwnerName,
@@ -840,6 +844,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['room_action'])) {
                     $roomId,
                     $hoHotelResortId,
                 ]);
+                if ($childApproval) HoChildSaveApproval($pdo, $roomId, (int)$hoAdmin['hotel_admin_id'], $childApproval);
                 $flash = 'Room updated successfully.';
                 logActivity(
                     $pdo, 'Hotel Owner', (int)$hoAdmin['hotel_admin_id'], (string)$hoOwnerName,
@@ -1134,6 +1139,8 @@ $hoTopbarViewToggle = [
   <title>Horooms | Hotel Owner Rooms</title>
   <link rel="icon" type="image/png" href="img/newlogo.png" />
   <link rel="stylesheet" href="styles/Ho_panel.css?v=<?= (int)@filemtime(__DIR__ . '/styles/Ho_panel.css') ?>" />
+<link rel="stylesheet" href="styles/hotel-child-policy.css?v=<?= (int)filemtime(__DIR__ . '/styles/hotel-child-policy.css') ?>">
+<script defer src="js/hotel-room-child-settings.js?v=<?= (int)filemtime(__DIR__ . '/js/hotel-room-child-settings.js') ?>"></script>
 </head>
 <body class="ho-body">
   <div class="ho-layout">
@@ -2051,6 +2058,7 @@ $hoTopbarViewToggle = [
               <label>Breakfast For<input type="number" name="breakfast_for" min="0" value="<?= (int)$room['breakfast_for'] ?>" required /></label>
             </div>
 
+          <?php HoChildRoomSettings($room); ?>
           <div class="ho-image-editor-section">
             <h4>Main Image</h4>
             <div class="ho-main-image-row">
@@ -2162,6 +2170,7 @@ $hoTopbarViewToggle = [
           <label>Children<input type="number" name="capacity_children" min="0" value="0" required /></label>
           <label>Breakfast For<input type="number" name="breakfast_for" min="0" value="2" required /></label>
         </div>
+        <?php HoChildRoomSettings(['capacity_adults' => 2, 'capacity_children' => 0]); ?>
         <div class="ho-image-editor-section">
           <h4>Main Image</h4>
           <div class="ho-main-image-row">

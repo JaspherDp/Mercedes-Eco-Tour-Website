@@ -569,6 +569,7 @@ foreach ($hotelsFromDb as $hotel) {
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
+  <link rel="stylesheet" href="styles/search-date-policy.css?v=<?= (int)filemtime(__DIR__ . '/../styles/search-date-policy.css') ?>" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous" />
   <link rel="stylesheet" href="styles/hotel_resorts.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/hotel_resorts.css') ?>" />
   <link rel="stylesheet" href="styles/favorites.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/favorites.css') ?>" />
@@ -832,12 +833,12 @@ foreach ($hotelsFromDb as $hotel) {
     </div>
 
     <div class="search-box">
-      <label id="guestLabel">Guests & Rooms</label>
+      <label id="guestLabel">Guests</label>
 
       <div class="search-control-wrap guest-control-wrap">
-        <div class="guest-display" onclick="toggleGuestBox()" role="button" tabindex="0" aria-label="Select guests and rooms">
+        <div class="guest-display" onclick="toggleGuestBox()" role="button" tabindex="0" aria-label="Select guests">
           <span class="search-control-icon" aria-hidden="true"><i class="fa-solid fa-user-group"></i></span>
-          <span id="guestText" class="placeholder">Guests & Rooms</span>
+          <span id="guestText" class="placeholder">Guests</span>
           <i class="fa-solid fa-chevron-down guest-chevron" aria-hidden="true"></i>
         </div>
 
@@ -859,16 +860,6 @@ foreach ($hotelsFromDb as $hotel) {
               <button onclick="changeValue('children', 1)">+</button>
             </div>
           </div>
-
-          <div id="roomsGuestRow" class="guest-row">
-            <span class="guest-classification-label">Rooms</span>
-            <div>
-              <button onclick="changeValue('rooms', -1)">-</button>
-              <span id="rooms">0</span>
-              <button onclick="changeValue('rooms', 1)">+</button>
-            </div>
-          </div>
-
           <div id="childAgeRows" class="child-age-list" aria-live="polite"></div>
 
           <div class="guest-actions">
@@ -1434,7 +1425,6 @@ include 'footer.php';
     const guestLabel = document.getElementById("guestLabel");
     const locationLabel = document.getElementById("locationLabel");
     const dateLabel = document.getElementById("dateLabel");
-    const roomsGuestRow = document.getElementById("roomsGuestRow");
     const tourDateModeToggle = document.getElementById("tourDateModeToggle");
     const islandSecondary = document.getElementById("islandSecondary");
     const islandSecondaryWrap = islandSecondary.closest(".secondary-location-wrap");
@@ -1450,8 +1440,7 @@ include 'footer.php';
     searchSection.dataset.searchTab = activeSearchTab;
     locationLabel.textContent = hasSecondDestination ? "Destinations (up to 2)" : (isTourTab ? "Destination" : "Where to go?");
     dateLabel.textContent = isTourTab ? "Stay dates" : "Check-in / Check-out";
-    guestLabel.textContent = isHotelTab ? "Guests & Rooms" : "Guests";
-    roomsGuestRow.classList.toggle("is-hidden", !isHotelTab);
+    guestLabel.textContent = isHotelTab ? "Guests" : "Guests";
     tourDateModeToggle.style.display = isTourTab ? "flex" : "none";
     islandSecondary.classList.toggle("is-hidden", !hasSecondDestination);
     if (islandSecondaryWrap) {
@@ -1503,7 +1492,10 @@ include 'footer.php';
     const end = document.getElementById("checkout");
     if (start) start.min = minimum;
     if (end) end.min = minimum;
-    if (fp) fp.set("minDate", minimum);
+    if (fp) {
+      fp.set("minDate", minimum);
+      window.SearchDatePolicy.updateCalendarNote(fp, activeSearchTab);
+    }
     if (start?.value && start.value < minimum) {
       if (fp) fp.clear();
       start.value = "";
@@ -1773,7 +1765,8 @@ include 'footer.php';
         syncSearchDateMinimum();
         requestAnimationFrame(revealCalendar);
       },
-      onReady: function() {
+      onReady: function(selectedDates, dateStr, instance) {
+        window.SearchDatePolicy.updateCalendarNote(instance, activeSearchTab);
         lockSearchDateInput();
         bindSearchDatePickerTrigger();
         requestAnimationFrame(placeCalendarBelow);
@@ -1887,7 +1880,8 @@ include 'footer.php';
         syncSearchDateMinimum();
         requestAnimationFrame(revealCalendar);
       },
-      onReady: function() {
+      onReady: function(selectedDates, dateStr, instance) {
+        window.SearchDatePolicy.updateCalendarNote(instance, activeSearchTab);
         lockSearchDateInput();
         bindSearchDatePickerTrigger();
         requestAnimationFrame(placeCalendarBelow);
@@ -1931,7 +1925,7 @@ include 'footer.php';
     const checkout = document.getElementById("checkout");
     const adults = parseInt(document.getElementById("adults").innerText, 10);
     const children = parseInt(document.getElementById("children").innerText, 10);
-    const rooms = parseInt(document.getElementById("rooms").innerText, 10);
+    const rooms = 1;
     const tourTypeValue = tourDateMode === "sameday" ? "same-day" : "overnight";
     const computedDuration = buildTourDurationLabel(checkin.value, checkout.value, tourDateMode);
     const childAges = getChildAges();
@@ -2200,7 +2194,7 @@ include 'footer.php';
             adults: Number(urlParams.get("adults") || 1),
             children: Number(urlParams.get("children") || 0),
             childAges: parseChildAges(urlParams.get("child_ages") || ""),
-            rooms: Number(urlParams.get("rooms") || 1),
+            rooms: 1,
             tourDateMode: urlParams.get("tour_date_mode") || "overnight",
             tourDuration: urlParams.get("tour_duration") || ""
           };
@@ -2232,7 +2226,6 @@ include 'footer.php';
           }
           document.getElementById("adults").innerText = savedData.adults ?? 1;
           document.getElementById("children").innerText = savedData.children ?? 0;
-          document.getElementById("rooms").innerText = savedData.rooms ?? 1;
           renderChildAgeRows(savedData.childAges || []);
           applyGuestSelection(false);
           setTimeout(() => {
@@ -2256,7 +2249,6 @@ include 'footer.php';
             }
             document.getElementById("adults").innerText = savedData.adults ?? 0;
             document.getElementById("children").innerText = savedData.children ?? 0;
-            document.getElementById("rooms").innerText = savedData.rooms ?? 0;
             renderChildAgeRows(savedData.childAges || []);
             applyGuestSelection(false);
             setTimeout(() => {
@@ -2696,7 +2688,7 @@ include 'footer.php';
     if (data.checkout) url.searchParams.set("checkout", data.checkout);
     url.searchParams.set("adults", String(data.adults ?? 1));
     url.searchParams.set("children", String(data.children ?? 0));
-    url.searchParams.set("rooms", String(data.rooms ?? 1));
+    url.searchParams.set("rooms", "1");
     if (Array.isArray(data.childAges) && data.childAges.length) {
       url.searchParams.set("child_ages", data.childAges.join(","));
     }
@@ -2712,7 +2704,7 @@ include 'footer.php';
     const dateRangeInput = document.getElementById("dateRangePicker");
     const adults = parseInt(document.getElementById("adults").innerText, 10);
     const children = parseInt(document.getElementById("children").innerText, 10);
-    const rooms = parseInt(document.getElementById("rooms").innerText, 10);
+    const rooms = 1;
     const isHotelSearch = activeSearchTab === "hotels";
     const isTourSearch = isTourSearchTab(activeSearchTab);
 
@@ -2801,6 +2793,7 @@ include 'footer.php';
     sessionStorage.setItem("searchMode", "true");
     sessionStorage.setItem("searchData", JSON.stringify(currentSearchData));
     persistHotelSearchUrl(currentSearchData);
+    applySearchWithoutValidation(currentSearchData);
   }
 
 function hotelMatchesSearchIsland(hotel, island) {
@@ -2813,7 +2806,8 @@ function hotelMatchesSearchIsland(hotel, island) {
   return !normalize(island) || normalize(hotel.island) === normalize(island);
 }
 
-function applySearchWithoutValidation(data) {
+let hotelAvailabilityRequest = 0;
+async function applySearchWithoutValidation(data) {
   document.getElementById("featuredSection").style.display = "none";
   document.getElementById("carouselSection").style.display = "none";
   document.getElementById("recentlyViewedSection").hidden = true;
@@ -2833,7 +2827,24 @@ function applySearchWithoutValidation(data) {
     updateMobileHotelSearchSummary();
   }
 
+  const requestId = ++hotelAvailabilityRequest;
   filtered = hotels.filter(h => hotelMatchesSearchIsland(h, data.island));
+  if (data.checkin && data.checkout) {
+    const container = document.getElementById('hotelList');
+    container.textContent = 'Checking room availability...';
+    try {
+      const params = new URLSearchParams({ checkin: data.checkin, checkout: data.checkout, adults: String(data.adults || 1), children: String(data.children || 0), child_ages: (data.childAges || []).join(',') });
+      const response = await fetch('php/hotel_property_availability.php?' + params.toString(), { cache: 'no-store', headers: { Accept: 'application/json' } });
+      const result = await response.json();
+      if (requestId !== hotelAvailabilityRequest) return;
+      if (!response.ok || !result.success || !Array.isArray(result.hotel_ids)) throw new Error(result.message || 'Unable to load hotel availability.');
+      filtered = filtered.filter(hotel => result.hotel_ids.includes(Number(hotel.id)));
+    } catch (error) {
+      if (requestId !== hotelAvailabilityRequest) return;
+      container.textContent = error.message || 'Unable to check availability. Please try again.';
+      return;
+    }
+  }
 
   persistHotelSearchUrl(data);
   applyCheckboxFilters();
@@ -2893,24 +2904,20 @@ document.querySelectorAll(".filter").forEach(cb => {
 
   function parseChildAges(value) {
     const values = Array.isArray(value) ? value : String(value || "").split(",");
-    return values
-      .map(age => String(age).trim())
-      .filter(age => /^\d+$/.test(age) && Number(age) >= 0 && Number(age) <= 17)
-      .map(Number);
+    if (values.length === 1 && String(values[0]).trim() === "") return [];
+    return values.map(age => /^\d+$/.test(String(age).trim()) && Number(age) >= 0 && Number(age) <= 17 ? Number(age) : "");
   }
 
   function syncSearchGuestClassification() {
     const isHotel = activeSearchTab === "hotels";
-    document.getElementById("guestAdultsLabel").innerHTML = isHotel ? "Adults" : "Adults <small>(14+ years)</small>";
-    document.getElementById("guestChildrenLabel").innerHTML = isHotel ? "Children" : "Children <small>(0–13 years)</small>";
+    document.getElementById("guestAdultsLabel").innerHTML = isHotel ? "Adults <small>(18+ years)</small>" : "Adults <small>(14+ years)</small>";
+    document.getElementById("guestChildrenLabel").innerHTML = isHotel ? "Children <small>(0–17 years)</small>" : "Children <small>(0–13 years)</small>";
   }
 
   function getChildAges() {
     if (activeSearchTab !== "hotels") return [];
     return Array.from(document.querySelectorAll(".child-age-select"))
-      .map(select => select.value)
-      .filter(value => value !== "")
-      .map(Number);
+      .map(select => select.value === "" ? "" : Number(select.value));
   }
 
   function clearGuestPickerHighlights() {
@@ -2923,7 +2930,7 @@ document.querySelectorAll(".filter").forEach(cb => {
   function validateGuestSelection(includeRooms = activeSearchTab === "hotels") {
     const adults = Number(document.getElementById("adults")?.innerText || 0);
     const children = Number(document.getElementById("children")?.innerText || 0);
-    const rooms = Number(document.getElementById("rooms")?.innerText || 0);
+    const rooms = 1;
     const guestDisplay = document.querySelector(".guest-display");
     const messages = [];
     clearGuestPickerHighlights();
@@ -2935,11 +2942,6 @@ document.querySelectorAll(".filter").forEach(cb => {
       document.getElementById("adults")?.closest(".guest-row")?.classList.add("is-invalid");
       document.getElementById("children")?.closest(".guest-row")?.classList.add("is-invalid");
       messages.push("add at least 1 guest");
-    }
-
-    if (includeRooms && rooms < 1) {
-      document.getElementById("roomsGuestRow")?.classList.add("is-invalid");
-      messages.push("add at least 1 room");
     }
 
     const missingAgeLabels = [];
@@ -2976,7 +2978,7 @@ document.querySelectorAll(".filter").forEach(cb => {
     container.innerHTML = Array.from({ length: count }, (_, index) => {
       const selectedAge = previous[index] ?? "";
       const options = Array.from({ length: 18 }, (__, age) =>
-        `<option value="${age}"${selectedAge === String(age) ? " selected" : ""}>${age} year${age === 1 ? "" : "s"} old${age <= 7 ? " — Free" : ""}</option>`
+        `<option value="${age}"${selectedAge === String(age) ? " selected" : ""}>${age} year${age === 1 ? "" : "s"} old${age <= 5 ? " — Free" : " — PHP 250/night"}</option>`
       ).join("");
       return `<label class="child-age-row">
         <span>Child ${index + 1} age</span>
@@ -2988,7 +2990,7 @@ document.querySelectorAll(".filter").forEach(cb => {
 
     container.hidden = count === 0;
     if (count > 0) {
-      container.insertAdjacentHTML("beforeend", '<p class="child-age-note"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Ages 7 and below: free hotel admission and entrance fees.</p>');
+      container.insertAdjacentHTML("beforeend", '<p class="child-age-note"><i class="fa-solid fa-circle-check" aria-hidden="true"></i> Ages 0–5: free accommodation. Ages 6–17: PHP 250 per child per night. Existing bedding is shared; extra bedding is optional.</p>');
     }
     container.querySelectorAll(".child-age-select").forEach(select => {
       select.addEventListener("change", () => {
@@ -3018,7 +3020,7 @@ document.querySelectorAll(".filter").forEach(cb => {
   function applyGuestSelection(shouldValidate = true) {
     const adults = parseInt(document.getElementById("adults").innerText, 10);
     const children = parseInt(document.getElementById("children").innerText, 10);
-    const rooms = parseInt(document.getElementById("rooms").innerText, 10);
+    const rooms = 1;
     const textEl = document.getElementById("guestText");
     const includeRooms = activeSearchTab === "hotels";
 
@@ -3028,18 +3030,16 @@ document.querySelectorAll(".filter").forEach(cb => {
       clearError(document.querySelector(".guest-display"));
     }
 
-    if (adults === 0 && children === 0 && (!includeRooms || rooms === 0)) {
-      textEl.innerText = includeRooms ? "Guests & Rooms" : "Guests";
+    if (adults === 0 && children === 0) {
+      textEl.innerText = includeRooms ? "Guests" : "Guests";
       textEl.classList.add("placeholder");
     } else {
-      textEl.innerText = includeRooms
-        ? `${adults} Adult${adults > 1 ? "s" : ""}, ${children} Child${children !== 1 ? "ren" : ""} • ${rooms} Room${rooms > 1 ? "s" : ""}`
-        : `${adults} Adult${adults > 1 ? "s" : ""}, ${children} Child${children !== 1 ? "ren" : ""}`;
+      textEl.innerText = `${adults} Adult${adults > 1 ? "s" : ""}, ${children} Child${children !== 1 ? "ren" : ""}`;
       textEl.classList.remove("placeholder");
     }
 
     const guestBox = document.querySelector(".guest-display");
-    if (includeRooms ? (adults > 0 || rooms > 0) : (adults + children > 0)) {
+    if (adults + children > 0) {
       clearError(guestBox);
     }
 

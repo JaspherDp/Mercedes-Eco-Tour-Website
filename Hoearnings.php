@@ -215,7 +215,8 @@ $hoEarningsHeaderActions = true;
 $hoEarningsExportUrl = '?' . http_build_query($exportQuery);
 ?>
 <!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Earnings & Payouts | Hotel Admin</title><link rel="icon" href="img/newlogo.png"><link rel="stylesheet" href="styles/Ho_panel.css?v=notifications-4"><link rel="stylesheet" href="styles/Ho_earnings.css?v=3"><link rel="stylesheet" href="styles/payout_accounting.css?v=1"></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Earnings & Payouts | Hotel Admin</title><link rel="icon" href="img/newlogo.png"><link rel="stylesheet" href="styles/Ho_panel.css?v=notifications-4"><link rel="stylesheet" href="styles/Ho_earnings.css?v=3">
+<link rel="stylesheet" href="styles/booking-status-colors.css?v=1"><link rel="stylesheet" href="styles/payout_accounting.css?v=1"></head>
 <body class="ho-body"><div class="ho-layout">
 <?php include __DIR__.'/Ho_sidebar.php'; ?>
 <main class="ho-main"><?php include __DIR__.'/Ho_header.php'; ?>
