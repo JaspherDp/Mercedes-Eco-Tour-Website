@@ -5,6 +5,12 @@ Options -Indexes
 # Load the PHP homepage when visiting the root domain.
 DirectoryIndex index.php
 
+# PDF.js and its worker are ES modules. Some shared hosts serve .mjs as
+# application/octet-stream, which browsers reject under nosniff.
+<IfModule mod_mime.c>
+    AddType application/javascript .mjs
+</IfModule>
+
 # Central response-header policy. HSTS is deliberately limited to HTTPS
 # requests. Hostinger CDN terminates TLS before forwarding some requests, so
 # accept its HTTPS forwarding marker as well as Apache's direct HTTPS state.
