@@ -3721,6 +3721,7 @@ html[data-profile-tab="complaints"] .mobile-profile-nav a[data-section="complain
 @media (max-width: 760px) { .tourist-profile-pdf-modal { height: 100dvh; } }
 .swal2-container.profile-decision-swal{z-index:130200!important}
 .swal2-container.profile-decision-swal{z-index:130200!important}
+.swal2-container.profile-review-swal{z-index:130200!important}
 </style>
 <link rel="stylesheet" href="../styles/tourist-manifest-form.css?v=1">
   <?php TouristRenderActivityMonitor(); ?>
@@ -6155,6 +6156,7 @@ if (modal) {
 // ===================== SUBMIT =====================
 if (submitBtn) {
   submitBtn.addEventListener('click', async () => {
+    if (submitBtn.disabled) return;
 
     const bookingId = document.getElementById('af-booking-id')?.value?.trim();
     const type = document.getElementById('af-booking-type')?.value?.trim();
@@ -6162,10 +6164,11 @@ if (submitBtn) {
     const rating = document.querySelector('input[name="star-radio"]:checked')?.value;
 
     if (!bookingId || !type || !rating || !comment) {
-      alert("Missing fields");
+      await Swal.fire({icon:'warning',title:'Complete your review',text:'Choose a rating and enter your review before submitting.',confirmButtonColor:'#176b58',customClass:{container:'profile-review-swal'}});
       return;
     }
 
+    submitBtn.disabled = true;
     try {
       const res = await fetch('submit_review.php', {
         method: 'POST',
@@ -6182,23 +6185,26 @@ if (submitBtn) {
       const text = await res.text();
       const data = JSON.parse(text);
 
-      if (data.success) {
-        Swal.fire({
+      if (res.ok && data.success) {
+        closeModal();
+        await Swal.fire({
           icon: 'success',
-          title: 'Review submitted successfully!',
+          title: 'Review submitted',
           text: data.message || 'Thank you for your feedback.',
-          confirmButtonColor: '#2e7d66'
-        }).then(() => {
-          closeModal();
-          location.reload();
+          confirmButtonText: 'OK',
+          confirmButtonColor: '#176b58',
+          customClass: {container:'profile-review-swal'}
         });
+        location.reload();
       } else {
-        alert(data.message || "Unable to submit review.");
+        await Swal.fire({icon:'error',title:'Review not submitted',text:data.message || 'Unable to submit review.',confirmButtonColor:'#176b58',customClass:{container:'profile-review-swal'}});
       }
 
     } catch (err) {
       console.error(err);
-      alert("Something went wrong.");
+      await Swal.fire({icon:'error',title:'Review not submitted',text:'The submission response could not be verified. Please refresh and check your review before trying again.',confirmButtonColor:'#176b58',customClass:{container:'profile-review-swal'}});
+    } finally {
+      submitBtn.disabled = false;
     }
   });
 }
