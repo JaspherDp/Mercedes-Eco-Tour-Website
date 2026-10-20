@@ -1407,6 +1407,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'decli
 
 // --- Handle POST actions with decision note ---
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['id'])) {
+    $finishJson = ($_POST['action'] ?? '') === 'finish' && ($_POST['finish_json'] ?? '') === '1';
     try {
         if (!AppVerifyCsrf('admin', 'booking_management', $_POST['csrf_token'] ?? null)) {
             throw new RuntimeException('Your session expired. Refresh the page and try again.');
@@ -1570,6 +1571,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'], $_POST['id'
         ];
     }
 
+    if ($finishJson) {
+        $finishAlert = $_SESSION['alert'];
+        unset($_SESSION['alert']);
+        $finishSucceeded = ($finishAlert['type'] ?? '') === 'success';
+        http_response_code($finishSucceeded ? 200 : 422);
+        header('Content-Type: application/json; charset=utf-8');
+        header('Cache-Control: no-store');
+        echo json_encode(['success'=>$finishSucceeded, 'message'=>html_entity_decode(strip_tags((string)$finishAlert['message']), ENT_QUOTES, 'UTF-8')], JSON_INVALID_UTF8_SUBSTITUTE);
+        exit;
+    }
     header("Location: adbookings.php?tab=" . rawurlencode($return_tab));
     exit();
 }
@@ -5299,7 +5310,7 @@ document.getElementById('adminPhoneRegistrationModal')?.addEventListener('moused
 });
 
 function completeBookingWithoutBalance(bookingId) {
-  Swal.fire({
+  return Swal.fire({
     title: 'Mark as Completed?',
     text: 'This booking is fully paid and ready to be completed.',
     icon: 'question',
@@ -5307,18 +5318,23 @@ function completeBookingWithoutBalance(bookingId) {
     confirmButtonColor: '#2b7a66',
     cancelButtonColor: '#6b7e78',
     confirmButtonText: 'Yes, complete it'
-  }).then(result => {
+  }).then(async result => {
     if (!result.isConfirmed) return;
     const formData = new FormData();
     formData.append('action', 'finish');
+    formData.append('finish_json', '1');
     formData.append('id', bookingId);
     formData.append('csrf_token', adminBookingCsrf);
-    fetch(window.location.href, { method: 'POST', body: formData })
-      .then(response => {
-        if (!response.ok) throw new Error('Could not complete booking.');
-        location.reload();
-      })
-      .catch(error => Swal.fire('Unable to Complete', error.message, 'error'));
+    Swal.fire({title:'Completing booking',text:'Please wait while the booking is updated.',allowOutsideClick:false,allowEscapeKey:false,showConfirmButton:false,didOpen:()=>Swal.showLoading()});
+    try {
+      const response = await fetch(window.location.href, { method: 'POST', body: formData, headers:{Accept:'application/json'} });
+      const payload = await response.json();
+      if (!response.ok || !payload.success) throw new Error(payload.message || 'Could not complete booking.');
+      await Swal.fire({icon:'success',title:'Booking Completed',text:payload.message || 'The booking has been marked as completed.',confirmButtonText:'OK',confirmButtonColor:'#176b58'});
+      location.reload();
+    } catch (error) {
+      await Swal.fire({icon:'error',title:'Unable to Complete',text:error.message || 'Please refresh and check the booking status.',confirmButtonColor:'#176b58'});
+    }
   });
 }
 
