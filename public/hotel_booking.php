@@ -577,7 +577,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
           <div class="totals-panel hotel-payment-summary">
             <h3>Payment summary</h3>
             <div class="booking-addon-summary" data-addon-summary hidden></div>
-            <p><span>Optional add-ons</span><strong id="hotelCatalogAddonsTotal">₱0.00</strong></p>
             <p><span>Rate per night</span><strong id="unitPriceText">₱<?= number_format($unitPrice, 2) ?></strong></p>
             <p><span>Child accommodation (ages 6–17)</span><strong id="hotelChildFeeTotal">-</strong></p>
             <p><span>Room subtotal</span><strong id="hotelRoomSubtotal">-</strong></p>
@@ -1096,7 +1095,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['submit_hotel_booking'
         const total = unitPrice * nights + childFee + catalogAddonsTotal;
         document.getElementById("hotelChildFeeTotal").textContent = childQuote ? formatMoney(childFee) : "Complete child ages and stay details";
         document.getElementById("summaryChildFee").textContent = childQuote ? formatMoney(childFee) : "Awaiting valid guest details";
-        document.getElementById("hotelCatalogAddonsTotal").textContent = formatMoney(catalogAddonsTotal);
         const dueNow = selectedPaymentType === "partial" ? total * depositRate : total;
         const remaining = Math.max(total - dueNow, 0);
 
