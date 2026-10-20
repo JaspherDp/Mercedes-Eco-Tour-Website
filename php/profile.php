@@ -4295,7 +4295,6 @@ document.addEventListener("DOMContentLoaded", function () {
               <div class="meta-tags">
                 <span>Adults: <?= (int)($h['adults'] ?? 0) ?></span>
                 <span>Children: <?= (int)($h['children'] ?? 0) ?></span>
-                <?php if ($savedChildPolicy = HoChildSnapshot($pdo, (int)$h['hotel_booking_id'])): ?><span><?= htmlspecialchars(HoChildSummary($savedChildPolicy), ENT_QUOTES, 'UTF-8') ?></span><?php endif; ?>
               </div>
             </div>
 
