@@ -29,7 +29,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!submitButton || !buttonLabel) return;
 
     const originalLabel = buttonLabel.textContent;
-    const usernameInput = form.querySelector('input[name="username"]');
+    const usernameInput = form.querySelector('[data-login-username]');
     const lockableInputs = [...form.querySelectorAll('input:not([type="hidden"])')];
     const loginScope = form.dataset.loginScope || "portal";
     const lockoutStorageKey = `itourPortalLoginLockout:${loginScope}`;

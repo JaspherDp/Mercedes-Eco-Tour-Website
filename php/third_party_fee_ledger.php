@@ -27,7 +27,7 @@ final class ThirdPartyFeeLedger
         $pools=[];
         $add=function(string $category,string $location)use(&$pools):string{
             $location=self::location($location);$key=self::key($category,$location);
-            if(!isset($pools[$key]))$pools[$key]=['key'=>$key,'category'=>$category,'location'=>$location,'rates'=>[],'collected'=>[],'settled'=>[],'history'=>[]];
+            if(!isset($pools[$key]))$pools[$key]=['key'=>$key,'category'=>$category,'location'=>$location,'rates'=>[],'collected'=>[],'eligible'=>[],'settled'=>[],'history'=>[]];
             return $key;
         };
         foreach($catalog as $fee){
@@ -42,11 +42,13 @@ final class ThirdPartyFeeLedger
             if(isset($seenBookings[$bookKey]))continue;$seenBookings[$bookKey]=true;
             $a=$booking['accounting'];
             if($a['active_refund']||str_contains($a['blocked_reason'],'reconciliation')||str_contains($a['blocked_reason'],'Currency')||str_contains($a['blocked_reason'],'inconsistent'))continue;
+            $completed=strtolower(trim((string)($booking['completion_status']??'')))==='completed';
             foreach(['entrance','docking'] as $category)foreach($a['booking_fee_locations_minor'][$category]??[] as $location=>$amount){
                 $key=$add($category,$location);$pools[$key]['collected'][$bookKey]=($pools[$key]['collected'][$bookKey]??0)+$amount;
+                if($completed)$pools[$key]['eligible'][$bookKey]=true;
             }
             $amount=$a['booking_fees_minor']['environmental']??0;
-            if($amount>0){$key=$add('environmental','Environmental fee collections');$pools[$key]['collected'][$bookKey]=($pools[$key]['collected'][$bookKey]??0)+$amount;}
+            if($amount>0){$key=$add('environmental','Environmental fee collections');$pools[$key]['collected'][$bookKey]=($pools[$key]['collected'][$bookKey]??0)+$amount;if($completed)$pools[$key]['eligible'][$bookKey]=true;}
         }
         foreach($payments as $payment){
             $key=$add($payment['fee_category'],$payment['location_name']);
@@ -58,10 +60,14 @@ final class ThirdPartyFeeLedger
         return array_values($pools);
     }
     public static function balance(array $pool,array $bookKeys): array {
-        $scope=array_fill_keys($bookKeys,true);$collected=0;$settled=0;
-        foreach($pool['collected'] as $key=>$amount)if(isset($scope[$key]))$collected+=$amount;
+        $scope=array_fill_keys($bookKeys,true);$collected=0;$settled=0;$available=0;$pending=0;
+        foreach($pool['collected'] as $key=>$amount)if(isset($scope[$key])){
+            $collected+=$amount;
+            $remaining=max(0,$amount-($pool['settled'][$key]??0));
+            if(!empty($pool['eligible'][$key]))$available+=$remaining;else $pending+=$remaining;
+        }
         foreach($pool['settled'] as $key=>$amount)if(isset($scope[$key]))$settled+=$amount;
-        return ['collected'=>$collected,'settled'=>$settled,'available'=>max(0,$collected-$settled)];
+        return ['collected'=>$collected,'settled'=>$settled,'available'=>$available,'pending'=>$pending];
     }
     public static function statTotals(array $pools,array $bookKeys): array {
         $totals=['available'=>0,'settled'=>0];
@@ -73,6 +79,7 @@ final class ThirdPartyFeeLedger
         if($amount<=0||$amount>$balance['available'])throw new RuntimeException('The amount exceeds the current balance. Refresh the collection details and try again.');
         $allocations=[];$remaining=$amount;
         foreach(array_unique($bookKeys) as $key){
+            if(empty($pool['eligible'][$key]))continue;
             $available=max(0,($pool['collected'][$key]??0)-($pool['settled'][$key]??0));
             $part=min($available,$remaining);if($part>0){$allocations[$key]=$part;$remaining-=$part;}if($remaining===0)break;
         }

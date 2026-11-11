@@ -13,8 +13,8 @@ $isPhoneSetupReturn = $adminReturnPage === 'admin-phone-setup.php';
 $isAjaxLogin = AdminRequestExpectsJson();
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $username = trim((string)($_POST['username'] ?? ''));
-    $password = trim((string)($_POST['password'] ?? ''));
+    $username = trim((string)($_POST['administrator_username'] ?? $_POST['username'] ?? ''));
+    $password = trim((string)($_POST['administrator_password'] ?? $_POST['password'] ?? ''));
 
     if ($username === '' || $password === '' || !ItourTurnstileRequestPassed()) {
         $message = $username === '' || $password === '' ? 'Username and password are required.' : ITOUR_TURNSTILE_ERROR;
@@ -131,7 +131,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>iTour Mercedes - Admin Login</title>
 <link rel="icon" type="image/png" href="../img/newlogo.png">
-<link rel="stylesheet" href="../styles/auth-portal.css?v=14">
+<link rel="stylesheet" href="../styles/auth-portal.css?v=16">
 </head>
 <body class="auth-page">
 
@@ -151,19 +151,19 @@ require __DIR__ . '/alert.php';
         <h1 class="adlog-title">Administrator Login</h1>
     </header>
 
-    <form class="adlog-form" action="" method="POST" data-login-scope="administrator">
+    <form id="administrator_login" name="administrator_login" class="adlog-form" action="" method="POST" data-login-scope="administrator">
         <?php if ($adminReturnPage !== 'adhomepage.php'): ?>
             <input type="hidden" name="return_to" value="<?= htmlspecialchars($adminReturnPage, ENT_QUOTES, 'UTF-8') ?>">
         <?php endif; ?>
         <div class="adlog-input-group">
             <svg class="adlog-input-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M5 21a7 7 0 0 1 14 0"/></svg>
-            <input type="text" id="adminUsername" name="username" required placeholder=" " autocomplete="username">
+            <input type="text" id="adminUsername" name="administrator_username" required placeholder=" " autocomplete="section-administrator username" data-login-username>
             <label for="adminUsername">Username</label>
         </div>
 
         <div class="adlog-input-group">
             <svg class="adlog-input-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-            <input type="password" id="adminPassword" name="password" required placeholder=" " autocomplete="current-password">
+            <input type="password" id="adminPassword" name="administrator_password" required placeholder=" " autocomplete="section-administrator current-password">
             <label for="adminPassword">Password</label>
             <img class="adlog-eye-icon" id="toggleAdminPassword" src="../img/passwordhide.png" data-hidden-icon="../img/passwordhide.png" data-visible-icon="../img/passwordsee.png" data-password-input="adminPassword" alt="Show password" role="button" tabindex="0">
         </div>
@@ -177,7 +177,7 @@ require __DIR__ . '/alert.php';
 </div>
 
 <script src="../js/turnstile.js?v=7"></script>
-<script src="../js/auth-portal.js?v=11"></script>
+<script src="../js/auth-portal.js?v=12"></script>
 </body>
 </html>
 

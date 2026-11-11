@@ -32,6 +32,7 @@ $operatorNotificationCsrf = AppCsrfToken('operator', 'notifications');
 $opPendingStmt = $pdo->prepare("SELECT COUNT(*) FROM bookings WHERE operator_id=? AND status='pending'");
 $opPendingStmt->execute([$operator_id]);
 $opPendingCount = (int)$opPendingStmt->fetchColumn();
+$opPendingLabel = $opPendingCount . ' pending booking' . ($opPendingCount === 1 ? '' : 's');
 
 // ✅ Fetch operator data
 $stmt = $pdo->prepare("SELECT * FROM operators WHERE operator_id=? LIMIT 1");
@@ -367,7 +368,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['updateProfile'])) {
 .op-form-container button:hover,
 .op-form-container .op-profile-link:hover { background-color: var(--op-primary-dark); }
 </style>
-<link rel="stylesheet" href="styles/provider_sidebar.css?v=3">
+<link rel="stylesheet" href="styles/provider_sidebar.css?v=4">
 
 <?php require_once __DIR__ . '/../php/alert.php'; ?>
 <div class="op-sidebar" id="opSidebar">
@@ -390,7 +391,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['updateProfile'])) {
                 <svg class="op-nav-icon" aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>
                 <span>Bookings</span>
                 <?php if ($opPendingCount > 0): ?>
-                    <strong class="op-nav-badge"><?= (int)$opPendingCount ?></strong>
+                    <strong class="op-nav-badge" title="<?= htmlspecialchars($opPendingLabel, ENT_QUOTES, 'UTF-8') ?>" aria-label="<?= htmlspecialchars($opPendingLabel, ENT_QUOTES, 'UTF-8') ?>"><?= (int)$opPendingCount ?></strong>
                 <?php endif; ?>
             </a>
             <a href="oppayments.php" class="<?= basename($_SERVER['PHP_SELF'])=='oppayments.php'?'active':'' ?>">

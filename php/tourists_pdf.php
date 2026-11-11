@@ -8,6 +8,7 @@ require_once __DIR__ . '/admin_auth_helper.php';
 require_once __DIR__ . '/operator_auth_helper.php';
 require_once __DIR__ . '/tourist_auth_helper.php';
 require_once __DIR__ . '/booking_tourists_helper.php';
+require_once __DIR__ . '/passenger_manifest_helper.php';
 require_once __DIR__ . '/../tcpdf/tcpdf.php';
 
 $bookingScope = '';
@@ -37,7 +38,7 @@ if ($bookingId <= 0) {
 $bookingStmt = $pdo->prepare("
     SELECT b.booking_id, b.booking_reference, b.booking_date, b.booking_type,
            b.package_name, b.location, b.jump_off_port, b.preferred_resource,
-           b.pax, b.num_adults, b.num_children, bo.name AS boat_name
+           b.pax, b.num_adults, b.num_children, b.boat_id, bo.name AS boat_name
     FROM bookings b
     LEFT JOIN boats bo ON bo.boat_id = b.boat_id
     WHERE b.booking_id = ?{$bookingScope}
@@ -54,7 +55,7 @@ ensureBookingTouristManifestColumns($pdo);
 
 $touristStmt = $pdo->prepare("
     SELECT full_name, gender, age, address, country, region, province, city, barangay,
-           postal_code, street, residence, phone_number
+           postal_code, street, residence, phone_number, boat_number
     FROM booking_tourists
     WHERE booking_id = ?
     ORDER BY id ASC
@@ -84,6 +85,8 @@ foreach ($tourists as &$tourist) {
     }
 }
 unset($tourist);
+
+$manifestBoatNames = passengerManifestBoatNames($pdo, $booking);
 
 function manifestText($value): string
 {
@@ -141,33 +144,16 @@ $pdf->SetPrintFooter(false);
 $pdf->SetMargins(10, 12, 10);
 $pdf->SetAutoPageBreak(false);
 
-$bookingType = strtolower(trim((string)($booking['booking_type'] ?? '')));
-if ($bookingType === 'package') {
-    $vesselName = trim((string)($booking['package_name'] ?? ''));
-    $resourceNote = 'Tour Package';
-} elseif ($bookingType === 'tourguide') {
-    $vesselName = trim((string)($booking['preferred_resource'] ?? ''));
-    $resourceNote = 'Tour Guide';
-} else {
-    $vesselName = trim((string)($booking['boat_name'] ?? ''));
-    if ($vesselName === '') {
-        $vesselName = trim((string)($booking['preferred_resource'] ?? ''));
-    }
-    $resourceNote = 'Tour Boat';
-}
-$vesselNameWithType = $vesselName === '' ? '' : $vesselName . ' (' . $resourceNote . ')';
 $destination = trim((string)($booking['location'] ?? ''));
 if ($destination === '') {
     $destination = trim((string)($booking['package_name'] ?? ''));
 }
 $destination = preg_replace('/\s*,\s*/u', ', ', $destination) ?? $destination;
 
-$pages = array_chunk($tourists, 12);
-if (!$pages) {
-    $pages = [[]];
-}
+$pages = passengerManifestPages($tourists, $booking, $manifestBoatNames);
 
-foreach ($pages as $pageIndex => $passengers) {
+foreach ($pages as $pageIndex => $manifestPage) {
+    $passengers = $manifestPage['passengers'];
     $pdf->AddPage();
     manifestHeader($pdf);
 
@@ -175,7 +161,7 @@ foreach ($pages as $pageIndex => $passengers) {
     $pdf->SetFont('times', 'B', 10.5);
     $pdf->Cell(40, 6, 'Name of FBCA/MBCA:', 0, 0, 'L');
     $pdf->SetFont('times', '', 10.5);
-    $pdf->Cell(80, 6, manifestText($vesselNameWithType), 'B', 1, 'L');
+    $pdf->Cell(80, 6, $manifestPage['boat_name'], 'B', 1, 'L');
     $pdf->SetX(11);
     $pdf->SetFont('times', 'B', 10.5);
     $pdf->Cell(40, 6, 'Destination:', 0, 0, 'L');
@@ -185,10 +171,6 @@ foreach ($pages as $pageIndex => $passengers) {
     $pdf->SetY(77);
     $pdf->SetFont('times', 'B', 15);
     $pdf->Cell(0, 8, 'PASSENGER MANIFEST', 0, 1, 'C');
-    if (count($pages) > 1) {
-        $pdf->SetFont('times', '', 8);
-        $pdf->Cell(0, 4, 'Page ' . ($pageIndex + 1) . ' of ' . count($pages), 0, 1, 'C');
-    }
 
     $columns = [
         ['label' => '#', 'width' => 9, 'align' => 'C'],
@@ -199,7 +181,7 @@ foreach ($pages as $pageIndex => $passengers) {
         ['label' => 'CONTACT #', 'width' => 31, 'align' => 'C'],
     ];
     $left = 10.0;
-    $y = $pdf->GetY() + 2;
+    $y = $pdf->GetY() + 6;
     $x = $left;
     $pdf->SetFillColor(245, 245, 245);
     $pdf->SetDrawColor(35, 35, 35);
@@ -214,15 +196,15 @@ foreach ($pages as $pageIndex => $passengers) {
     $rowsToDraw = count($passengers);
     for ($rowIndex = 0; $rowIndex < $rowsToDraw; $rowIndex++) {
         $passenger = $passengers[$rowIndex] ?? null;
-        $globalNumber = $pageIndex * 12 + $rowIndex + 1;
+        $passengerNumber = $rowIndex + 1;
         $values = $passenger ? [
-            (string)$globalNumber,
+            (string)$passengerNumber,
             manifestText($passenger['full_name'] ?? ''),
             manifestText($passenger['address'] ?? ''),
             ucfirst(manifestText($passenger['gender'] ?? '')),
             ($passenger['age'] === null || $passenger['age'] === '') ? '-' : (string)(int)$passenger['age'],
             manifestText($passenger['phone_number'] ?? ''),
-        ] : [(string)$globalNumber, '', '', '', '', ''];
+        ] : [(string)$passengerNumber, '', '', '', '', ''];
 
         $pdf->SetFont('times', '', 8);
         $rowHeight = 8.0;

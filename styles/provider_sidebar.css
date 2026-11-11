@@ -56,3 +56,11 @@
 @media(max-width:850px){
   .ho-sidebar .ho-nav{overflow:visible;flex-basis:auto}
 }
+
+/* Match the administrator pending-booking badge in every nav state. */
+.op-sidebar .op-navlinks a .op-nav-badge,
+.op-sidebar .op-navlinks a:hover .op-nav-badge,
+.op-sidebar .op-navlinks a.active .op-nav-badge,
+.ho-sidebar .ho-nav a .ho-nav-count,
+.ho-sidebar .ho-nav a:hover .ho-nav-count,
+.ho-sidebar .ho-nav a.active .ho-nav-count{background:#b82e3d;color:#fff;font-variant-numeric:tabular-nums}

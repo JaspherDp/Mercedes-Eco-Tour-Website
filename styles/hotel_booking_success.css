@@ -15,9 +15,8 @@ body {
   margin: 0;
   color: var(--success-text);
   background:
-    radial-gradient(circle at 10% 15%, rgba(52, 157, 124, .13), transparent 28rem),
-    radial-gradient(circle at 92% 84%, rgba(240, 182, 73, .11), transparent 25rem),
-    #f4f8f6;
+    linear-gradient(135deg, rgba(5, 39, 32, 0.9), rgba(16, 91, 72, 0.73)),
+    url("../img/tourscover.png") center / cover fixed;
   font-family: Inter, "Segoe UI", Arial, sans-serif;
 }
 

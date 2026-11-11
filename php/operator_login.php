@@ -8,8 +8,8 @@ require_once __DIR__ . '/turnstile.php';
 $isAjaxLogin = strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH'] ?? '')) === 'xmlhttprequest';
 
 if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    $username = trim((string)($_POST['username'] ?? ''));
-    $password = trim((string)($_POST['password'] ?? ''));
+    $username = trim((string)($_POST['operator_username'] ?? $_POST['username'] ?? ''));
+    $password = trim((string)($_POST['operator_password'] ?? $_POST['password'] ?? ''));
 
     if ($username === '' || $password === '' || !ItourTurnstileRequestPassed()) {
         $message = $username === '' || $password === '' ? 'Username and password are required.' : ITOUR_TURNSTILE_ERROR;
@@ -131,7 +131,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>iTour Mercedes - Operator Login</title>
 <link rel="icon" type="image/png" href="../img/newlogo.png">
-<link rel="stylesheet" href="../styles/auth-portal.css?v=14">
+<link rel="stylesheet" href="../styles/auth-portal.css?v=16">
 </head>
 <body class="auth-page">
 
@@ -145,16 +145,16 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
         <h1 class="adlog-title">Operator Login</h1>
     </header>
 
-    <form class="adlog-form" action="" method="POST" data-login-scope="operator">
+    <form id="operator_login" name="operator_login" class="adlog-form" action="" method="POST" data-login-scope="operator">
         <div class="adlog-input-group">
             <svg class="adlog-input-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M5 21a7 7 0 0 1 14 0"/></svg>
-            <input type="text" id="operatorUsername" name="username" required placeholder=" " autocomplete="username">
+            <input type="text" id="operatorUsername" name="operator_username" required placeholder=" " autocomplete="section-operator username" data-login-username>
             <label for="operatorUsername">Username</label>
         </div>
 
         <div class="adlog-input-group">
             <svg class="adlog-input-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-            <input type="password" id="operatorPassword" name="password" required placeholder=" " autocomplete="current-password">
+            <input type="password" id="operatorPassword" name="operator_password" required placeholder=" " autocomplete="section-operator current-password">
             <label for="operatorPassword">Password</label>
             <img class="adlog-eye-icon" id="toggleOperatorPassword" src="../img/passwordhide.png" data-hidden-icon="../img/passwordhide.png" data-visible-icon="../img/passwordsee.png" data-password-input="operatorPassword" alt="Show password" role="button" tabindex="0">
         </div>
@@ -168,7 +168,7 @@ if ($_SERVER["REQUEST_METHOD"] == "POST") {
 </div>
 
 <script src="../js/turnstile.js?v=7"></script>
-<script src="../js/auth-portal.js?v=11"></script>
+<script src="../js/auth-portal.js?v=12"></script>
 </body>
 </html>
 

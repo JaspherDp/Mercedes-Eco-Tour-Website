@@ -217,9 +217,10 @@ body.auth-page::after {
   transition: top 0.2s ease, left 0.2s ease, color 0.2s ease, font-size 0.2s ease;
 }
 
-/* Preserve the existing floating-label behavior. */
-.adlog-input-group input:focus + label,
-.adlog-input-group input:not(:placeholder-shown) + label {
+/* Autofill can happen without input/change events. Match its browser state
+   directly, alongside focused fields and typed or restored values.
+   :is() lets browsers ignore any unsupported autofill pseudo-class. */
+.adlog-input-group input:is(:focus, :not(:placeholder-shown), :autofill, :-webkit-autofill) + label {
   top: -10px;
   left: 12px;
   color: var(--auth-primary);

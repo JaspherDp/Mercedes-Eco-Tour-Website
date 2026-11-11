@@ -2235,8 +2235,8 @@ if(isset($_GET['action']) && $_GET['action'] === 'fetchBookings') {
 <link rel="stylesheet" href="styles/booking-status-colors.css?v=1">
 <link rel="stylesheet" href="styles/tourist-manifest-form.css?v=1" />
 <link rel="stylesheet" href="styles/admin-booking-addons.css?v=2" />
-<link rel="stylesheet" href="styles/tourist-booking-history.css?v=1" />
-<script defer src="js/tourist-booking-history.js?v=1"></script>
+<link rel="stylesheet" href="styles/tourist-booking-history.css?v=3" />
+<script defer src="js/tourist-booking-history.js?v=2"></script>
 <link rel="stylesheet" href="styles/admin_receipt.css?v=3" />
 </head>
 <style>
@@ -3254,7 +3254,7 @@ echo "<td>{$paymentPill}</td>
 $historyTouristId = (int)($b['tourist_id'] ?? 0);
 $historyCount = (int)($b['t_total_bookings'] ?? 0);
 if ($historyTouristId > 0) {
-    echo "<button type='button' class='tourist-booking-count' data-tourist-history='{$historyTouristId}' aria-label='View tourist booking history: {$historyCount} bookings'>{$historyCount}X</button>";
+    echo "<button type='button' class='tourist-booking-count' data-tourist-history='{$historyTouristId}' aria-label='View tourist booking history: {$historyCount} bookings' title='{$historyCount} tour bookings - View booking history'><svg viewBox='0 0 24 24' aria-hidden='true'><path d='M3 11a9 9 0 1 1 2.6 7.4M3 4v7h7'/><path d='M12 7v5l3 2'/></svg><span class='tourist-booking-count-value'>{$historyCount}<span class='tourist-booking-count-suffix' aria-hidden='true'>x</span></span></button>";
 }
 
 if ($showCancellationRequestState) {

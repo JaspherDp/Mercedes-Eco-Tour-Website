@@ -40,7 +40,7 @@
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Unable to load booking history.');
       if (controller.signal.aborted) return;
-      summary.innerHTML = `<strong>${escape(data.name)}</strong><span>${Number(data.total)}X · ${Number(data.total)} tour booking${Number(data.total) === 1 ? '' : 's'}</span>`;
+      summary.innerHTML = `<strong>${escape(data.name)}</strong><span>${Number(data.total)} tour booking${Number(data.total) === 1 ? '' : 's'}</span>`;
       list.insertAdjacentHTML('beforeend', data.bookings.map(booking => {
         const type = String(booking.booking_type || 'tour');
         const service = type === 'boat' ? booking.boat_name : ['tourguide', 'guide'].includes(type) ? booking.guide_name : booking.package_name;

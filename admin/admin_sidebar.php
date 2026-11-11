@@ -154,18 +154,22 @@ if (isset($_GET['get_pending_count'])) {
                 FROM booking_cancellation_requests cr
                 WHERE cr.booking_domain='tour'
                   AND cr.booking_id=b.booking_id
-                  AND cr.request_status IN ('pending','approved')
+                  AND cr.request_status IN ('pending','approved','decision_required','completed')
               )
         ")->fetchColumn();
         $cancellation_count = $pdo->query("
             SELECT COUNT(*) FROM booking_cancellation_requests
-            WHERE request_status IN ('pending','approved')
+            WHERE request_status='pending'
         ")->fetchColumn();
     } catch (Throwable $error) {
         $pending_count = $pdo->query("SELECT COUNT(*) FROM bookings b WHERE status='pending' AND is_complete='uncomplete' AND " . WalkinBookingVisibleSql('b'))->fetchColumn();
         $cancellation_count = 0;
     }
-    echo json_encode(['count' => (int)$pending_count + (int)$cancellation_count]);
+    echo json_encode([
+        'count' => (int)$pending_count + (int)$cancellation_count,
+        'pending_count' => (int)$pending_count,
+        'cancellation_count' => (int)$cancellation_count,
+    ]);
     exit;
 }
 
@@ -364,8 +368,8 @@ if (isset($_GET['get_pending_count'])) {
 
 .admin-badge {
   margin-left: auto;
-  background: #d8efe4;
-  color: #1f614e;
+  background: #b82e3d;
+  color: #fff;
   border-radius: 999px;
   font-size: 9px;
   padding: 0 6px;
@@ -381,8 +385,8 @@ if (isset($_GET['get_pending_count'])) {
 
 .admin-navlinks a:hover .admin-badge,
 .admin-navlinks a.active .admin-badge {
-  background: rgba(232, 255, 245, 0.92);
-  color: #1c5a48;
+  background: #b82e3d;
+  color: #fff;
 }
 
 .admin-sidebar-bottom {
@@ -943,8 +947,18 @@ async function fetchPendingBookings() {
         if (data.count > 0) {
             badge.style.display = 'inline-flex';
             badge.textContent = data.count;
+            const pendingCount = Number(data.pending_count) || 0;
+            const cancellationCount = Number(data.cancellation_count) || 0;
+            const messages = [];
+            if (pendingCount > 0) messages.push(`${pendingCount} pending booking${pendingCount === 1 ? '' : 's'}`);
+            if (cancellationCount > 0) messages.push(`${cancellationCount} cancellation request${cancellationCount === 1 ? '' : 's'} awaiting approval`);
+            const message = messages.join(' • ');
+            badge.title = message;
+            badge.setAttribute('aria-label', message);
         } else {
             badge.style.display = 'none';
+            badge.removeAttribute('title');
+            badge.removeAttribute('aria-label');
         }
     } catch (err) {
         console.error('Failed to fetch pending bookings:', err);

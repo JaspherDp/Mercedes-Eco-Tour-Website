@@ -408,6 +408,7 @@ if (
     <!-- Mobile navigation and brand -->
     <div class="head-nav-left">
       <button type="button" class="head-nav-mobile-toggle" id="headNavMobileToggle" aria-label="Open navigation menu" aria-expanded="false" aria-controls="headNavPrimary"><span class="hamburger" aria-hidden="true"><span class="bar"></span><span class="bar"></span><span class="bar"></span></span></button>
+      <img src="img/TourismLogo.png" class="head-nav-logo head-nav-tourism-logo" width="45" height="45" alt="Municipal Tourism Office of Mercedes">
       <img src="img/newlogo-ui-v1.png" class="head-nav-logo" alt="Mercedes tourism logo" onerror="this.onerror=null;this.src='img/newlogo.png';">
       <img src="img/textlogo2.png" class="head-navtext-logo" alt="iTour Mercedes">
     </div>
@@ -681,6 +682,8 @@ body {
   height: 45px;
   object-fit: contain;
 }
+
+.head-nav-tourism-logo + .head-nav-logo { margin-left: -9px; }
 
 .head-navtext-logo {
   margin-top: -6px;
@@ -1349,6 +1352,7 @@ html {
   .head-nav-main-header .head-nav-container { height: 100%; padding: 0 10px !important; gap: 8px; }
   .head-nav-main-header .head-nav-left { min-width: 0; flex: 1; margin: 0 !important; gap: 7px !important; }
   .head-nav-main-header .head-nav-logo { flex: 0 0 36px; width: 36px !important; height: 36px !important; margin: 0; }
+  .head-nav-main-header .head-nav-tourism-logo + .head-nav-logo { margin-left: -3px; }
   .head-nav-main-header .head-navtext-logo { display: block !important; min-width: 0; width: clamp(90px, 28vw, 155px); height: 30px !important; margin: 0; object-fit: contain; }
   .head-nav-main-header .head-nav-right { flex: 0 0 auto; gap: 4px !important; margin-left: auto; }
   .head-nav-main-header .head-nav-mobile-toggle { display: flex; flex: 0 0 40px; width: 40px; height: 44px; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 0; border: 0; border-radius: 9px; background: transparent; color: #155a49; cursor: pointer; }

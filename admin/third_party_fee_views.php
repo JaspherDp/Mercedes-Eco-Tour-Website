@@ -1,7 +1,7 @@
 <?php
 $feeScopeRows=array_filter($allRows,static fn($row)=>($stakeholderFilter==='all'||strtolower((string)$row['provider_type'])===$stakeholderFilter)&&($providerFilter==='all'||$row['provider_key']===$providerFilter));
 $feeBookKeys=array_map(static fn($row)=>$row['booking_domain'].':'.$row['booking_id'],$feeScopeRows);
-$feeCardTotals=array_fill_keys(['docking','entrance','environmental'],['collected'=>0,'settled'=>0,'available'=>0]);
+$feeCardTotals=array_fill_keys(['docking','entrance','environmental'],['collected'=>0,'settled'=>0,'available'=>0,'pending'=>0]);
 foreach($thirdPartyPools as $pool){$balance=ThirdPartyFeeLedger::balance($pool,$feeBookKeys);foreach($balance as $name=>$amount)$feeCardTotals[$pool['category']][$name]+=$amount;}
 ?>
 <section class="fee-collection-section" aria-label="Fee collections summary">
@@ -19,9 +19,14 @@ foreach($thirdPartyPools as $pool){$balance=ThirdPartyFeeLedger::balance($pool,$
 <header class="fee-modal-header"><div class="fee-header-title"><button type="button" class="fee-header-back" id="feeHeaderBack" data-fee-back aria-label="Back to collections" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14 6-6 6 6 6M8 12h12"/></svg><span>Back</span></button><div><small>FEE COLLECTIONS</small><h3 id="feeModalTitle">Collection details</h3><p id="feeModalSubtitle">Current prices and recorded balances</p></div></div><nav id="feeCollectionTabs" class="fee-modal-tabs fee-header-tabs" aria-label="Fee categories"><button type="button" data-fee-tab="docking">Docking / landing</button><button type="button" data-fee-tab="entrance">Entrance</button><button type="button" data-fee-tab="environmental">Environmental</button></nav><button type="button" class="fee-modal-close" data-fee-close aria-label="Close fee collections">×</button></header>
 <div class="fee-modal-content">
 <div id="feeCollectionTableView">
+<div class="fee-summary-toolbar">
 <div class="fee-modal-summary" id="feeModalSummary"></div>
+<nav class="fee-modal-tabs fee-status-tabs" aria-label="Collection status"><button type="button" data-fee-status="pending">Pending</button><button type="button" data-fee-status="available" class="active">To settle</button><button type="button" data-fee-status="history">History</button></nav>
+</div>
+<p class="fee-status-note" id="feeStatusNote"></p>
 <?php if(!$thirdPartyReady):?><p class="fee-modal-notice">Payout recording will be available after the third-party payout table is installed.</p><?php endif;?>
-<div class="fee-modal-table-wrap"><table class="fee-modal-table"><thead><tr><th>Location / collection</th><th>Current price</th><th class="right">Collected</th><th class="right">Settled</th><th class="right">To settle</th><th class="right">Actions</th></tr></thead><tbody id="feeCollectionRows"></tbody></table></div>
+<div class="fee-modal-table-wrap" id="feeBalancesTable"><table class="fee-modal-table"><thead><tr><th>Location / collection</th><th>Current price</th><th class="right">Collected</th><th class="right">Settled</th><th class="right" id="feeBalanceColumn">To settle</th><th class="right">Actions</th></tr></thead><tbody id="feeCollectionRows"></tbody></table></div>
+<div class="fee-modal-table-wrap" id="feeHistoryTable" hidden><table class="fee-modal-table"><thead><tr><th>Settled on</th><th>Location / collection</th><th>Recipient</th><th>Method / reference</th><th class="right">Amount settled</th><th class="right">Actions</th></tr></thead><tbody id="feeHistoryRows"></tbody></table></div>
 </div>
 <div id="feeCollectionDetailView" hidden><div id="feeCollectionDetails"></div></div>
 <div id="feeCollectionSettleView" hidden>

@@ -1,6 +1,7 @@
 <?php
 $hoActive = $hoActive ?? 'dashboard';
 $hoPendingBadge = isset($hoPendingBadge) ? (int)$hoPendingBadge : 0;
+$hoPendingLabel = $hoPendingBadge . ' pending booking' . ($hoPendingBadge === 1 ? '' : 's');
 $hoSidebarAccountName = trim((string)($_SESSION['hotel_admin_name'] ?? 'Hotel Admin'));
 $hoSidebarPropertyName = trim((string)($_SESSION['hotel_admin_property_name'] ?? ''));
 $hoSidebarInitial = strtoupper(substr($hoSidebarAccountName !== '' ? $hoSidebarAccountName : 'H', 0, 1));
@@ -45,7 +46,7 @@ $hoNavIcons = [
 ];
 ?>
 <script src="js/page-navigation-progress.js?v=1"></script>
-<link rel="stylesheet" href="styles/provider_sidebar.css?v=3">
+<link rel="stylesheet" href="styles/provider_sidebar.css?v=4">
 <aside class="ho-sidebar" aria-label="Hotel admin sidebar">
   <a class="ho-brand" href="Hohome.php">
     <img src="img/newlogo.png" alt="iTour Mercedes" />
@@ -71,7 +72,7 @@ $hoNavIcons = [
             <a href="<?= htmlspecialchars($href) ?>" class="<?= $isActive ? 'active' : '' ?>" <?= $isActive ? 'aria-current="page"' : '' ?>>
               <svg class="ho-nav-icon" viewBox="0 0 24 24" aria-hidden="true"><?= $hoNavIcons[$icon] ?></svg>
               <span><?= htmlspecialchars($label) ?></span>
-              <?php if ($key === 'bookings' && $hoPendingBadge > 0): ?><strong class="ho-nav-count"><?= (int)$hoPendingBadge ?></strong><?php endif; ?>
+              <?php if ($key === 'bookings' && $hoPendingBadge > 0): ?><strong class="ho-nav-count" title="<?= htmlspecialchars($hoPendingLabel, ENT_QUOTES, 'UTF-8') ?>" aria-label="<?= htmlspecialchars($hoPendingLabel, ENT_QUOTES, 'UTF-8') ?>"><?= (int)$hoPendingBadge ?></strong><?php endif; ?>
             </a>
           <?php endforeach; ?>
         </div>

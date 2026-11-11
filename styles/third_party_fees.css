@@ -1,4 +1,15 @@
 /* Manual third-party collection balances and payout dialogs. */
+.fee-summary-toolbar{display:flex;align-items:center;gap:18px;margin:0 0 16px}
+.fee-summary-toolbar .fee-modal-summary{flex:1;min-width:0;margin:0}
+.fee-summary-toolbar .fee-status-tabs{flex-shrink:0;margin:0}
+@media(max-width:780px){.fee-summary-toolbar{flex-wrap:wrap}.fee-summary-toolbar .fee-modal-summary{flex-basis:100%}.fee-summary-toolbar .fee-status-tabs{margin-left:auto}}
+.fee-status-note{margin:0 0 16px;color:#718679;font-size:11px;line-height:1.6}
+.fee-history-fields{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:20px 0}
+.fee-history-fields>div{padding:12px;border:1px solid #e0eae4;border-radius:8px;min-width:0}
+.fee-history-fields dt{color:#718679;font-size:10px;margin-bottom:7px}
+.fee-history-fields dd{margin:0;color:#244436;font-size:12px;overflow-wrap:anywhere;white-space:pre-wrap}
+.fee-modal .fee-modal-summary,.fee-modal .fee-detail-balances{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media(max-width:650px){.fee-modal .fee-modal-summary,.fee-modal .fee-detail-balances{grid-template-columns:repeat(2,minmax(0,1fr))}.fee-history-fields{grid-template-columns:1fr}}
 .fee-collection-card{display:flex;flex-direction:column}
 .fee-collection-card>header{border-bottom:0;padding:16px 18px 8px!important;flex-direction:row;align-items:center}
 .fee-card-balances{padding:0 18px 14px}
