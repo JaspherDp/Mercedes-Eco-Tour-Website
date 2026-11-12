@@ -33,7 +33,11 @@ function loadScriptOnce(src, key, testReady) {
     script.async = true;
     script.dataset.headNavScript = key;
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error(`Failed to load script: ${src}`));
+    script.onerror = () => {
+      delete window.__headNavScriptPromises[key];
+      script.remove();
+      reject(new Error(`Failed to load script: ${src}`));
+    };
     document.body.appendChild(script);
   });
 
@@ -41,7 +45,8 @@ function loadScriptOnce(src, key, testReady) {
 }
 
 function ensureGlobalAuthModal() {
-  if (document.getElementById("modalOverlay")) {
+  if (window.__globalAuthModalPromise) return window.__globalAuthModalPromise;
+  if (document.getElementById("modalOverlay") && typeof window.initLogSignEvents === "function") {
     if (typeof window.initLogSignEvents === "function") {
       window.initLogSignEvents();
     }
@@ -51,10 +56,6 @@ function ensureGlobalAuthModal() {
   // Legacy pages mount the modal into #loginModal themselves.
   if (document.getElementById("loginModal")) {
     return Promise.resolve();
-  }
-
-  if (window.__globalAuthModalPromise) {
-    return window.__globalAuthModalPromise;
   }
 
   window.__globalAuthModalPromise = (async () => {
@@ -174,7 +175,12 @@ function initHeadSubnavTouchMenus() {
   );
   if (!menuItems.length) return;
 
+  const loadMenuImages = item => item.querySelectorAll('img[data-deferred-src]').forEach(image => {
+    image.src = image.dataset.deferredSrc;
+    image.removeAttribute('data-deferred-src');
+  });
   const setMenuOpen = (item, open) => {
+    if (open) loadMenuImages(item);
     item.classList.toggle("is-touch-open", open);
     item.querySelector(":scope > .head-subnav-link")?.setAttribute("aria-expanded", String(open));
   };
@@ -186,6 +192,8 @@ function initHeadSubnavTouchMenus() {
   };
 
   menuItems.forEach((item, index) => {
+    item.addEventListener("mouseenter", () => loadMenuImages(item), { once: true });
+    item.addEventListener("focusin", () => loadMenuImages(item), { once: true });
     const trigger = item.querySelector(":scope > .head-subnav-link");
     const popup = item.querySelector(":scope > .head-subnav-popup");
     const popupId = popup.id || `headSubnavPopup${index + 1}`;
@@ -437,7 +445,7 @@ function initHeader() {
       });
     }
 
-    if (openModalBtn && !usesLegacyAuthLoader) {
+    if (openModalBtn && !usesLegacyAuthLoader && !document.body.classList.contains("homepage")) {
       ensureGlobalAuthModal().catch((error) => {
         console.error("Auth modal preloading failed:", error);
       });
@@ -522,7 +530,7 @@ function initHeader() {
 
     // Scroll to top
     const scrollToTopBtn = document.getElementById("scroll-to-top-btn");
-    window.addEventListener("scroll", () => {
+    if (scrollToTopBtn) window.addEventListener("scroll", () => {
       if (scrollToTopBtn)
         scrollToTopBtn.style.display = window.scrollY > 200 ? "flex" : "none";
     });

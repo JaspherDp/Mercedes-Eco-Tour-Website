@@ -46,3 +46,27 @@ device, location and network settings as the baseline. No new production
 score or full automated accessibility audit has been claimed. Browser automation
 was unavailable during this session; desktop/mobile visual and interaction QA
 remains necessary before deployment.
+
+## Second optimization pass
+
+- Homepage login markup, authentication JavaScript, SweetAlert and login-related
+  dependencies load on the first login/booking action, or for an explicit
+  open_login resume link. Ordinary homepage visits do not load them.
+- Footer icons use small inline SVGs. The homepage no longer downloads Font
+  Awesome CSS or its icon fonts. Other pages keep their existing icon-font
+  availability for compatibility. Deploy php/footer_icons.php with footer.php.
+- Popular-navigation and development-team image URLs stay deferred until their
+  menus/dialog open. The gallery loads its selected background near the viewport
+  and pauses its timer offscreen. A noscript fallback preserves the first photo.
+- The hero visual uses native lazy loading for its image and does not schedule
+  automatic photo changes when hidden by the mobile layout. Mobile docking does
+  not bind an unused desktop scroll handler.
+- Static images and scripts/styles receive one-day caching. Assets with a
+  nine-or-more-digit file-mtime v parameter receive one-year immutable caching.
+  Local HEAD requests verified those headers; homepage HTML remains no-store.
+- Run node scripts/homepage_lazy_resources_test.cjs for loader concurrency,
+  retry, resume/return-link, and offscreen-gallery regression coverage.
+
+This pass does not claim a new tester score or resolve the unidentified serious
+accessibility warning in the screenshots. A CDN requires hosting configuration
+and was not enabled. Browser automation remained unavailable for visual QA.

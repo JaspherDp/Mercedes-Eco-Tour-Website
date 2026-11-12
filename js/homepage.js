@@ -9,42 +9,14 @@
     .replaceAll("'", "&#039;");
 
   function loadLoginModal() {
-    const container = document.getElementById("loginModal");
-    if (!container) return;
-
-    fetch("logsign-modal.html?v=17")
-      .then((response) => {
-        if (!response.ok) throw new Error("Unable to load the login form.");
-        return response.text();
-      })
-      .then((html) => {
-        container.innerHTML = html;
-        const loadAuthScript = () => {
-          const script = document.createElement("script");
-          script.src = "logsign.js?v=18";
-          script.onload = () => {
-          if (typeof window.initLogSignEvents === "function") window.initLogSignEvents();
-          const params = new URLSearchParams(window.location.search);
-          if (params.get("open_login") === "1") {
-            window.AuthModalStore?.open({ resume: true });
-            params.delete("open_login");
-            const query = params.toString();
-            window.history.replaceState({}, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
-          }
-          };
-          document.body.appendChild(script);
-        };
-
-        if (window.Swal) {
-          loadAuthScript();
-        } else {
-          const sweetAlertScript = document.createElement("script");
-          sweetAlertScript.src = "https://cdn.jsdelivr.net/npm/sweetalert2@11";
-          sweetAlertScript.onload = loadAuthScript;
-          document.body.appendChild(sweetAlertScript);
-        }
-      })
-      .catch((error) => console.error(error));
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("open_login") !== "1") return;
+    window.ensureGlobalAuthModal().then(async () => {
+      await window.AuthModalStore.open({ resume: true });
+      params.delete("open_login");
+      const query = params.toString();
+      window.history.replaceState({}, "", window.location.pathname + (query ? "?" + query : "") + window.location.hash);
+    }).catch(error => console.error("Unable to open login:", error));
   }
 
   function loadHeader() {
@@ -94,9 +66,14 @@
       if (!frame) frame = window.requestAnimationFrame(update);
     };
 
-    window.addEventListener("scroll", scheduleUpdate, { passive: true });
+    const bindMobileScroll = () => {
+      window.removeEventListener("scroll", scheduleUpdate);
+      if (mobileQuery.matches) window.addEventListener("scroll", scheduleUpdate, { passive: true });
+      scheduleUpdate();
+    };
     window.addEventListener("resize", scheduleUpdate, { passive: true });
-    mobileQuery.addEventListener?.("change", scheduleUpdate);
+    mobileQuery.addEventListener?.("change", bindMobileScroll);
+    bindMobileScroll();
     update();
   }
 
@@ -166,7 +143,7 @@
     const scheduleNext = () => {
       window.clearTimeout(autoTimer);
       restartProgress();
-      if (!paused && !reduceMotion) {
+      if (!paused && !reduceMotion && visual.getClientRects().length && !document.hidden) {
         autoTimer = window.setTimeout(() => selectDestination((activeIndex + 1) % options.length), 5500);
       }
     };
@@ -243,6 +220,8 @@
       });
     }
 
+    window.addEventListener("resize", scheduleNext, { passive: true });
+    document.addEventListener("visibilitychange", scheduleNext);
     selectDestination(0);
   }
 
@@ -259,6 +238,7 @@
     const modalTriggers = Array.from(document.querySelectorAll("[data-gallery-image]"));
     if (!slides.length) return;
 
+    let galleryVisible = !("IntersectionObserver" in window);
     let current = 0;
     let intervalId = 0;
     let lastFocused = null;
@@ -274,6 +254,7 @@
       current = (index + slides.length) % slides.length;
       slides.forEach((slide, slideIndex) => {
         const active = slideIndex === current;
+        if (active && galleryVisible && slide.dataset.galleryImage) slide.style.backgroundImage = `url(${JSON.stringify(slide.dataset.galleryImage)})`;
         slide.classList.toggle("active", active);
         slide.tabIndex = active ? 0 : -1;
         slide.setAttribute("aria-hidden", active ? "false" : "true");
@@ -288,7 +269,7 @@
     const stop = () => window.clearInterval(intervalId);
     const start = () => {
       stop();
-      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      if (galleryVisible && !document.hidden && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         intervalId = window.setInterval(() => show(current + 1), 4500);
       }
     };
@@ -414,6 +395,13 @@
     });
     slider?.addEventListener("mouseenter", stop);
     slider?.addEventListener("mouseleave", start);
+    if ("IntersectionObserver" in window && slider) {
+      const observer = new IntersectionObserver(entries => {
+        galleryVisible = entries.some(entry => entry.isIntersecting);
+        if (galleryVisible) { show(current); start(); } else stop();
+      }, { rootMargin: "150px" });
+      observer.observe(slider);
+    }
     show(0);
     start();
   }

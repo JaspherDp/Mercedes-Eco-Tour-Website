@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/php/footer_icons.php';
 require_once __DIR__ . '/php/public_image_helper.php';
 if (session_status() === PHP_SESSION_NONE) {
     require_once __DIR__ . '/php/session_security.php';
@@ -17,7 +18,9 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <?php if ($footerLoadLegacyIconFont ?? true): ?>
   <link rel="stylesheet" media="print" onload="this.media='all'" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"><noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
+  <?php endif; ?>
   <link rel="stylesheet" media="print" onload="this.media='all'" href="styles/complaint-modal.css?v=<?= (int)@filemtime(__DIR__ . '/styles/complaint-modal.css') ?>"><noscript><link rel="stylesheet" href="styles/complaint-modal.css?v=<?= (int)@filemtime(__DIR__ . '/styles/complaint-modal.css') ?>"></noscript>
   <link rel="stylesheet" media="print" onload="this.media='all'" href="styles/legal-policy-modal.css?v=<?= (int)@filemtime(__DIR__ . '/styles/legal-policy-modal.css') ?>"><noscript><link rel="stylesheet" href="styles/legal-policy-modal.css?v=<?= (int)@filemtime(__DIR__ . '/styles/legal-policy-modal.css') ?>"></noscript>
   <link rel="stylesheet" href="styles/cookie-consent-banner.css?v=<?= (int)@filemtime(__DIR__ . '/styles/cookie-consent-banner.css') ?>">
@@ -74,29 +77,29 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
         <h3>Contact Info</h3>
 
         <a href="<?= htmlspecialchars($officeDetails['office_facebook_url'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer" class="contact-line">
-          <i class="fab fa-facebook-f contact-icon"></i>
+          <?= FooterIcon('facebook-f', 'contact-icon') ?>
           Municipal Tourism Office - LGU Mercedes
         </a>
 
         <div class="contact-line">
-          <i class="fa-solid fa-phone contact-icon"></i>
+          <?= FooterIcon('phone', 'contact-icon') ?>
           <a href="tel:<?= htmlspecialchars($officePhoneHref, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($officeDetails['office_phone'], ENT_QUOTES, 'UTF-8') ?></a>
         </div>
 
         <div class="contact-line">
-          <i class="fa-solid fa-envelope contact-icon"></i>
+          <?= FooterIcon('envelope', 'contact-icon') ?>
           <a href="mailto:<?= htmlspecialchars($officeDetails['office_email'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($officeDetails['office_email'], ENT_QUOTES, 'UTF-8') ?></a>
         </div>
 
         <div class="contact-line">
-          <i class="fa-solid fa-location-dot contact-icon"></i>
+          <?= FooterIcon('location-dot', 'contact-icon') ?>
           <a href="<?= htmlspecialchars($officeDetails['office_map_url'], ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener noreferrer">
             <?= htmlspecialchars($officeDetails['office_address'], ENT_QUOTES, 'UTF-8') ?>
           </a>
         </div>
 
         <button type="button" class="contact-line contact-line--button" id="developersModalTrigger" aria-haspopup="dialog">
-          <i class="fa-solid fa-users contact-icon" aria-hidden="true"></i>
+          <?= FooterIcon('users', 'contact-icon') ?>
           <span>Developers</span>
         </button>
       </div>
@@ -244,8 +247,8 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
       <header class="developers-modal__header">
         <div class="developers-modal__header-content">
           <div class="developers-modal__brand" aria-label="iTour Mercedes">
-            <img class="developers-modal__brand-logo" width="6250" height="6250" src="<?= htmlspecialchars(PublicImageUrl('img/newlogo-ui-v1.png'), ENT_QUOTES, 'UTF-8') ?>" alt="iTour Mercedes logo" loading="lazy" onerror="this.onerror=null;this.src='img/newlogo.png';">
-            <img class="developers-modal__wordmark" width="642" height="163" src="<?= htmlspecialchars(PublicImageUrl('img/textlogo2-white.png'), ENT_QUOTES, 'UTF-8') ?>" alt="iTour Mercedes" loading="lazy">
+            <img class="developers-modal__brand-logo" width="6250" height="6250" data-deferred-src="<?= htmlspecialchars(PublicImageUrl('img/newlogo-ui-v1.png'), ENT_QUOTES, 'UTF-8') ?>" alt="iTour Mercedes logo" loading="lazy" onerror="this.onerror=null;this.src='img/newlogo.png';">
+            <img class="developers-modal__wordmark" width="642" height="163" data-deferred-src="<?= htmlspecialchars(PublicImageUrl('img/textlogo2-white.png'), ENT_QUOTES, 'UTF-8') ?>" alt="iTour Mercedes" loading="lazy">
           </div>
           <div class="developers-modal__heading">
             <h2 id="developersModalTitle">Development Team</h2>
@@ -257,38 +260,38 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
 
       <div class="developers-modal__grid">
         <article class="developer-profile-card">
-          <div class="developer-profile-avatar"><img width="1254" height="1254" src="<?= htmlspecialchars(PublicImageUrl('img/jaspher.png'), ENT_QUOTES, 'UTF-8') ?>" alt="John Jaspher O. Dela Pacion" loading="lazy"></div>
+          <div class="developer-profile-avatar"><img width="1254" height="1254" data-deferred-src="<?= htmlspecialchars(PublicImageUrl('img/jaspher.png'), ENT_QUOTES, 'UTF-8') ?>" alt="John Jaspher O. Dela Pacion" loading="lazy"></div>
           <div class="developer-profile-details">
-            <span class="developer-profile-role"><i class="fa-solid fa-code" aria-hidden="true"></i> Platform Developer</span>
+            <span class="developer-profile-role"><?= FooterIcon('code', '') ?> Platform Developer</span>
             <h3>John Jaspher O. Dela Pacion</h3>
             <ul class="developer-profile-meta">
-              <li><i class="fa-solid fa-graduation-cap" aria-hidden="true"></i><span><small>Degree Program</small><strong>BS Information Systems</strong></span></li>
-              <li class="developer-profile-meta-school"><i class="fa-solid fa-building-columns" aria-hidden="true"></i><span><small>Institution</small><strong>UNIVERSITY OF CAMARINES NORTE</strong></span></li>
-              <li><i class="fa-solid fa-envelope" aria-hidden="true"></i><span><small>Email</small><a href="mailto:johnjaspherdelapacion29@gmail.com">johnjaspherdelapacion29@gmail.com</a></span></li>
+              <li><?= FooterIcon('graduation-cap', '') ?><span><small>Degree Program</small><strong>BS Information Systems</strong></span></li>
+              <li class="developer-profile-meta-school"><?= FooterIcon('building-columns', '') ?><span><small>Institution</small><strong>UNIVERSITY OF CAMARINES NORTE</strong></span></li>
+              <li><?= FooterIcon('envelope', '') ?><span><small>Email</small><a href="mailto:johnjaspherdelapacion29@gmail.com">johnjaspherdelapacion29@gmail.com</a></span></li>
             </ul>
           </div>
         </article>
         <article class="developer-profile-card">
-          <div class="developer-profile-avatar"><img width="1563" height="1563" src="<?= htmlspecialchars(PublicImageUrl('img/jacqueline.png'), ENT_QUOTES, 'UTF-8') ?>" alt="Jacqueline Alyzza G. Asis" loading="lazy"></div>
+          <div class="developer-profile-avatar"><img width="1563" height="1563" data-deferred-src="<?= htmlspecialchars(PublicImageUrl('img/jacqueline.png'), ENT_QUOTES, 'UTF-8') ?>" alt="Jacqueline Alyzza G. Asis" loading="lazy"></div>
           <div class="developer-profile-details">
-            <span class="developer-profile-role"><i class="fa-solid fa-code" aria-hidden="true"></i> Platform Developer</span>
+            <span class="developer-profile-role"><?= FooterIcon('code', '') ?> Platform Developer</span>
             <h3>Jacqueline Alyzza G. Asis</h3>
             <ul class="developer-profile-meta">
-              <li><i class="fa-solid fa-graduation-cap" aria-hidden="true"></i><span><small>Degree Program</small><strong>BS Information Systems</strong></span></li>
-              <li class="developer-profile-meta-school"><i class="fa-solid fa-building-columns" aria-hidden="true"></i><span><small>Institution</small><strong>UNIVERSITY OF CAMARINES NORTE</strong></span></li>
-              <li><i class="fa-solid fa-envelope" aria-hidden="true"></i><span><small>Email</small><a href="mailto:jacquelineasis29@gmail.com">jacquelineasis29@gmail.com</a></span></li>
+              <li><?= FooterIcon('graduation-cap', '') ?><span><small>Degree Program</small><strong>BS Information Systems</strong></span></li>
+              <li class="developer-profile-meta-school"><?= FooterIcon('building-columns', '') ?><span><small>Institution</small><strong>UNIVERSITY OF CAMARINES NORTE</strong></span></li>
+              <li><?= FooterIcon('envelope', '') ?><span><small>Email</small><a href="mailto:jacquelineasis29@gmail.com">jacquelineasis29@gmail.com</a></span></li>
             </ul>
           </div>
         </article>
         <article class="developer-profile-card">
-          <div class="developer-profile-avatar"><img width="1254" height="1254" src="<?= htmlspecialchars(PublicImageUrl('img/oliver.png'), ENT_QUOTES, 'UTF-8') ?>" alt="Mark Oliver Coronel" loading="lazy"></div>
+          <div class="developer-profile-avatar"><img width="1254" height="1254" data-deferred-src="<?= htmlspecialchars(PublicImageUrl('img/oliver.png'), ENT_QUOTES, 'UTF-8') ?>" alt="Mark Oliver Coronel" loading="lazy"></div>
           <div class="developer-profile-details">
-            <span class="developer-profile-role"><i class="fa-solid fa-code" aria-hidden="true"></i> Platform Developer</span>
+            <span class="developer-profile-role"><?= FooterIcon('code', '') ?> Platform Developer</span>
             <h3>Mark Oliver Coronel</h3>
             <ul class="developer-profile-meta">
-              <li><i class="fa-solid fa-graduation-cap" aria-hidden="true"></i><span><small>Degree Program</small><strong>BS Information Systems</strong></span></li>
-              <li class="developer-profile-meta-school"><i class="fa-solid fa-building-columns" aria-hidden="true"></i><span><small>Institution</small><strong>UNIVERSITY OF CAMARINES NORTE</strong></span></li>
-              <li><i class="fa-solid fa-envelope" aria-hidden="true"></i><span><small>Email</small><a href="mailto:oliver002118@gmail.com">oliver002118@gmail.com</a></span></li>
+              <li><?= FooterIcon('graduation-cap', '') ?><span><small>Degree Program</small><strong>BS Information Systems</strong></span></li>
+              <li class="developer-profile-meta-school"><?= FooterIcon('building-columns', '') ?><span><small>Institution</small><strong>UNIVERSITY OF CAMARINES NORTE</strong></span></li>
+              <li><?= FooterIcon('envelope', '') ?><span><small>Email</small><a href="mailto:oliver002118@gmail.com">oliver002118@gmail.com</a></span></li>
             </ul>
           </div>
         </article>
@@ -322,6 +325,7 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
       };
       const open = () => {
         returnFocus = document.activeElement;
+        modal.querySelectorAll("img[data-deferred-src]").forEach(image => { image.src = image.dataset.deferredSrc; image.removeAttribute("data-deferred-src"); });
         modal.hidden = false;
         modal.setAttribute('aria-hidden', 'false');
         document.body.classList.add('developers-modal-open');
@@ -350,6 +354,9 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
 
 <!-- Styling -->
 <style>
+.footer-svg-icon { display: inline-block; width: 1em; height: 1em; flex-shrink: 0; vertical-align: -.125em; padding: .15em; }
+.contact-icon.footer-svg-icon { padding: 8px; }
+.developer-profile-meta .footer-svg-icon { padding: 6px; }
 /* ================= WAVES ================= */
 .wave-container {
   position: relative;
@@ -622,12 +629,12 @@ footer {
 .developer-profile-card h3 { min-height: 2.8em; margin: 0 0 13px; color: #143d33; font-size: .88rem; line-height: 1.4; letter-spacing: .025em; text-transform: uppercase; }
 .developer-profile-meta { display: grid; gap: 3px; margin: auto 0 0; padding: 12px 0 0; border-top: 1px solid #e1ebe7; list-style: none; text-align: left; }
 .developer-profile-meta li { display: grid; grid-template-columns: 29px minmax(0, 1fr); align-items: center; gap: 9px; padding: 7px 0; }
-.developer-profile-meta li > i { width: 29px; height: 29px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; color: #19745d; background: #eaf5f0; font-size: .75rem; }
+.developer-profile-meta li > .footer-svg-icon { width: 29px; height: 29px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; color: #19745d; background: #eaf5f0; font-size: .75rem; }
 .developer-profile-meta li > span { min-width: 0; display: grid; gap: 1px; }
 .developer-profile-meta small { color: #788983; font-size: .62rem; font-weight: 700; letter-spacing: .055em; text-transform: uppercase; }
 .developer-profile-meta strong, .developer-profile-meta a { overflow-wrap: anywhere; color: #264a41; font-size: .75rem; font-weight: 650; line-height: 1.4; text-decoration: none; }
 .developer-profile-meta .developer-profile-meta-school { margin: 1px -8px; padding: 9px 8px; border: 1px solid #d4ebe1; border-radius: 10px; background: linear-gradient(135deg, #edf8f3, #f8fcfa); }
-.developer-profile-meta-school > i { color: #fff !important; background: linear-gradient(145deg, #28846b, #17604d) !important; box-shadow: 0 4px 10px rgba(23, 96, 77, .18); }
+.developer-profile-meta-school > .footer-svg-icon { color: #fff !important; background: linear-gradient(145deg, #28846b, #17604d) !important; box-shadow: 0 4px 10px rgba(23, 96, 77, .18); }
 .developer-profile-meta-school small { color: #3d7968; }
 .developer-profile-meta-school strong { color: #155541; font-size: .7rem; font-weight: 850; letter-spacing: .025em; line-height: 1.35; }
 .developer-profile-meta a:hover, .developer-profile-meta a:focus-visible { color: #08765a; text-decoration: underline; }
@@ -1014,7 +1021,7 @@ footer {
   .developer-profile-card h3 { min-height: 0; margin-bottom: 11px; font-size: .7rem; }
   .developer-profile-meta { gap: 2px; padding-top: 9px; }
   .developer-profile-meta li { grid-template-columns: 27px minmax(0, 1fr); gap: 8px; padding: 5px 0; }
-  .developer-profile-meta li > i { width: 27px; height: 27px; font-size: .64rem; }
+  .developer-profile-meta li > .footer-svg-icon { width: 27px; height: 27px; font-size: .64rem; }
   .developer-profile-meta small { font-size: .52rem; }
   .developer-profile-meta strong,
   .developer-profile-meta a { font-size: .62rem; line-height: 1.35; }

@@ -10,11 +10,13 @@ $dom = new DOMDocument(); @$dom->loadHTML($html);
 $xpath = new DOMXPath($dom);
 foreach ($dom->getElementsByTagName('img') as $image) {
     if (!$image->hasAttribute('alt')) throw new RuntimeException('Missing image alt attribute.');
-    $path = $image->getAttribute('src');
+    $path = $image->getAttribute('src') ?: $image->getAttribute('data-deferred-src');
     if ($path !== '' && !preg_match('~^(?:https?:|data:)~', $path) && !is_file($path)) throw new RuntimeException('Missing image: ' . $path);
 }
 if ($xpath->query('//main//button[@aria-selected] | //main//*[@role="tablist"]')->length) throw new RuntimeException('Carousel controls still use incomplete tab semantics.');
 if ($xpath->query('//video[@src]')->length) throw new RuntimeException('Homepage video downloads before entering view.');
+if ($xpath->query('//*[@id="loginModal"]')->length || str_contains($html, 'font-awesome/')) throw new RuntimeException('Unused login markup or icon font still loads at startup.');
+if ($xpath->query('//*[contains(@class,"head-subnav-popup")]//img[@src] | //*[@id="developersModal"]//img[@src]')->length) throw new RuntimeException('Closed views still expose image download URLs.');
 $blocking = $xpath->query('//link[@rel="stylesheet" and not(@media="print") and not(ancestor::noscript)]');
 foreach ($blocking as $link) if (str_starts_with($link->getAttribute('href'), 'https://')) throw new RuntimeException('Blocking third-party stylesheet.');
 foreach ($xpath->query('//script[@src]') as $script) if (!$script->hasAttribute('defer') && !$script->hasAttribute('async')) throw new RuntimeException('Blocking external script.');

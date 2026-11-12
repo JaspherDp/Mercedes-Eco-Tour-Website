@@ -548,7 +548,7 @@ if (
       <?php if (!empty($popularDestinations)): ?>
         <?php foreach ($popularDestinations as $destination): ?>
           <a href="<?= htmlspecialchars($destination['url']) ?>" class="head-subnav-popup-item">
-            <img src="<?= htmlspecialchars(headSubnavResolveImage($destination['image'], 'img/sampleimage.png')) ?>" alt="<?= htmlspecialchars($destination['title']) ?>" loading="lazy">
+            <img data-deferred-src="<?= htmlspecialchars(headSubnavResolveImage($destination['image'], 'img/sampleimage.png')) ?>" alt="<?= htmlspecialchars($destination['title']) ?>" loading="lazy">
             <div>
               <span><?= htmlspecialchars($destination['label']) ?></span>
               <strong><?= htmlspecialchars($destination['title']) ?></strong>
@@ -573,7 +573,7 @@ if (
       <?php if (!empty($popularPackages)): ?>
         <?php foreach ($popularPackages as $package): ?>
           <a href="package_details.php?package_id=<?= (int)$package['package_id'] ?>" class="head-subnav-popup-item">
-            <img src="<?= htmlspecialchars(headSubnavResolveImage($package['package_image'] ?? '', 'img/packageshome.png')) ?>" alt="<?= htmlspecialchars((string)($package['package_title'] ?? 'Package')) ?>" loading="lazy">
+            <img data-deferred-src="<?= htmlspecialchars(headSubnavResolveImage($package['package_image'] ?? '', 'img/packageshome.png')) ?>" alt="<?= htmlspecialchars((string)($package['package_title'] ?? 'Package')) ?>" loading="lazy">
             <div>
               <span>Top package</span>
               <strong><?= htmlspecialchars((string)($package['package_title'] ?? 'Package')) ?></strong>
@@ -598,7 +598,7 @@ if (
       <?php if (!empty($popularHotels)): ?>
         <?php foreach ($popularHotels as $hotel): ?>
           <a href="hotel_details.php?id=<?= (int)$hotel['hotel_resort_id'] ?>&amp;source=popular" class="head-subnav-popup-item">
-            <img src="<?= htmlspecialchars(headSubnavResolveImage($hotel['image_path'] ?? '', 'img/hotelshome.png')) ?>" alt="<?= htmlspecialchars((string)($hotel['name'] ?? 'Hotel')) ?>" loading="lazy">
+            <img data-deferred-src="<?= htmlspecialchars(headSubnavResolveImage($hotel['image_path'] ?? '', 'img/hotelshome.png')) ?>" alt="<?= htmlspecialchars((string)($hotel['name'] ?? 'Hotel')) ?>" loading="lazy">
             <div>
               <span>Top stays</span>
               <strong><?= htmlspecialchars((string)($hotel['name'] ?? 'Hotel & Resort')) ?></strong>

@@ -12,9 +12,6 @@ function PublicImageUrl(string $path): string
     if (str_starts_with($path, 'uploads/') || str_starts_with($path, 'php/upload/')) {
         $variant = 'img/homepage-cache/' . hash('sha256', $path) . '.webp';
     }
-    if (str_starts_with($path, 'uploads/') || str_starts_with($path, 'php/upload/')) {
-        $variant = 'img/homepage-cache/' . hash('sha256', $path) . '.webp';
-    }
     if (is_file($root . $path) && is_file($root . $variant)
         && filemtime($root . $variant) >= filemtime($root . $path)
         && filesize($root . $variant) < filesize($root . $path)) return $variant;

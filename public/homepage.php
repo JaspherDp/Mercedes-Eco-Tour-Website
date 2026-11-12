@@ -312,7 +312,7 @@ try {
             </span>
 
             <figure class="hero-visual-card">
-              <img id="heroVisualImage" fetchpriority="high" decoding="async" src="<?= htmlspecialchars($initialHeroDestination['image'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($initialHeroDestination['title'], ENT_QUOTES, 'UTF-8') ?>">
+              <img id="heroVisualImage" loading="lazy" fetchpriority="high" decoding="async" src="<?= htmlspecialchars($initialHeroDestination['image'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($initialHeroDestination['title'], ENT_QUOTES, 'UTF-8') ?>">
               <div class="hero-card-shade"></div>
               <figcaption aria-live="polite">
                 <span>Featured island escape</span>
@@ -612,10 +612,11 @@ try {
           <div class="fe-gallery">
             <div class="fe-slider" aria-label="Mercedes photo gallery">
               <?php foreach ($sliderImages as $index => $image): ?>
-                <button class="fe-slide <?= $index === 0 ? 'active' : '' ?>" type="button" style="background-image:url('<?= htmlspecialchars($image, ENT_QUOTES, 'UTF-8') ?>')" data-gallery-image="<?= htmlspecialchars($image, ENT_QUOTES, 'UTF-8') ?>" aria-label="Open gallery photo <?= $index + 1 ?>"></button>
+                <button class="fe-slide <?= $index === 0 ? 'active' : '' ?>" type="button" data-gallery-image="<?= htmlspecialchars($image, ENT_QUOTES, 'UTF-8') ?>" aria-label="Open gallery photo <?= $index + 1 ?>"></button>
               <?php endforeach; ?>
               <div class="fe-slider-caption"><span>Island moments</span><strong>See Mercedes up close</strong></div>
             </div>
+            <noscript><style>.fe-slide.active { background-image: url(<?= json_encode($sliderImages[0], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>); }</style></noscript>
             <div class="fe-dots" role="group" aria-label="Choose gallery image">
               <?php foreach ($sliderImages as $index => $image): ?>
                 <button type="button" aria-pressed="<?= $index === 0 ? 'true' : 'false' ?>" class="<?= $index === 0 ? 'active' : '' ?>" data-slide-index="<?= $index ?>" aria-label="Show photo <?= $index + 1 ?>"></button>
@@ -688,7 +689,7 @@ try {
     <span>Book a Tour</span>
   </a>
  
-  <div id="loginModal"></div>
+
   <div id="feModal" class="fe-modal itour-image-viewer" role="dialog" aria-modal="true" aria-label="Gallery preview" hidden>
     <div class="itour-image-viewer__stage">
       <button class="fe-close itour-image-viewer__close" type="button" aria-label="Close image preview"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
@@ -699,7 +700,7 @@ try {
     </div>
   </div>
 
-  <?php include 'footer.php'; ?>
+  <?php $footerLoadLegacyIconFont = false; include 'footer.php'; ?>
 
   <script>
     window.homeReviewSummaries = <?= json_encode($reviewSummaryByKey, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
