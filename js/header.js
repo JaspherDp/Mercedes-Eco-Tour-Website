@@ -1,6 +1,8 @@
 // header.js
 (function () {
+  if (window.itourMobileScrollReady || document.querySelector('script[data-itour-mobile-scroll]')) return;
   const script = document.createElement('script');
+  script.dataset.itourMobileScroll = '1';
   script.src = new URL('mobile-scroll.js', document.currentScript.src).href;
   document.head.appendChild(script);
 })();

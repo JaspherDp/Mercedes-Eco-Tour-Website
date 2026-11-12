@@ -306,9 +306,11 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
       endpoint: 'php/submit_complaint_incident.php'
     };
   </script>
+  <?php if (empty($homepageRuntimeBundle)): ?>
   <script defer src="js/complaint-modal.js?v=<?= (int)@filemtime(__DIR__ . '/js/complaint-modal.js') ?>"></script>
   <script defer src="js/legal-policy-modal.js?v=<?= (int)@filemtime(__DIR__ . '/js/legal-policy-modal.js') ?>"></script>
   <script defer src="js/cookie-consent-banner.js?v=<?= (int)@filemtime(__DIR__ . '/js/cookie-consent-banner.js') ?>"></script>
+  <?php endif; ?>
   <script>
     (() => {
       const trigger = document.getElementById('developersModalTrigger');

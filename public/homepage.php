@@ -3,6 +3,8 @@ require_once __DIR__ . '/../php/public_image_helper.php';
 chdir(__DIR__ . '/..');
 require_once __DIR__ . '/../php/session_security.php';
 AppSessionStart();
+require_once __DIR__ . '/../php/homepage_assets.php';
+$homepageRuntimeBundle = HomepageRuntimeBundle();
 require_once 'php/db_connection.php';
 require_once __DIR__ . '/../php/featured_media_helper.php';
 require_once __DIR__ . '/../php/tourist_activity_helper.php';
@@ -709,11 +711,15 @@ try {
       accountId: <?= json_encode((string)($_SESSION['tourist_id'] ?? '')) ?>
     };
   </script>
+  <?php if ($homepageRuntimeBundle !== null): ?>
+  <script defer src="<?= htmlspecialchars($homepageRuntimeBundle, ENT_QUOTES, 'UTF-8') ?>"></script>
+  <?php else: ?>
   <script defer src="js/header.js?v=<?= (int)@filemtime(__DIR__ . '/../js/header.js') ?>"></script>
   <script defer src="js/recently_viewed.js?v=<?= (int)@filemtime(__DIR__ . '/../js/recently_viewed.js') ?>"></script>
   <script defer src="js/featured-viewport-video.js?v=<?= (int)@filemtime(__DIR__ . '/../js/featured-viewport-video.js') ?>"></script>
   <script defer src="js/homepage.js?v=<?= (int)@filemtime(__DIR__ . '/../js/homepage.js') ?>"></script>
   <script defer src="js/back-to-top.js?v=<?= (int)@filemtime(__DIR__ . '/../js/back-to-top.js') ?>"></script>
+  <?php endif; ?>
 </body>
 </html>
 <?php exit; ?>
