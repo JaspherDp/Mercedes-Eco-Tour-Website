@@ -97,3 +97,30 @@ The cookie-free-domain and hosting-level redirect recommendations still require
 hosting/DNS configuration. The gzip grade must be interpreted alongside the HAR's
 actual br response headers; a higher Pingdom grade is not guaranteed by these
 additional reductions.
+
+## Final pass after the reported 89 / 794 ms / 44 requests
+
+- The homepage loader has no minimum display delay: once the document is usable,
+  it removes the overlay immediately instead of holding it for 480 ms plus a
+  fade. Other pages retain their existing loader timing.
+- An independent 1.8-second inline fail-safe unlocks the homepage and removes its
+  loader if the external loader script fails. This addresses a possible covered
+  screen failure mode; it does not prove the cause of the tester's blank preview.
+- Versioned static files with a nine-or-more-digit v parameter now receive a
+  one-year Expires interval when mod_expires is enabled, matching their existing
+  immutable Cache-Control policy. Other static files retain one-day expiry;
+  PHP/HTML/account responses are excluded.
+- The complete Apache configuration plus project .htaccess was syntax-checked
+  in a temporary validation config with expires_module explicitly loaded. The
+  running Apache configuration was not changed. Loader tests, original loader
+  behavior on other pages, bundle integrity, login, playback, search guests,
+  calendars and filters passed locally. The temporary config was removed.
+
+Deploy .htaccess, public/homepage.php and js/page-loader.js; the current runtime
+and style bundles remain valid and do not need regeneration for this pass.
+The new regression test is scripts/page_loader_reveal_test.cjs.
+
+Retest https://itourmercedes.com/ directly, with the same region and cache
+conditions. The earlier HAR recorded two redirects from the HTTP www address.
+No deployed score of 90 or higher is promised: hosting compression negotiation,
+asset-host cookies, the test URL and the tester's grading remain relevant.

@@ -226,6 +226,13 @@ try {
   <script>document.documentElement.classList.add('itour-page-loading');</script>
   <link rel="stylesheet" href="styles/page-loader.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/page-loader.css') ?>">
   <?php endif; ?>
+  <script>
+    // Reveal server-rendered content even if the external loader script fails.
+    window.setTimeout(function () {
+      document.documentElement.classList.remove('itour-page-loading');
+      document.getElementById('itourPageLoader')?.remove();
+    }, 1800);
+  </script>
   <script defer src="js/page-loader.js?v=<?= (int)@filemtime(__DIR__ . '/../js/page-loader.js') ?>"></script>
   <?php TouristRenderActivityMonitor(); ?>
 </head>

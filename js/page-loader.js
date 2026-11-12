@@ -2,7 +2,8 @@
   'use strict';
 
   var startedAt = Date.now();
-  var minimumDisplayMs = 480;
+  var immediateHomepage = document.body?.classList.contains("homepage") === true;
+  var minimumDisplayMs = immediateHomepage ? 0 : 480;
   var maximumDisplayMs = 1400;
   var dismissed = false;
 
@@ -13,6 +14,10 @@
     var loader = document.getElementById('itourPageLoader');
     document.documentElement.classList.remove('itour-page-loading');
     if (!loader) return;
+    if (immediateHomepage) {
+      if (loader.parentNode) loader.parentNode.removeChild(loader);
+      return;
+    }
 
     loader.classList.add('is-leaving');
     loader.setAttribute('aria-hidden', 'true');

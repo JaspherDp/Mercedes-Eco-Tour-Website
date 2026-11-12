@@ -15,6 +15,9 @@ DirectoryIndex index.php
     <FilesMatch "\.(?:css|js|mjs|woff2?|png|jpe?g|webp|svg|ico)$">
         ExpiresActive On
         ExpiresDefault "access plus 1 day"
+        <If "%{QUERY_STRING} =~ m#(?:^|&)v=[0-9]{9,}(?:&|$)#">
+            ExpiresDefault "access plus 1 year"
+        </If>
     </FilesMatch>
 </IfModule>
 <IfModule mod_headers.c>
