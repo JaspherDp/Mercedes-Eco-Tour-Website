@@ -23,7 +23,7 @@ body {
   font-family: "Inter", sans-serif;
   color: var(--text-dark);
 
-  background-image: url("../img/HomeBG.png");
+  background-image: url("../img/HomeBG.home.webp");
   background-repeat: no-repeat;
   background-position: top center;
   background-size: 100% auto;
@@ -32,14 +32,14 @@ body {
 /* ================= HERO ================= */
 .hotel-hero {
   height: 45vh;
-  background: url('../img/hotelcover2.png') center/cover no-repeat;
+  background: url('../img/hotelcover2.home.webp') center/cover no-repeat;
   position: relative;
 }
 
 .hotel-hero--tours {
   height: 41vh;
   min-height: 310px;
-  background-image: url('../img/tourscover.png');
+  background-image: url('../img/tourscover.home.webp');
 }
 
 .hotel-hero--tours .hotel-hero-overlay {
@@ -7133,4 +7133,10 @@ body.hotel-map-open {
   #searchSection.search-fixed[data-search-tab="hotels"] .search-submit-wrap .search-btn svg {
     flex-shrink: 0;
   }
+}
+
+/* Smaller copies of the same banners for narrow viewports. */
+@media (max-width: 760px) {
+  .hotel-hero { background-image: url("../img/hotelcover2.mobile.webp"); }
+  .hotel-hero--tours { background-image: url("../img/tourscover.mobile.webp"); }
 }

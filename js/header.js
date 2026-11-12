@@ -445,7 +445,7 @@ function initHeader() {
       });
     }
 
-    if (openModalBtn && !usesLegacyAuthLoader && !document.body.classList.contains("homepage")) {
+    if (openModalBtn && !usesLegacyAuthLoader && !document.body.classList.contains("homepage") && !document.body.hasAttribute("data-auth-on-demand")) {
       ensureGlobalAuthModal().catch((error) => {
         console.error("Auth modal preloading failed:", error);
       });

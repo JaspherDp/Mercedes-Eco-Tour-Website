@@ -1,0 +1,11 @@
+'use strict';
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const source=fs.readFileSync('public/hotel_resorts.php','utf8');
+let active=false,maps=0,tiles=0;
+const map={setView(){return this;}};
+const scope={document:{querySelector:()=>({classList:{contains:()=>active}}),getElementById:()=>({})},L:{map(){maps++;return map;}},getNearbyHotelsForMap:()=>[],addMapTiles(){tiles++;},hotelMapPreview:null,hotelPreviewMarkers:[],MERCEDES_MAP_CENTER:[0,0]};
+vm.createContext(scope);vm.runInContext(source.slice(source.indexOf('  function updatePreviewMap()'),source.indexOf('  function renderHotelMap(')),scope);
+scope.updatePreviewMap();assert.equal(maps,0,'Landing visits must not construct a hidden map');
+active=true;scope.updatePreviewMap();assert.equal(maps,1);assert.equal(tiles,1);
+scope.updatePreviewMap();assert.equal(maps,1,'Search refresh reuses the preview map');
+console.log('PASS: no hidden map at startup; active hotel searches initialize and reuse the preview.');

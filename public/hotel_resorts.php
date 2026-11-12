@@ -2,6 +2,7 @@
 chdir(__DIR__ . '/..');
 require_once __DIR__ . '/../php/session_security.php';
 AppSessionStart();
+require_once __DIR__ . '/../php/public_image_helper.php';
 require_once 'php/db_connection.php';
 require_once __DIR__ . '/../php/tourist_activity_helper.php';
 TouristPreparePageActivity($pdo);
@@ -162,6 +163,8 @@ function hoLandingOptimizedImagePath(?string $path): string
   if (str_starts_with($normalized, 'upload/')) {
     $normalized = 'php/' . $normalized;
   }
+  $publicCopy = PublicImageUrl($normalized);
+  if ($publicCopy !== $normalized) return $publicCopy;
   $candidate = preg_replace('/\.(?:png|jpe?g)$/i', '.optimized.webp', $normalized);
   $candidatePaths = $candidate ? [$candidate] : [];
   if ($candidate && !str_contains($candidate, '/')) {
@@ -505,6 +508,11 @@ foreach ($boatsFromDb as &$boat) {
 }
 unset($boat);
 
+foreach ($hotelsFromDb as &$hotel) $hotel['img'] = hoLandingOptimizedImagePath($hotel['img'] ?? '');
+unset($hotel);
+foreach ($guidesFromDb as &$guide) $guide['img'] = hoLandingOptimizedImagePath($guide['img'] ?? '');
+unset($guide);
+
 $lowestRoomPriceByHotel = [];
 try {
     HoEnsureHotelRoomsTable($pdo);
@@ -555,11 +563,13 @@ foreach ($hotelsFromDb as $hotel) {
 <!DOCTYPE html>
 <html lang="en" class="tours-page-root">
 <head>
-<script src="js/page-navigation-progress.js?v=3"></script>
+<script defer src="js/page-navigation-progress.js?v=3"></script>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="description" content="<?= htmlspecialchars($seoDescription, ENT_QUOTES, 'UTF-8') ?>" />
   <link rel="canonical" href="<?= htmlspecialchars($seoCanonical, ENT_QUOTES, 'UTF-8') ?>" />
+  <link rel="preload" as="image" media="(max-width: 760px)" href="img/<?= $isToursLanding ? 'tourscover' : 'hotelcover2' ?>.mobile.webp">
+  <link rel="preload" as="image" media="(min-width: 761px)" href="img/<?= $isToursLanding ? 'tourscover' : 'hotelcover2' ?>.home.webp">
   <title><?= htmlspecialchars($seoTitle, ENT_QUOTES, 'UTF-8') ?></title>
   <link rel="icon" type="image/png" href="<?= is_file(__DIR__ . '/../img/favicon-64-v1.png') ? 'img/favicon-64-v1.png' : 'img/newlogo.png' ?>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -567,17 +577,17 @@ foreach ($hotelsFromDb as $hotel) {
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
   <link rel="preconnect" href="https://unpkg.com" crossorigin />
   <link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet" media="print" onload="this.media='all'" /><noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"></noscript>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css" />
   <link rel="stylesheet" href="styles/search-date-policy.css?v=<?= (int)filemtime(__DIR__ . '/../styles/search-date-policy.css') ?>" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="anonymous" />
   <link rel="stylesheet" href="styles/hotel_resorts.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/hotel_resorts.css') ?>" />
-  <link rel="stylesheet" href="styles/favorites.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/favorites.css') ?>" />
-  <link rel="stylesheet" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>" />
+  <link rel="stylesheet" media="print" onload="this.media='all'" href="styles/favorites.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/favorites.css') ?>" /><noscript><link rel="stylesheet" href="styles/favorites.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/favorites.css') ?>" /></noscript>
+  <link rel="stylesheet" media="print" onload="this.media='all'" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>" /><noscript><link rel="stylesheet" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>" /></noscript>
   <script>document.documentElement.classList.add('itour-page-loading');</script>
   <link rel="stylesheet" href="styles/page-loader.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/page-loader.css') ?>" />
-  <script src="js/page-loader.js?v=<?= (int)@filemtime(__DIR__ . '/../js/page-loader.js') ?>"></script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <script defer src="js/page-loader.js?v=<?= (int)@filemtime(__DIR__ . '/../js/page-loader.js') ?>"></script>
+  <link rel="stylesheet" media="print" onload="this.media='all'" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"><noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"></noscript>
   <?php TouristRenderActivityMonitor(); ?>
 </head>
 
@@ -591,7 +601,7 @@ foreach ($hotelsFromDb as $hotel) {
   </div>
 </div>
 
-<body>
+<body data-auth-on-demand>
 <?php include __DIR__ . '/../includes/page_loader.php'; ?>
 
 <!-- Header -->
@@ -608,8 +618,8 @@ foreach ($hotelsFromDb as $hotel) {
   aria-modal="true">
   <div class="service-drawer-topbar">
     <a class="service-drawer-brand" href="./" aria-label="iTour Mercedes home">
-      <img class="service-drawer-brand-seal" src="img/newlogo-ui-v1.png" alt="" onerror="this.onerror=null;this.src='img/newlogo.png';">
-      <img class="service-drawer-brand-wordmark" src="img/textlogo2.png" alt="iTour Mercedes">
+      <img class="service-drawer-brand-seal" src="<?= htmlspecialchars(PublicImageUrl('img/newlogo-ui-v1.png'), ENT_QUOTES, 'UTF-8') ?>" alt="" onerror="this.onerror=null;this.src='img/newlogo.png';">
+      <img class="service-drawer-brand-wordmark" src="<?= htmlspecialchars(PublicImageUrl('img/textlogo2.png'), ENT_QUOTES, 'UTF-8') ?>" alt="iTour Mercedes">
     </a>
     <div class="service-drawer-actions">
       <button
@@ -632,7 +642,7 @@ foreach ($hotelsFromDb as $hotel) {
 
   <div class="service-drawer-scroll">
     <div class="service-gallery" id="serviceGallery">
-      <img id="serviceGalleryImage" src="img/sampleimage.png" alt="">
+      <img id="serviceGalleryImage" alt="">
       <div class="service-gallery-shade"></div>
       <span class="service-gallery-badge" id="serviceGalleryBadge">Tour Service</span>
       <span class="service-gallery-count" id="serviceGalleryCount">1 / 1</span>
@@ -695,7 +705,7 @@ foreach ($hotelsFromDb as $hotel) {
       </button>
     </div>
     <div class="service-image-modal-stage">
-      <img id="serviceImageModalImage" src="img/sampleimage.png" alt="">
+      <img id="serviceImageModalImage" alt="">
       <button class="service-image-modal-nav service-image-modal-prev" id="serviceImageModalPrev" type="button" aria-label="Previous image">
         <i class="fa-solid fa-chevron-left" aria-hidden="true"></i>
       </button>
@@ -1139,10 +1149,12 @@ foreach ($hotelsFromDb as $hotel) {
 </div>
 
 <!-- Login/Signup Modal -->
-<div id="loginModal"></div>
+
 
 <?php
 $footerVariant = 'tours';
+// This page already supplies the icon font used by its controls.
+$footerLoadLegacyIconFont = false;
 include 'footer.php';
 ?>
 
@@ -2023,7 +2035,7 @@ include 'footer.php';
 
         // Scroll to Top Button
         const scrollToTopBtn = document.getElementById("scroll-to-top-btn");
-        window.addEventListener("scroll", () => {
+        if (scrollToTopBtn) window.addEventListener("scroll", () => {
           if (scrollToTopBtn) scrollToTopBtn.style.display = window.scrollY > 200 ? "flex" : "none";
         });
         scrollToTopBtn?.addEventListener("click", () => {
@@ -2272,27 +2284,12 @@ include 'footer.php';
 
         scrollToLandingCarousel();
 
-        fetch("logsign-modal.html?v=16")
-          .then(res => res.text())
-          .then(html => {
-            const modalContainer = document.getElementById("loginModal");
-            if (!modalContainer) return console.error("loginModal container not found");
-            modalContainer.innerHTML = html;
-
-            const swalScript = document.createElement("script");
-            swalScript.src = "https://cdn.jsdelivr.net/npm/sweetalert2@11";
-            swalScript.onload = () => {
-              const logsignScript = document.createElement("script");
-              logsignScript.src = "logsign.js?v=18";
-              logsignScript.onload = () => {
-                if (typeof initLogSignEvents === "function") initLogSignEvents();
-                else console.error("initLogSignEvents not found in logsign.js");
-              };
-              document.body.appendChild(logsignScript);
-            };
-            document.body.appendChild(swalScript);
-          })
-          .catch(err => console.error("Modal load error:", err));
+        // Login and its dependencies are loaded by the shared header on demand.
+        const loginParams = new URLSearchParams(window.location.search);
+        if (loginParams.get("open_login") === "1") {
+          ensureGlobalAuthModal().then(() => window.AuthModalStore.open({ resume: true }))
+            .catch(error => console.error("Unable to resume login:", error));
+        }
       })
       .catch(err => console.error("Header load error:", err));
   });
@@ -2424,6 +2421,8 @@ include 'footer.php';
   }
 
   function updatePreviewMap() {
+    // The results rail is not shown until a hotel search is active.
+    if (!document.querySelector(".hotel-main")?.classList.contains("search-active")) return;
     if (typeof L === "undefined" || !document.getElementById("hotelMapPreview")) return;
     const list = getNearbyHotelsForMap();
     if (!hotelMapPreview) {
@@ -3108,8 +3107,8 @@ document.querySelectorAll(".filter").forEach(cb => {
     // A single DOM update avoids reflowing and repainting the carousel for every card.
     const cards = hotels.map((h, index) => {
       const visibleAmenities = h.amenities || [];
-      const imageLoading = index < 5 ? "eager" : "lazy";
-      const imagePriority = index < 3 ? "high" : "auto";
+      const imageLoading = "lazy";
+      const imagePriority = "low";
       const hotelId = Number(h.id) || 0;
       const hotelImage = escapeHtml(h.img || "img/sampleimage.png");
       const hotelName = escapeHtml(h.name || "Hotel");
@@ -3618,7 +3617,7 @@ function displayCarouselItems(elementId, items, type) {
     items.forEach((item, itemIndex) => {
 
         let cardHtml = "";
-        const aboveFoldImage = type === "package" && itemIndex < (window.innerWidth <= 600 ? 1 : 3);
+        const aboveFoldImage = type === "package" && itemIndex === 0 && container.getBoundingClientRect().top < window.innerHeight;
         const imageLoading = aboveFoldImage ? "eager" : "lazy";
         const imagePriority = aboveFoldImage ? "high" : "low";
 
@@ -4024,7 +4023,9 @@ function displayCarouselItems(elementId, items, type) {
   });
 </script>
 
+<?php if (($_GET['booking_success'] ?? '') === '1'): ?>
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<?php endif; ?>
 <script src="js/booking-payment-confirmation.js?v=<?= (int)@filemtime(__DIR__ . '/../js/booking-payment-confirmation.js') ?>"></script>
 <script src="js/back-to-top.js?v=<?= (int)@filemtime(__DIR__ . '/../js/back-to-top.js') ?>"></script>
 </body>
