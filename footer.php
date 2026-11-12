@@ -21,9 +21,13 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
   <?php if ($footerLoadLegacyIconFont ?? true): ?>
   <link rel="stylesheet" media="print" onload="this.media='all'" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"><noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
   <?php endif; ?>
+  <?php if (!empty($homepageFooterStyleBundle)): ?>
+  <link rel="stylesheet" href="<?= htmlspecialchars($homepageFooterStyleBundle, ENT_QUOTES, 'UTF-8') ?>">
+  <?php else: ?>
   <link rel="stylesheet" media="print" onload="this.media='all'" href="styles/complaint-modal.css?v=<?= (int)@filemtime(__DIR__ . '/styles/complaint-modal.css') ?>"><noscript><link rel="stylesheet" href="styles/complaint-modal.css?v=<?= (int)@filemtime(__DIR__ . '/styles/complaint-modal.css') ?>"></noscript>
   <link rel="stylesheet" media="print" onload="this.media='all'" href="styles/legal-policy-modal.css?v=<?= (int)@filemtime(__DIR__ . '/styles/legal-policy-modal.css') ?>"><noscript><link rel="stylesheet" href="styles/legal-policy-modal.css?v=<?= (int)@filemtime(__DIR__ . '/styles/legal-policy-modal.css') ?>"></noscript>
   <link rel="stylesheet" href="styles/cookie-consent-banner.css?v=<?= (int)@filemtime(__DIR__ . '/styles/cookie-consent-banner.css') ?>">
+  <?php endif; ?>
 </head>
 
 <body>

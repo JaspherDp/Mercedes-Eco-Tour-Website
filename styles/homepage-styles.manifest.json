@@ -1,0 +1,19 @@
+{
+    "head": {
+        "sources": {
+            "styles/homepage.css": "3a1fd60988a71334fb42addd1563ab66066b2485ff90c64aaea2e3a808747a5f",
+            "styles/back-to-top.css": "23f4e2e4406b3a49e3e35ac9f84062a35905d0bcb6866c11fd819619600df894",
+            "styles/image-viewer.css": "0c3687354943e8e70de0f68de36c41a1085879667a9ed06d864a26387a9c3e64",
+            "styles/page-loader.css": "e694a0f6bcf15673362795c4498244f5428b2e61505e212d11e9d5fcfd6d132d"
+        },
+        "bundle": "aaf68bfec2b136162347fed21ec209d263dc04e9fe8c9983089e2aa7d7c9a3e0"
+    },
+    "footer": {
+        "sources": {
+            "styles/complaint-modal.css": "3fb3be81938891011f7e915d279badd2c0a6f146c2a286685fbdbfd40bc0c7ff",
+            "styles/legal-policy-modal.css": "13a3498aeb7649180f019157c46a556fcc44ffb60e88ff920a55a4024db58635",
+            "styles/cookie-consent-banner.css": "cd983c983cbb5223ed3b1725d8d96092c6f746a004761bed06abdecd5131dd37"
+        },
+        "bundle": "a3e4ec9b37492b9d6074c04b478a344347222b6157803f3d4e749200cc1059f8"
+    }
+}

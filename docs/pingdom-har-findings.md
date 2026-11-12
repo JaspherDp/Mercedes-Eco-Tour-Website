@@ -61,3 +61,39 @@ rendered homepage snapshot that references those new upload paths.
 Compare the same canonical URL, test region, and cache conditions after deploying.
 A lower request count/load time need not produce an identical change in Pingdom's
 grade, especially while it flags br-compressed responses under its gzip rule.
+
+## Follow-up after Pingdom 82 / 59 requests
+
+- Homepage style links drop from eight to three in server-rendered markup,
+  including the unchanged Google Fonts link. The dynamically loaded mobile-scroll
+  stylesheet remains independent. Four head styles are concatenated in exactly
+  their original order, and three footer styles in their original order. Groups
+  stay at their original document positions; source rules are not minified,
+  pruned or recolored. Each group has its own source/output hash validation and
+  independent original-file fallback.
+- Six allowlisted tiny service-icon images can be embedded as data URLs. The
+  rendered local page contains 16 such icon elements; the encoded bytes were
+  compared with the previously selected files and match exactly. Photos, large
+  logos, dynamic external images and oversized icons retain URL loading.
+- Static-file Expires rules apply only when mod_expires is available. HTML/PHP
+  and session/cache policy remain unchanged; local HTML is still no-store.
+  The existing Brotli negotiation and login cookies were not altered.
+- PHP/Apache configuration, rendered pages, static dimensions, stale-group
+  fallback, icon payload equality, media, lazy auth, guest counts, calendars,
+  availability/filter behavior and boat-image checks passed locally. A new
+  production score and full visual browser QA have not been performed.
+
+Rebuild after editing any bundled stylesheet:
+
+    C:\xampp\php\php.exe scripts/build_homepage_styles.php
+
+Deploy the edited files plus scripts/build_homepage_styles.php,
+styles/homepage-head.bundle.css, styles/homepage-footer.bundle.css and
+styles/homepage-styles.manifest.json. Keep the original stylesheets: they are
+required by the integrity fallback and other pages. Test the canonical HTTPS URL
+from the same region after deploying and clearing any hosting cache.
+
+The cookie-free-domain and hosting-level redirect recommendations still require
+hosting/DNS configuration. The gzip grade must be interpreted alongside the HAR's
+actual br response headers; a higher Pingdom grade is not guaranteed by these
+additional reductions.

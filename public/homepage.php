@@ -5,6 +5,8 @@ require_once __DIR__ . '/../php/session_security.php';
 AppSessionStart();
 require_once __DIR__ . '/../php/homepage_assets.php';
 $homepageRuntimeBundle = HomepageRuntimeBundle();
+$homepageHeadStyleBundle = HomepageStyleBundle('head');
+$homepageFooterStyleBundle = HomepageStyleBundle('footer');
 require_once 'php/db_connection.php';
 require_once __DIR__ . '/../php/featured_media_helper.php';
 require_once __DIR__ . '/../php/tourist_activity_helper.php';
@@ -214,11 +216,16 @@ try {
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet" media="print" onload="this.media='all'"><noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"></noscript>
+  <?php if ($homepageHeadStyleBundle !== null): ?>
+  <link rel="stylesheet" href="<?= htmlspecialchars($homepageHeadStyleBundle, ENT_QUOTES, 'UTF-8') ?>">
+  <script>document.documentElement.classList.add('itour-page-loading');</script>
+  <?php else: ?>
   <link rel="stylesheet" href="styles/homepage.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/homepage.css') ?>">
   <link rel="stylesheet" media="print" onload="this.media='all'" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>"><noscript><link rel="stylesheet" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>"></noscript>
   <link rel="stylesheet" media="print" onload="this.media='all'" href="styles/image-viewer.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/image-viewer.css') ?>"><noscript><link rel="stylesheet" href="styles/image-viewer.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/image-viewer.css') ?>"></noscript>
   <script>document.documentElement.classList.add('itour-page-loading');</script>
   <link rel="stylesheet" href="styles/page-loader.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/page-loader.css') ?>">
+  <?php endif; ?>
   <script defer src="js/page-loader.js?v=<?= (int)@filemtime(__DIR__ . '/../js/page-loader.js') ?>"></script>
   <?php TouristRenderActivityMonitor(); ?>
 </head>
@@ -369,7 +376,7 @@ try {
           <div class="hero-ribbon-group" <?= $ribbonCopy === 1 ? 'aria-hidden="true"' : '' ?>>
             <?php foreach ($heroRibbonItems as $ribbonItem): ?>
               <a href="<?= htmlspecialchars($ribbonItem['href'], ENT_QUOTES, 'UTF-8') ?>" class="hero-ribbon-item" <?= $ribbonCopy === 1 ? 'tabindex="-1"' : '' ?>>
-                <span class="hero-ribbon-icon"><img src="<?= htmlspecialchars($ribbonItem['icon'], ENT_QUOTES, 'UTF-8') ?>" alt=""></span>
+                <span class="hero-ribbon-icon"><img src="<?= htmlspecialchars(HomepageIconUrl((string)$ribbonItem['icon']), ENT_QUOTES, 'UTF-8') ?>" alt=""></span>
                 <span><?= htmlspecialchars($ribbonItem['label'], ENT_QUOTES, 'UTF-8') ?></span>
                 <i aria-hidden="true"></i>
               </a>
@@ -392,22 +399,22 @@ try {
 
         <div class="bt-container">
           <a href="hotel_resorts.php?tab=hotels#featuredSection" class="bt-card-link">
-            <span class="bt-icon-wrap"><img src="<?= htmlspecialchars(PublicImageUrl('img/hotelshome.png'), ENT_QUOTES, 'UTF-8') ?>" width="100" height="100" alt=""></span>
+            <span class="bt-icon-wrap"><img src="<?= htmlspecialchars(HomepageIconUrl('img/hotelshome.png'), ENT_QUOTES, 'UTF-8') ?>" width="100" height="100" alt=""></span>
             <span class="bt-card-copy"><strong>Hotels &amp; resorts</strong><small>Find your home by the coast</small></span>
             <span class="bt-arrow" aria-hidden="true">→</span>
           </a>
           <a href="hotel_resorts.php?tab=tours#tourPackagesSection" class="bt-card-link">
-            <span class="bt-icon-wrap"><img src="<?= htmlspecialchars(PublicImageUrl('img/packageshome.png'), ENT_QUOTES, 'UTF-8') ?>" width="100" height="100" alt=""></span>
+            <span class="bt-icon-wrap"><img src="<?= htmlspecialchars(HomepageIconUrl('img/packageshome.png'), ENT_QUOTES, 'UTF-8') ?>" width="100" height="100" alt=""></span>
             <span class="bt-card-copy"><strong>Tour packages</strong><small>Ready-made island experiences</small></span>
             <span class="bt-arrow" aria-hidden="true">→</span>
           </a>
           <a href="hotel_resorts.php?tab=guides#tourGuidesSection" class="bt-card-link">
-            <span class="bt-icon-wrap"><img src="<?= htmlspecialchars(PublicImageUrl('img/tourguidehome.png'), ENT_QUOTES, 'UTF-8') ?>" width="100" height="100" alt=""></span>
+            <span class="bt-icon-wrap"><img src="<?= htmlspecialchars(HomepageIconUrl('img/tourguidehome.png'), ENT_QUOTES, 'UTF-8') ?>" width="100" height="100" alt=""></span>
             <span class="bt-card-copy"><strong>Local guides</strong><small>Explore with local expertise</small></span>
             <span class="bt-arrow" aria-hidden="true">→</span>
           </a>
           <a href="hotel_resorts.php?tab=boats#tourBoatsSection" class="bt-card-link">
-            <span class="bt-icon-wrap"><img src="<?= htmlspecialchars(PublicImageUrl('img/boathome.png'), ENT_QUOTES, 'UTF-8') ?>" width="100" height="100" alt=""></span>
+            <span class="bt-icon-wrap"><img src="<?= htmlspecialchars(HomepageIconUrl('img/boathome.png'), ENT_QUOTES, 'UTF-8') ?>" width="100" height="100" alt=""></span>
             <span class="bt-card-copy"><strong>Boat rentals</strong><small>Travel safely between islands</small></span>
             <span class="bt-arrow" aria-hidden="true">→</span>
           </a>

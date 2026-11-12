@@ -5,7 +5,7 @@ $checked = 0;
 foreach (['public/homepage.php', 'footer.php'] as $template) {
     $source = file_get_contents(dirname(__DIR__) . '/' . $template);
     // Optimized copies preserve the aspect ratio of these original dimensions.
-    $source = preg_replace("~<\?= htmlspecialchars\(PublicImageUrl\('([^']+)'\), ENT_QUOTES, 'UTF-8'\) \?>~", '$1', $source);
+    $source = preg_replace("~<\?= htmlspecialchars\((?:PublicImageUrl|HomepageIconUrl)\('([^']+)'\), ENT_QUOTES, 'UTF-8'\) \?>~", '$1', $source);
     preg_match_all('/<img\b[^>]*>/i', $source, $matches);
     foreach ($matches[0] as $tag) {
         if (!preg_match('/\bsrc="([^"<]+)"/', $tag, $src) || !preg_match('/\bwidth="(\d+)"/', $tag, $width) || !preg_match('/\bheight="(\d+)"/', $tag, $height)) continue;
