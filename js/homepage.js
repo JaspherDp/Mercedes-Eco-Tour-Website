@@ -12,7 +12,7 @@
     const container = document.getElementById("loginModal");
     if (!container) return;
 
-    fetch("logsign-modal.html?v=16")
+    fetch("logsign-modal.html?v=17")
       .then((response) => {
         if (!response.ok) throw new Error("Unable to load the login form.");
         return response.text();
@@ -155,10 +155,7 @@
       }
     };
 
-    options.forEach((option) => {
-      const preload = new Image();
-      preload.src = option.dataset.image || "";
-    });
+    // Destination photos load when selected instead of preloading every full image.
 
     const restartProgress = () => {
       visual.classList.remove("is-auto-playing");
@@ -182,7 +179,7 @@
       options.forEach((option, optionIndex) => {
         const active = optionIndex === activeIndex;
         option.classList.toggle("active", active);
-        option.setAttribute("aria-selected", active ? "true" : "false");
+        option.setAttribute("aria-pressed", active ? "true" : "false");
         option.tabIndex = active ? 0 : -1;
       });
 
@@ -284,7 +281,7 @@
       dots.forEach((dot, dotIndex) => {
         const active = dotIndex === current;
         dot.classList.toggle("active", active);
-        dot.setAttribute("aria-selected", active ? "true" : "false");
+        dot.setAttribute("aria-pressed", active ? "true" : "false");
       });
     };
 
@@ -443,7 +440,7 @@
       dots.forEach((dot, dotIndex) => {
         const active = dotIndex === current;
         dot.classList.toggle("is-active", active);
-        dot.setAttribute("aria-selected", active ? "true" : "false");
+        dot.setAttribute("aria-pressed", active ? "true" : "false");
       });
 
       if (shouldScroll && viewport.scrollWidth > viewport.clientWidth) {

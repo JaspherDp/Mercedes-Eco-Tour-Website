@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/../php/public_image_helper.php';
 chdir(__DIR__ . '/..');
 require_once __DIR__ . '/../php/session_security.php';
 AppSessionStart();
@@ -53,18 +54,18 @@ function getLatestHomepageFields(PDO $pdo): array
 function resolveHomepageImage(?string $rawPath, string $fallback = 'img/sampleimage.png'): string
 {
     $candidate = trim((string)$rawPath);
-    if ($candidate === '') return $fallback;
+    if ($candidate === '') return PublicImageUrl($fallback);
     if (preg_match('#^https?://#i', $candidate)) return $candidate;
 
     $cleanCandidate = ltrim(str_replace('\\', '/', $candidate), '/');
-    if (is_file(__DIR__ . '/../' . $cleanCandidate)) return $cleanCandidate;
+    if (is_file(__DIR__ . '/../' . $cleanCandidate)) return PublicImageUrl($cleanCandidate);
 
     $basename = basename($cleanCandidate);
     foreach (['php/upload/', 'uploads/', 'img/', 'imagess/'] as $directory) {
         $relativePath = $directory . $basename;
-        if (is_file(__DIR__ . '/../' . $relativePath)) return $relativePath;
+        if (is_file(__DIR__ . '/../' . $relativePath)) return PublicImageUrl($relativePath);
     }
-    return $fallback;
+    return PublicImageUrl($fallback);
 }
 
 function getDestinationProfileImage(PDO $pdo, string $slug, string $fallback): string
@@ -74,7 +75,7 @@ function getDestinationProfileImage(PDO $pdo, string $slug, string $fallback): s
         $stmt->execute([$slug]);
         return resolveHomepageImage($stmt->fetchColumn() ?: '', $fallback);
     } catch (Throwable $error) {
-        return $fallback;
+        return PublicImageUrl($fallback);
     }
 }
 
@@ -125,6 +126,11 @@ if (!$heroDestinations) {
         ['slug' => 'quinapaguian-island', 'title' => 'Quinapaguian Island', 'location' => 'Quiet coastline · Mercedes', 'image' => 'imagess/Quinapaguian.jpg', 'url' => 'destination.php?destination=quinapaguian-island&return=.%2F'],
     ];
 }
+foreach ($heroDestinations as &$heroDestination) $heroDestination['image'] = PublicImageUrl($heroDestination['image']);
+unset($heroDestination);
+$sliderImages = array_map('resolveHomepageImage', $sliderImages);
+$smallImage1 = resolveHomepageImage($smallImage1);
+$smallImage2 = resolveHomepageImage($smallImage2);
 $initialHeroDestination = $heroDestinations[0];
 
 $popularTours = [];
@@ -195,7 +201,7 @@ try {
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<script src="js/page-navigation-progress.js?v=3"></script>
+<script defer src="js/page-navigation-progress.js?v=3"></script>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#155a49">
@@ -205,13 +211,13 @@ try {
   <link rel="icon" type="image/png" href="<?= is_file(__DIR__ . '/../img/favicon-64-v1.png') ? 'img/favicon-64-v1.png' : 'img/newlogo.png' ?>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet" media="print" onload="this.media='all'"><noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"></noscript>
   <link rel="stylesheet" href="styles/homepage.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/homepage.css') ?>">
-  <link rel="stylesheet" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>">
-  <link rel="stylesheet" href="styles/image-viewer.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/image-viewer.css') ?>">
+  <link rel="stylesheet" media="print" onload="this.media='all'" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>"><noscript><link rel="stylesheet" href="styles/back-to-top.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/back-to-top.css') ?>"></noscript>
+  <link rel="stylesheet" media="print" onload="this.media='all'" href="styles/image-viewer.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/image-viewer.css') ?>"><noscript><link rel="stylesheet" href="styles/image-viewer.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/image-viewer.css') ?>"></noscript>
   <script>document.documentElement.classList.add('itour-page-loading');</script>
   <link rel="stylesheet" href="styles/page-loader.css?v=<?= (int)@filemtime(__DIR__ . '/../styles/page-loader.css') ?>">
-  <script src="js/page-loader.js?v=<?= (int)@filemtime(__DIR__ . '/../js/page-loader.js') ?>"></script>
+  <script defer src="js/page-loader.js?v=<?= (int)@filemtime(__DIR__ . '/../js/page-loader.js') ?>"></script>
   <?php TouristRenderActivityMonitor(); ?>
 </head>
 <body class="homepage">
@@ -306,7 +312,7 @@ try {
             </span>
 
             <figure class="hero-visual-card">
-              <img id="heroVisualImage" src="<?= htmlspecialchars($initialHeroDestination['image'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($initialHeroDestination['title'], ENT_QUOTES, 'UTF-8') ?>">
+              <img id="heroVisualImage" fetchpriority="high" decoding="async" src="<?= htmlspecialchars($initialHeroDestination['image'], ENT_QUOTES, 'UTF-8') ?>" alt="<?= htmlspecialchars($initialHeroDestination['title'], ENT_QUOTES, 'UTF-8') ?>">
               <div class="hero-card-shade"></div>
               <figcaption aria-live="polite">
                 <span>Featured island escape</span>
@@ -324,15 +330,15 @@ try {
             <div class="hero-island-selector" aria-label="Choose a featured destination">
               <span class="hero-selector-label">Explore route</span>
               <div class="hero-selector-viewport">
-                <div class="hero-selector-track" role="tablist" aria-label="Featured destinations" aria-orientation="vertical">
+                <div class="hero-selector-track" role="group" aria-label="Featured destinations">
                   <?php foreach ($heroDestinations as $destinationIndex => $destination): ?>
-                    <button class="hero-destination-option<?= $destinationIndex === 0 ? ' active' : '' ?>" type="button" role="tab" aria-selected="<?= $destinationIndex === 0 ? 'true' : 'false' ?>" title="<?= htmlspecialchars($destination['title'], ENT_QUOTES, 'UTF-8') ?>"
+                    <button class="hero-destination-option<?= $destinationIndex === 0 ? ' active' : '' ?>" type="button" aria-pressed="<?= $destinationIndex === 0 ? 'true' : 'false' ?>" title="<?= htmlspecialchars($destination['title'], ENT_QUOTES, 'UTF-8') ?>"
                             data-stop="<?= $destinationIndex % 3 ?>"
                             data-title="<?= htmlspecialchars($destination['title'], ENT_QUOTES, 'UTF-8') ?>"
                             data-location="<?= htmlspecialchars($destination['location'], ENT_QUOTES, 'UTF-8') ?>"
                             data-image="<?= htmlspecialchars($destination['image'], ENT_QUOTES, 'UTF-8') ?>"
                             data-url="<?= htmlspecialchars($destination['url'], ENT_QUOTES, 'UTF-8') ?>">
-                      <img src="<?= htmlspecialchars($destination['image'], ENT_QUOTES, 'UTF-8') ?>" alt=""><span><?= str_pad((string)($destinationIndex + 1), 2, '0', STR_PAD_LEFT) ?></span>
+                      <img src="<?= htmlspecialchars($destination['image'], ENT_QUOTES, 'UTF-8') ?>" alt="" loading="lazy" decoding="async"><span><?= str_pad((string)($destinationIndex + 1), 2, '0', STR_PAD_LEFT) ?></span>
                     </button>
                   <?php endforeach; ?>
                 </div>
@@ -384,22 +390,22 @@ try {
 
         <div class="bt-container">
           <a href="hotel_resorts.php?tab=hotels#featuredSection" class="bt-card-link">
-            <span class="bt-icon-wrap"><img src="img/hotelshome.png" width="100" height="100" alt=""></span>
+            <span class="bt-icon-wrap"><img src="<?= htmlspecialchars(PublicImageUrl('img/hotelshome.png'), ENT_QUOTES, 'UTF-8') ?>" width="100" height="100" alt=""></span>
             <span class="bt-card-copy"><strong>Hotels &amp; resorts</strong><small>Find your home by the coast</small></span>
             <span class="bt-arrow" aria-hidden="true">→</span>
           </a>
           <a href="hotel_resorts.php?tab=tours#tourPackagesSection" class="bt-card-link">
-            <span class="bt-icon-wrap"><img src="img/packageshome.png" width="100" height="100" alt=""></span>
+            <span class="bt-icon-wrap"><img src="<?= htmlspecialchars(PublicImageUrl('img/packageshome.png'), ENT_QUOTES, 'UTF-8') ?>" width="100" height="100" alt=""></span>
             <span class="bt-card-copy"><strong>Tour packages</strong><small>Ready-made island experiences</small></span>
             <span class="bt-arrow" aria-hidden="true">→</span>
           </a>
           <a href="hotel_resorts.php?tab=guides#tourGuidesSection" class="bt-card-link">
-            <span class="bt-icon-wrap"><img src="img/tourguidehome.png" width="100" height="100" alt=""></span>
+            <span class="bt-icon-wrap"><img src="<?= htmlspecialchars(PublicImageUrl('img/tourguidehome.png'), ENT_QUOTES, 'UTF-8') ?>" width="100" height="100" alt=""></span>
             <span class="bt-card-copy"><strong>Local guides</strong><small>Explore with local expertise</small></span>
             <span class="bt-arrow" aria-hidden="true">→</span>
           </a>
           <a href="hotel_resorts.php?tab=boats#tourBoatsSection" class="bt-card-link">
-            <span class="bt-icon-wrap"><img src="img/boathome.png" width="100" height="100" alt=""></span>
+            <span class="bt-icon-wrap"><img src="<?= htmlspecialchars(PublicImageUrl('img/boathome.png'), ENT_QUOTES, 'UTF-8') ?>" width="100" height="100" alt=""></span>
             <span class="bt-card-copy"><strong>Boat rentals</strong><small>Travel safely between islands</small></span>
             <span class="bt-arrow" aria-hidden="true">→</span>
           </a>
@@ -509,23 +515,23 @@ try {
         <div class="tc-viewport" data-tour-category-viewport>
           <div class="tc-track">
             <a class="tc-card is-active" href="hotel_resorts.php?tab=tours" data-tour-category-card>
-              <span class="tc-card-media"><img width="900" height="500" src="imagess/Apuao Grande.jpg" alt="Aerial view of Apuao Grande island" loading="lazy"><span class="tc-card-number">01</span><span class="tc-card-icon" aria-hidden="true">&#9965;</span></span>
+              <span class="tc-card-media"><img width="900" height="500" src="<?= htmlspecialchars(PublicImageUrl('imagess/Apuao Grande.jpg'), ENT_QUOTES, 'UTF-8') ?>" alt="Aerial view of Apuao Grande island" loading="lazy"><span class="tc-card-number">01</span><span class="tc-card-icon" aria-hidden="true">&#9965;</span></span>
               <strong>Island hopping</strong><small>See curated tours <span aria-hidden="true">&rarr;</span></small>
             </a>
             <a class="tc-card" href="destination.php" data-tour-category-card>
-              <span class="tc-card-media"><img width="900" height="520" src="imagess/Caringo.jpg" alt="Clear coastal water and beach at Caringo Island" loading="lazy"><span class="tc-card-number">02</span><span class="tc-card-icon" aria-hidden="true">&#9728;</span></span>
+              <span class="tc-card-media"><img width="900" height="520" src="<?= htmlspecialchars(PublicImageUrl('imagess/Caringo.jpg'), ENT_QUOTES, 'UTF-8') ?>" alt="Clear coastal water and beach at Caringo Island" loading="lazy"><span class="tc-card-number">02</span><span class="tc-card-icon" aria-hidden="true">&#9728;</span></span>
               <strong>Beach escapes</strong><small>Find a quiet shore <span aria-hidden="true">&rarr;</span></small>
             </a>
             <a class="tc-card" href="destination.php" data-tour-category-card>
-              <span class="tc-card-media"><img width="1080" height="809" src="imagess/Canimog.jpg" alt="Lush natural scenery on Canimog Island" loading="lazy"><span class="tc-card-number">03</span><span class="tc-card-icon" aria-hidden="true">&#10047;</span></span>
+              <span class="tc-card-media"><img width="1080" height="809" src="<?= htmlspecialchars(PublicImageUrl('imagess/Canimog.jpg'), ENT_QUOTES, 'UTF-8') ?>" alt="Lush natural scenery on Canimog Island" loading="lazy"><span class="tc-card-number">03</span><span class="tc-card-icon" aria-hidden="true">&#10047;</span></span>
               <strong>Nature discoveries</strong><small>Explore island life <span aria-hidden="true">&rarr;</span></small>
             </a>
             <a class="tc-card" href="destination.php" data-tour-category-card>
-              <span class="tc-card-media"><img width="960" height="434" src="imagess/Church.jpg" alt="Historic church and local heritage site in Mercedes" loading="lazy"><span class="tc-card-number">04</span><span class="tc-card-icon" aria-hidden="true">&#9670;</span></span>
+              <span class="tc-card-media"><img width="960" height="434" src="<?= htmlspecialchars(PublicImageUrl('imagess/Church.jpg'), ENT_QUOTES, 'UTF-8') ?>" alt="Historic church and local heritage site in Mercedes" loading="lazy"><span class="tc-card-number">04</span><span class="tc-card-icon" aria-hidden="true">&#9670;</span></span>
               <strong>Culture &amp; heritage</strong><small>Meet local stories <span aria-hidden="true">&rarr;</span></small>
             </a>
             <a class="tc-card" href="hotel_resorts.php?tab=boats" data-tour-category-card>
-              <span class="tc-card-media"><img width="1200" height="675" src="imagess/Quinapaguian.jpg" alt="Blue water surrounding Quinapaguian Island" loading="lazy"><span class="tc-card-number">05</span><span class="tc-card-icon" aria-hidden="true">&#9875;</span></span>
+              <span class="tc-card-media"><img width="1200" height="675" src="<?= htmlspecialchars(PublicImageUrl('imagess/Quinapaguian.jpg'), ENT_QUOTES, 'UTF-8') ?>" alt="Blue water surrounding Quinapaguian Island" loading="lazy"><span class="tc-card-number">05</span><span class="tc-card-icon" aria-hidden="true">&#9875;</span></span>
               <strong>Boat adventures</strong><small>Choose your ride <span aria-hidden="true">&rarr;</span></small>
             </a>
           </div>
@@ -533,9 +539,9 @@ try {
 
         <div class="tc-controls" aria-label="Tour category controls">
           <button class="tc-arrow" type="button" data-tour-category-direction="-1" aria-label="Previous tour category">&larr;</button>
-          <div class="tc-dots" role="tablist" aria-label="Choose a tour category">
+          <div class="tc-dots" role="group" aria-label="Choose a tour category">
             <?php for ($categoryIndex = 0; $categoryIndex < 5; $categoryIndex++): ?>
-              <button type="button" class="<?= $categoryIndex === 0 ? 'is-active' : '' ?>" data-tour-category-index="<?= $categoryIndex ?>" aria-label="Show tour category <?= $categoryIndex + 1 ?>" aria-selected="<?= $categoryIndex === 0 ? 'true' : 'false' ?>"></button>
+              <button type="button" class="<?= $categoryIndex === 0 ? 'is-active' : '' ?>" data-tour-category-index="<?= $categoryIndex ?>" aria-label="Show tour category <?= $categoryIndex + 1 ?>" aria-pressed="<?= $categoryIndex === 0 ? 'true' : 'false' ?>"></button>
             <?php endfor; ?>
           </div>
           <button class="tc-arrow" type="button" data-tour-category-direction="1" aria-label="Next tour category">&rarr;</button>
@@ -610,9 +616,9 @@ try {
               <?php endforeach; ?>
               <div class="fe-slider-caption"><span>Island moments</span><strong>See Mercedes up close</strong></div>
             </div>
-            <div class="fe-dots" role="tablist" aria-label="Choose gallery image">
+            <div class="fe-dots" role="group" aria-label="Choose gallery image">
               <?php foreach ($sliderImages as $index => $image): ?>
-                <button type="button" class="<?= $index === 0 ? 'active' : '' ?>" data-slide-index="<?= $index ?>" aria-label="Show photo <?= $index + 1 ?>"></button>
+                <button type="button" aria-pressed="<?= $index === 0 ? 'true' : 'false' ?>" class="<?= $index === 0 ? 'active' : '' ?>" data-slide-index="<?= $index ?>" aria-label="Show photo <?= $index + 1 ?>"></button>
               <?php endforeach; ?>
             </div>
           </div>
@@ -702,11 +708,11 @@ try {
       accountId: <?= json_encode((string)($_SESSION['tourist_id'] ?? '')) ?>
     };
   </script>
-  <script src="js/header.js?v=<?= (int)@filemtime(__DIR__ . '/../js/header.js') ?>"></script>
-  <script src="js/recently_viewed.js?v=<?= (int)@filemtime(__DIR__ . '/../js/recently_viewed.js') ?>"></script>
-  <script src="js/featured-viewport-video.js?v=<?= (int)@filemtime(__DIR__ . '/../js/featured-viewport-video.js') ?>"></script>
-  <script src="js/homepage.js?v=<?= (int)@filemtime(__DIR__ . '/../js/homepage.js') ?>"></script>
-  <script src="js/back-to-top.js?v=<?= (int)@filemtime(__DIR__ . '/../js/back-to-top.js') ?>"></script>
+  <script defer src="js/header.js?v=<?= (int)@filemtime(__DIR__ . '/../js/header.js') ?>"></script>
+  <script defer src="js/recently_viewed.js?v=<?= (int)@filemtime(__DIR__ . '/../js/recently_viewed.js') ?>"></script>
+  <script defer src="js/featured-viewport-video.js?v=<?= (int)@filemtime(__DIR__ . '/../js/featured-viewport-video.js') ?>"></script>
+  <script defer src="js/homepage.js?v=<?= (int)@filemtime(__DIR__ . '/../js/homepage.js') ?>"></script>
+  <script defer src="js/back-to-top.js?v=<?= (int)@filemtime(__DIR__ . '/../js/back-to-top.js') ?>"></script>
 </body>
 </html>
 <?php exit; ?>

@@ -60,5 +60,5 @@ function FeaturedMediaVideoHtml(string $path, bool $public=false): string
     $provider=$media['provider']??(str_starts_with($media['url'],'https://www.youtube-nocookie.com/')?'youtube':(str_starts_with($media['url'],'https://player.vimeo.com/')?'vimeo':''));
     $url=htmlspecialchars($media['url'],ENT_QUOTES,'UTF-8');
     if($media['kind']==='embed')return '<iframe class="featured-video-embed" data-media-provider="'.htmlspecialchars($provider,ENT_QUOTES,'UTF-8').'" src="'.$url.'" title="Featured Mercedes video" loading="lazy" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>';
-    return '<video src="'.$url.'" controls'.($public?'':' muted').' playsinline preload="metadata"'.($public?' loop data-viewport-video':'').'></video>';
+    return '<video '.($public?'data-video-src':'src').'="'.$url.'" controls'.($public?'':' muted').' playsinline preload="'.($public?'none':'metadata').'"'.($public?' loop data-viewport-video':'').'></video>';
 }

@@ -2,10 +2,11 @@
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm'),assert=require('node:assert/strict');
 const code=fs.readFileSync(path.join(__dirname,'../js/featured-viewport-video.js'),'utf8');
 function fixture(type){
- const counts={play:0,pause:0,mute:0};let intersection;const events={},windowEvents={};
+ const counts={play:0,pause:0,mute:0,load:0};let intersection;const events={},windowEvents={};
  const source=type==='drive'?'https://drive.google.com/file/d/Example_Drive_File_12345/preview':type==='youtube'?'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ':'https://player.vimeo.com/video/12345?h=private';
  const frame={dataset:{mediaProvider:type==='drive'?'google_drive':type},src:source,getAttribute(){return this.src;}};
- const video={muted:false,autoplay:true,playsInline:false,removeAttribute(){},play(){counts.play++;return Promise.resolve();},pause(){counts.pause++;},addEventListener(name,callback){events[name]=callback;}};
+ const attributes={'data-video-src':'uploads/featured/video.mp4'};
+ const video={muted:false,autoplay:true,playsInline:false,getAttribute(name){return attributes[name]||null;},removeAttribute(name){delete attributes[name];},load(){counts.load++;},play(){counts.play++;return Promise.resolve();},pause(){counts.pause++;},addEventListener(name,callback){events[name]=callback;}};
  let soundButton;const box={appendChild(element){soundButton=element;},dataset:{},querySelector:selector=>selector==='video'?(type==='native'?video:null):type==='native'?null:frame};
  const document={createElement(){return {hidden:false,addEventListener(name,callback){this[name]=callback;}};},hidden:false,querySelector:()=>box,addEventListener(name,callback){events[name]=callback;},head:{appendChild(){throw new Error('Unexpected remote SDK load in fixture');}}};
  const window={IntersectionObserver:true,location:{href:'https://example.com/',origin:'https://example.com'},addEventListener(name,callback){windowEvents[name]=callback;}};
@@ -17,7 +18,8 @@ function fixture(type){
 }
 (async()=>{
  const native=fixture('native');assert.equal(native.counts.play,0);assert.equal(native.video.muted,false);assert.equal(native.video.autoplay,false);
- native.visible(.6);assert.equal(native.counts.play,1);native.visible(.05);assert.ok(native.counts.pause>=2);
+ assert.equal(native.video.src,undefined);assert.equal(native.counts.load,0,'Offscreen media must not load');
+ native.visible(.6);assert.equal(native.counts.play,1);assert.equal(native.video.src,'uploads/featured/video.mp4');assert.equal(native.counts.load,1);native.visible(.05);assert.ok(native.counts.pause>=2);
  native.visible(.7);const plays=native.counts.play;native.document.hidden=true;native.events.visibilitychange();const pauses=native.counts.pause;assert.ok(pauses>=3);assert.equal(native.counts.play,plays);
  native.document.hidden=false;native.events.visibilitychange();assert.equal(native.counts.play,plays+1);native.windowEvents.pagehide();assert.ok(native.counts.pause>pauses);native.windowEvents.pageshow();assert.equal(native.counts.play,plays+2);
  const blocked=fixture('native');blocked.video.play=()=>Promise.reject(Object.assign(new Error('Gesture required'),{name:'NotAllowedError'}));blocked.visible(.7);await Promise.resolve();assert.equal(blocked.soundButton.hidden,false);blocked.visible(0);assert.equal(blocked.soundButton.hidden,true);blocked.visible(.7);await Promise.resolve();let clicked=false;blocked.video.play=()=>{clicked=true;blocked.events.playing();return Promise.resolve();};blocked.soundButton.click();assert.equal(clicked,true);assert.equal(blocked.video.muted,false);assert.equal(blocked.soundButton.hidden,true);

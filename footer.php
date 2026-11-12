@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/php/public_image_helper.php';
 if (session_status() === PHP_SESSION_NONE) {
     require_once __DIR__ . '/php/session_security.php';
     AppSessionStart();
@@ -16,9 +17,9 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
-  <link rel="stylesheet" href="styles/complaint-modal.css?v=<?= (int)@filemtime(__DIR__ . '/styles/complaint-modal.css') ?>">
-  <link rel="stylesheet" href="styles/legal-policy-modal.css?v=<?= (int)@filemtime(__DIR__ . '/styles/legal-policy-modal.css') ?>">
+  <link rel="stylesheet" media="print" onload="this.media='all'" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"><noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"></noscript>
+  <link rel="stylesheet" media="print" onload="this.media='all'" href="styles/complaint-modal.css?v=<?= (int)@filemtime(__DIR__ . '/styles/complaint-modal.css') ?>"><noscript><link rel="stylesheet" href="styles/complaint-modal.css?v=<?= (int)@filemtime(__DIR__ . '/styles/complaint-modal.css') ?>"></noscript>
+  <link rel="stylesheet" media="print" onload="this.media='all'" href="styles/legal-policy-modal.css?v=<?= (int)@filemtime(__DIR__ . '/styles/legal-policy-modal.css') ?>"><noscript><link rel="stylesheet" href="styles/legal-policy-modal.css?v=<?= (int)@filemtime(__DIR__ . '/styles/legal-policy-modal.css') ?>"></noscript>
   <link rel="stylesheet" href="styles/cookie-consent-banner.css?v=<?= (int)@filemtime(__DIR__ . '/styles/cookie-consent-banner.css') ?>">
 </head>
 
@@ -39,17 +40,17 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
       <!-- BRAND AND COLLABORATORS -->
       <div class="footer-section footer-logos">
         <div class="footer-brand" aria-label="iTour Mercedes">
-          <img class="footer-brand__icon" width="6250" height="6250" src="img/newlogo-ui-v1.png" alt="" loading="lazy" onerror="this.onerror=null;this.src='img/newlogo.png';">
+          <img class="footer-brand__icon" width="6250" height="6250" src="<?= htmlspecialchars(PublicImageUrl('img/newlogo-ui-v1.png'), ENT_QUOTES, 'UTF-8') ?>" alt="" loading="lazy" onerror="this.onerror=null;this.src='img/newlogo.png';">
           <div class="footer-brand__copy">
-            <img class="footer-brand__wordmark" width="642" height="163" src="img/textlogo2-white.png" alt="iTour Mercedes" loading="lazy">
+            <img class="footer-brand__wordmark" width="642" height="163" src="<?= htmlspecialchars(PublicImageUrl('img/textlogo2-white.png'), ENT_QUOTES, 'UTF-8') ?>" alt="iTour Mercedes" loading="lazy">
             <span class="footer-brand__caption">ITOUR MERCEDES &middot; MERCEDES TOURISM OFFICE</span>
           </div>
         </div>
         <div class="footer-collaborators">
           <p>In collaboration with</p>
           <div class="footer-collaborators__logos">
-            <img width="512" height="512" src="img/mercedeslogo.png" alt="Municipality of Mercedes official seal" loading="lazy">
-            <img width="500" height="500" src="img/TourismLogo.png" alt="Municipal Tourism Development Operation Center logo" loading="lazy">
+            <img width="512" height="512" src="<?= htmlspecialchars(PublicImageUrl('img/mercedeslogo.png'), ENT_QUOTES, 'UTF-8') ?>" alt="Municipality of Mercedes official seal" loading="lazy">
+            <img width="500" height="500" src="<?= htmlspecialchars(PublicImageUrl('img/TourismLogo.png'), ENT_QUOTES, 'UTF-8') ?>" alt="Municipal Tourism Development Operation Center logo" loading="lazy">
           </div>
         </div>
       </div>
@@ -243,8 +244,8 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
       <header class="developers-modal__header">
         <div class="developers-modal__header-content">
           <div class="developers-modal__brand" aria-label="iTour Mercedes">
-            <img class="developers-modal__brand-logo" width="6250" height="6250" src="img/newlogo-ui-v1.png" alt="iTour Mercedes logo" loading="lazy" onerror="this.onerror=null;this.src='img/newlogo.png';">
-            <img class="developers-modal__wordmark" width="642" height="163" src="img/textlogo2-white.png" alt="iTour Mercedes" loading="lazy">
+            <img class="developers-modal__brand-logo" width="6250" height="6250" src="<?= htmlspecialchars(PublicImageUrl('img/newlogo-ui-v1.png'), ENT_QUOTES, 'UTF-8') ?>" alt="iTour Mercedes logo" loading="lazy" onerror="this.onerror=null;this.src='img/newlogo.png';">
+            <img class="developers-modal__wordmark" width="642" height="163" src="<?= htmlspecialchars(PublicImageUrl('img/textlogo2-white.png'), ENT_QUOTES, 'UTF-8') ?>" alt="iTour Mercedes" loading="lazy">
           </div>
           <div class="developers-modal__heading">
             <h2 id="developersModalTitle">Development Team</h2>
@@ -256,7 +257,7 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
 
       <div class="developers-modal__grid">
         <article class="developer-profile-card">
-          <div class="developer-profile-avatar"><img width="1254" height="1254" src="img/jaspher.png" alt="John Jaspher O. Dela Pacion" loading="lazy"></div>
+          <div class="developer-profile-avatar"><img width="1254" height="1254" src="<?= htmlspecialchars(PublicImageUrl('img/jaspher.png'), ENT_QUOTES, 'UTF-8') ?>" alt="John Jaspher O. Dela Pacion" loading="lazy"></div>
           <div class="developer-profile-details">
             <span class="developer-profile-role"><i class="fa-solid fa-code" aria-hidden="true"></i> Platform Developer</span>
             <h3>John Jaspher O. Dela Pacion</h3>
@@ -268,7 +269,7 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
           </div>
         </article>
         <article class="developer-profile-card">
-          <div class="developer-profile-avatar"><img width="1563" height="1563" src="img/jacqueline.png" alt="Jacqueline Alyzza G. Asis" loading="lazy"></div>
+          <div class="developer-profile-avatar"><img width="1563" height="1563" src="<?= htmlspecialchars(PublicImageUrl('img/jacqueline.png'), ENT_QUOTES, 'UTF-8') ?>" alt="Jacqueline Alyzza G. Asis" loading="lazy"></div>
           <div class="developer-profile-details">
             <span class="developer-profile-role"><i class="fa-solid fa-code" aria-hidden="true"></i> Platform Developer</span>
             <h3>Jacqueline Alyzza G. Asis</h3>
@@ -280,7 +281,7 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
           </div>
         </article>
         <article class="developer-profile-card">
-          <div class="developer-profile-avatar"><img width="1254" height="1254" src="img/oliver.png" alt="Mark Oliver Coronel" loading="lazy"></div>
+          <div class="developer-profile-avatar"><img width="1254" height="1254" src="<?= htmlspecialchars(PublicImageUrl('img/oliver.png'), ENT_QUOTES, 'UTF-8') ?>" alt="Mark Oliver Coronel" loading="lazy"></div>
           <div class="developer-profile-details">
             <span class="developer-profile-role"><i class="fa-solid fa-code" aria-hidden="true"></i> Platform Developer</span>
             <h3>Mark Oliver Coronel</h3>
@@ -302,9 +303,9 @@ $complaintCsrf = $complaintLoggedIn ? complaintCsrfToken() : '';
       endpoint: 'php/submit_complaint_incident.php'
     };
   </script>
-  <script src="js/complaint-modal.js?v=<?= (int)@filemtime(__DIR__ . '/js/complaint-modal.js') ?>"></script>
-  <script src="js/legal-policy-modal.js?v=<?= (int)@filemtime(__DIR__ . '/js/legal-policy-modal.js') ?>"></script>
-  <script src="js/cookie-consent-banner.js?v=<?= (int)@filemtime(__DIR__ . '/js/cookie-consent-banner.js') ?>"></script>
+  <script defer src="js/complaint-modal.js?v=<?= (int)@filemtime(__DIR__ . '/js/complaint-modal.js') ?>"></script>
+  <script defer src="js/legal-policy-modal.js?v=<?= (int)@filemtime(__DIR__ . '/js/legal-policy-modal.js') ?>"></script>
+  <script defer src="js/cookie-consent-banner.js?v=<?= (int)@filemtime(__DIR__ . '/js/cookie-consent-banner.js') ?>"></script>
   <script>
     (() => {
       const trigger = document.getElementById('developersModalTrigger');

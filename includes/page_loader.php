@@ -1,10 +1,11 @@
+<?php require_once __DIR__ . '/../php/public_image_helper.php'; ?>
 <div class="itour-page-loader" id="itourPageLoader" role="status" aria-live="polite" aria-label="Loading page">
   <div class="itour-loader-scene" aria-hidden="true">
     <svg class="itour-loader-route" viewBox="0 0 184 184" focusable="false">
       <circle cx="92" cy="92" r="78"/>
     </svg>
     <span class="itour-loader-logo-halo"></span>
-    <img class="itour-loader-logo" src="img/newlogo-pdf.png" alt="" width="86" height="86" loading="eager" decoding="sync" fetchpriority="high">
+    <img class="itour-loader-logo" src="<?= htmlspecialchars(PublicImageUrl('img/newlogo-pdf.png'), ENT_QUOTES, 'UTF-8') ?>" alt="" width="86" height="86" loading="eager" decoding="sync" fetchpriority="high">
     <span class="itour-loader-orbit">
       <svg class="itour-loader-boat" viewBox="0 0 64 44" focusable="false">
         <path class="itour-loader-boat-sail" d="M30 5v20H12L30 5Z"/>
@@ -17,7 +18,7 @@
 
   <div class="itour-loader-copy">
     <span class="itour-loader-wordmark">
-      <img src="img/textlogo2-transparent.png" alt="iTour Mercedes" width="642" height="163" loading="eager" decoding="sync" fetchpriority="high">
+      <img src="<?= htmlspecialchars(PublicImageUrl('img/textlogo2-transparent.png'), ENT_QUOTES, 'UTF-8') ?>" alt="iTour Mercedes" width="642" height="163" loading="eager" decoding="sync" fetchpriority="high">
       <span class="itour-loader-wordmark-light" aria-hidden="true"></span>
     </span>
     <span class="itour-loader-caption">Preparing your experience</span>

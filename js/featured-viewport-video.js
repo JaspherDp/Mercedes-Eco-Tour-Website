@@ -39,7 +39,12 @@
     soundButton.addEventListener('click',()=>{video.muted=false;apply();});
     video.addEventListener('playing',()=>{soundButton.hidden=!video.muted;if(video.muted)soundButton.textContent='Turn sound on';});
     video.addEventListener('volumechange',()=>{soundButton.hidden=!video.muted||!shouldPlay();if(video.muted)soundButton.textContent='Turn sound on';});
-    controller={play:()=>video.play(),pause:()=>video.pause()};
+    controller={play:()=>{
+      // Keep the large media URL out of src until playback is actually needed.
+      const source=video.getAttribute('data-video-src');
+      if(source){video.removeAttribute('data-video-src');video.src=source;video.load();}
+      return video.play();
+    },pause:()=>video.pause()};
     video.addEventListener('loadedmetadata',apply);video.addEventListener('play',()=>{if(!shouldPlay())video.pause();});
   }else{
     const source=new URL(frame.getAttribute('src'),window.location.href);

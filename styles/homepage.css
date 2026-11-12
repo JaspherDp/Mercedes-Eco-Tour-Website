@@ -64,7 +64,7 @@ body {
 
 .homepage {
   background-color: #fff;
-  background-image: url("../img/HomeBG.png");
+  background-image: url("../img/HomeBG.home.webp");
   background-repeat: repeat-y;
   background-position: center top;
   background-size: 100% auto;
@@ -163,7 +163,7 @@ img { max-width: 100%; }
   align-items: center;
   overflow: visible;
   isolation: isolate;
-  background: url("../img/herohomepage2.png") center 48% / cover no-repeat;
+  background: url("../img/herohomepage2.home.webp") center 48% / cover no-repeat;
 }
 
 .home-hero::before,
@@ -2095,7 +2095,7 @@ img { max-width: 100%; }
     padding: 38px 20px 58px;
     background:
       linear-gradient(180deg, rgba(4, 36, 30, .32), rgba(4, 45, 37, .76)),
-      url("../img/herohomepage2.png") 62% 45% / cover no-repeat;
+      url("../img/herohomepage2.home.webp") 62% 45% / cover no-repeat;
   }
 
   .homepage .hero-eyebrow {

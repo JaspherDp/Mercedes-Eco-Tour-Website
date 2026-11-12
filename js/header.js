@@ -62,7 +62,7 @@ function ensureGlobalAuthModal() {
       await loadScriptOnce("https://cdn.jsdelivr.net/npm/sweetalert2@11", "sweetalert2", () => !!window.Swal);
     }
 
-    const response = await fetch("logsign-modal.html?v=16");
+    const response = await fetch("logsign-modal.html?v=17");
     if (!response.ok) {
       throw new Error(`Failed to load auth modal markup (${response.status})`);
     }

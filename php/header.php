@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__ . '/public_image_helper.php';
 if (session_status() === PHP_SESSION_NONE) {
     require_once __DIR__ . '/session_security.php';
     AppSessionStart();
@@ -187,7 +188,7 @@ function headSubnavResolveImage(?string $rawPath, string $fallback = 'img/sample
 {
     $candidate = trim((string)$rawPath);
     if ($candidate === '') {
-        return $fallback;
+        return PublicImageUrl($fallback);
     }
 
     if (preg_match('#^https?://#i', $candidate)) {
@@ -197,7 +198,7 @@ function headSubnavResolveImage(?string $rawPath, string $fallback = 'img/sample
     $cleanCandidate = ltrim(str_replace('\\', '/', $candidate), '/');
     $candidateFile = __DIR__ . '/../' . $cleanCandidate;
     if (is_file($candidateFile)) {
-        return $cleanCandidate;
+        return PublicImageUrl($cleanCandidate);
     }
 
     $basename = basename($candidate);
@@ -211,11 +212,11 @@ function headSubnavResolveImage(?string $rawPath, string $fallback = 'img/sample
 
     foreach ($relativeCandidates as $relativePath) {
         if (is_file(__DIR__ . '/../' . $relativePath)) {
-            return $relativePath;
+            return PublicImageUrl($relativePath);
         }
     }
 
-    return $fallback;
+    return PublicImageUrl($fallback);
 }
 
 function headSubnavDestinationKey(string $value): string
@@ -408,9 +409,9 @@ if (
     <!-- Mobile navigation and brand -->
     <div class="head-nav-left">
       <button type="button" class="head-nav-mobile-toggle" id="headNavMobileToggle" aria-label="Open navigation menu" aria-expanded="false" aria-controls="headNavPrimary"><span class="hamburger" aria-hidden="true"><span class="bar"></span><span class="bar"></span><span class="bar"></span></span></button>
-      <img src="img/TourismLogo.png" class="head-nav-logo head-nav-tourism-logo" width="45" height="45" alt="Municipal Tourism Office of Mercedes">
-      <img src="img/newlogo-ui-v1.png" class="head-nav-logo" alt="Mercedes tourism logo" onerror="this.onerror=null;this.src='img/newlogo.png';">
-      <img src="img/textlogo2.png" class="head-navtext-logo" alt="iTour Mercedes">
+      <img src="<?= htmlspecialchars(PublicImageUrl('img/TourismLogo.png'), ENT_QUOTES, 'UTF-8') ?>" class="head-nav-logo head-nav-tourism-logo" width="45" height="45" alt="Municipal Tourism Office of Mercedes">
+      <img src="<?= htmlspecialchars(PublicImageUrl('img/newlogo-ui-v1.png'), ENT_QUOTES, 'UTF-8') ?>" class="head-nav-logo" alt="Mercedes tourism logo" onerror="this.onerror=null;this.src='img/newlogo.png';">
+      <img src="<?= htmlspecialchars(PublicImageUrl('img/textlogo2.png'), ENT_QUOTES, 'UTF-8') ?>" class="head-navtext-logo" alt="iTour Mercedes">
     </div>
 
     <!-- RIGHT GROUP -->
@@ -465,7 +466,7 @@ if (
            data-notif-title="Booking Submitted"
            data-notif-message="<?= htmlspecialchars($bookingNotifMessage) ?>">
         <button class="head-nav-notif-btn" id="headNavNotifBtn" type="button" aria-expanded="false" aria-label="Notifications">
-          <img src="img/notificon.png" alt="Notifications">
+          <img src="<?= htmlspecialchars(PublicImageUrl('img/notificon.png'), ENT_QUOTES, 'UTF-8') ?>" alt="Notifications">
           <?php if ($notifCount > 0): ?>
             <span class="head-nav-notif-badge" id="headNavNotifBadge"><?= $notifCount ?></span>
           <?php endif; ?>
@@ -498,7 +499,7 @@ if (
                   onerror="this.onerror=null;this.style.display='none';var fallback=this.parentElement.querySelector('.head-nav-profile-fallback');if(fallback){fallback.style.display='inline-flex';}">
               <?php endif; ?>
               <span class="head-nav-profile-fallback"<?= $profileImage !== '' ? ' style="display:none;"' : '' ?>><?= htmlspecialchars($profileInitial, ENT_QUOTES, 'UTF-8') ?></span>
-              <img src="img/dropdownicon3.png" class="head-nav-dropdown-arrow" alt="" aria-hidden="true">
+              <img src="<?= htmlspecialchars(PublicImageUrl('img/dropdownicon3.png'), ENT_QUOTES, 'UTF-8') ?>" class="head-nav-dropdown-arrow" alt="" aria-hidden="true">
             </div>
 
             <div class="head-nav-profile-dropdown" id="profileDropdown">
@@ -614,7 +615,7 @@ if (
   <span class="head-subnav-separator">|</span>
 
   <a href="hotel_resorts.php?tab=tours" class="head-subnav-btn">
-    <img src="img/bookingicon.png" class="head-subnav-icon">
+    <img src="<?= htmlspecialchars(PublicImageUrl('img/bookingicon.png'), ENT_QUOTES, 'UTF-8') ?>" class="head-subnav-icon" alt="">
     Book a Tour
   </a>
 </div>

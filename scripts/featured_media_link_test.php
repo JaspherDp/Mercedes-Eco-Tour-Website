@@ -19,6 +19,7 @@ $html=FeaturedMediaVideoHtml('https://www.youtube.com/watch?v=dQw4w9WgXcQ',true)
 mediaCheck(str_contains($html,'<iframe')&&str_contains($html,'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ'),'Public linked YouTube uses an iframe');
 mediaCheck(str_contains(FeaturedMediaVideoHtml('uploads/featured/video.mp4',true),'loop data-viewport-video')&&!str_contains(FeaturedMediaVideoHtml('uploads/featured/video.mp4',true),' autoplay'),'Public uploaded video delegates autoplay to viewport controls and retains looping');
 mediaCheck(!str_contains(FeaturedMediaVideoHtml('uploads/featured/video.mp4',true),' muted'),'Homepage videos default to sound enabled');
+mediaCheck(str_contains(FeaturedMediaVideoHtml('uploads/featured/video.mp4',true),'data-video-src="uploads/featured/video.mp4"') && str_contains(FeaturedMediaVideoHtml('uploads/featured/video.mp4',true),'preload="none"') && !preg_match('/\ssrc=/',FeaturedMediaVideoHtml('uploads/featured/video.mp4',true)),'Homepage media has no downloadable src until it enters view');
 mediaCheck(str_contains(FeaturedMediaVideoHtml('https://cdn.example.com/file.mp4?x=1&y=2'),'&amp;y=2'),'Direct video attributes escape query parameters');
 mediaCheck(!str_contains(FeaturedMediaVideoHtml('javascript:alert(1)'),'javascript:'),'Unsafe stored video source falls back');
 $driveId='Example_Drive_File_12345';
