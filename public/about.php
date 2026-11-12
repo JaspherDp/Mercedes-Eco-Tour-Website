@@ -57,7 +57,7 @@ try {
 
       <div class="about-profile-grid">
         <figure class="about-profile-image">
-          <img src="img/mercedes-hall.png" alt="Mercedes Municipal Hall and Tourism Office" decoding="async" fetchpriority="high">
+          <img src="img/tourismoffie.jpg" alt="Mercedes Municipal Hall and Tourism Office" decoding="async" fetchpriority="high">
           <div class="about-profile-shade"></div>
           <figcaption><small>Municipal Tourism Office</small><strong>Your local gateway to Mercedes</strong><span>Visitor information &bull; Planning assistance &bull; Local coordination</span></figcaption>
           <div class="about-profile-status"><i aria-hidden="true"></i><span><strong>Open weekdays</strong><small>8:00 AM&ndash;5:00 PM</small></span></div>

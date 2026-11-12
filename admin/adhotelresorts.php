@@ -14,7 +14,7 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'fetch') {
     $search = trim($_GET['search'] ?? '');
     $status = $_GET['status'] ?? 'all';
     $type = $_GET['type'] ?? 'all';
-    $sort = $_GET['sort'] ?? 'id_desc';
+    $sort = $_GET['sort'] ?? 'id_asc';
     $rows = (int)($_GET['rows'] ?? 25);
 
     $where = [];
@@ -37,10 +37,10 @@ if (isset($_GET['ajax']) && $_GET['ajax'] === 'fetch') {
 
     $whereSql = $where ? "WHERE " . implode(" AND ", $where) : "";
 
-    $order = "hr.hotel_resort_id DESC";
+    $order = "hr.created_at DESC, hr.hotel_resort_id DESC";
     if ($sort === 'name_asc') $order = "hr.name ASC";
     if ($sort === 'name_desc') $order = "hr.name DESC";
-    if ($sort === 'id_asc') $order = "hr.hotel_resort_id ASC";
+    if ($sort === 'id_asc') $order = "hr.created_at ASC, hr.hotel_resort_id ASC";
 
     $sql = "SELECT hr.hotel_resort_id, hr.name, hr.island, hr.type, hr.status,
                    hr.price, hr.popular, hr.image_path, hr.description_text, hr.created_at, hr.updated_at,
@@ -180,7 +180,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['reset_hotel_password'
             $hotelId
         );
 
-        echo json_encode(['success' => true, 'message' => 'The Hotel Owner password was reset successfully.']);
+        echo json_encode(['success' => true, 'message' => 'The Hotel Owner password was changed successfully.']);
         exit;
     } catch (InvalidArgumentException $e) {
         http_response_code(422);
@@ -393,7 +393,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_hotel_account']))
 $search = trim((string)($_GET['search'] ?? ''));
 $statusFilter = strtolower(trim((string)($_GET['status'] ?? 'all')));
 $typeFilter = strtolower(trim((string)($_GET['type'] ?? 'all')));
-$sortBy = $_GET['sort'] ?? 'id_desc';
+$sortBy = $_GET['sort'] ?? 'id_asc';
 $rowsPerPage = (int)($_GET['rows'] ?? 25);
 if ($rowsPerPage < 1) $rowsPerPage = 25;
 if ($rowsPerPage > 300) $rowsPerPage = 300;
@@ -418,7 +418,7 @@ if ($typeFilter !== 'all') {
 
 $whereSql = !empty($where) ? 'WHERE ' . implode(' AND ', $where) : '';
 
-$orderClause = 'hr.hotel_resort_id DESC';
+$orderClause = 'hr.created_at DESC, hr.hotel_resort_id DESC';
 switch ($sortBy) {
     case 'name_asc':
         $orderClause = 'hr.name ASC';
@@ -427,11 +427,11 @@ switch ($sortBy) {
         $orderClause = 'hr.name DESC';
         break;
     case 'id_asc':
-        $orderClause = 'hr.hotel_resort_id ASC';
+        $orderClause = 'hr.created_at ASC, hr.hotel_resort_id ASC';
         break;
     case 'id_desc':
     default:
-        $orderClause = 'hr.hotel_resort_id DESC';
+        $orderClause = 'hr.created_at DESC, hr.hotel_resort_id DESC';
 }
 
 $sql = "SELECT hr.hotel_resort_id, hr.name, hr.type, hr.island, hr.status,
@@ -460,6 +460,7 @@ $sql = "SELECT hr.hotel_resort_id, hr.name, hr.type, hr.island, hr.status,
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $hotels = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$mostHotelBookings = $hotels ? max(array_map('intval', array_column($hotels, 'booking_count'))) : 0;
 $propertySummary = $pdo->query("
     SELECT COUNT(*) AS total,
            SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active,
@@ -1219,6 +1220,18 @@ body {
   background: #f9fcfb !important;
 }
 
+.hotel-booking-legend { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.hotel-booking-legend span { padding: 4px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; }
+.hotel-booking-legend .most-booked,
+.hotel-admin-main .hotels-table .booking-performance.most-booked > td { background: #dff3e7; }
+.hotel-booking-legend .moderate,
+.hotel-admin-main .hotels-table .booking-performance.moderate > td { background: #fff4cc; }
+.hotel-booking-legend .no-bookings,
+.hotel-admin-main .hotels-table .booking-performance.no-bookings > td { background: #fde6e8; }
+.hotel-booking-legend .most-booked { color: #174b33; }
+.hotel-booking-legend .moderate { color: #674c10; }
+.hotel-booking-legend .no-bookings { color: #822f3d; }
+
 .property-cell {
   display: flex;
   align-items: center;
@@ -1243,6 +1256,10 @@ body {
   background: #fff5e3;
   border-color: #f2dfb9;
 }
+
+.property-avatar { overflow: hidden; }
+.property-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.hotels-table .capsule.hotel, .hotels-table .capsule.resort { text-transform: uppercase; }
 
 .property-avatar svg {
   width: 19px;
@@ -1348,6 +1365,7 @@ body {
 .view-property-btn:hover { background: #edf6f2; border-color: #a9cdbf; }
 .view-property-btn svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8; }
 .reset-owner-password-btn { min-height: 34px; display: inline-flex; align-items: center; gap: 6px; margin-right: 6px; padding: 0 10px; border: 1px solid #cde0d9; border-radius: 9px; background: #f4faf7; color: #286650; font: 750 9.5px Inter, sans-serif; cursor: pointer; }
+.reset-owner-password-btn:disabled { opacity: .5; cursor: not-allowed; }
 .reset-owner-password-btn:hover { background: #e8f4ef; border-color: #a9cdbf; }
 .reset-owner-password-btn svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
 
@@ -1823,6 +1841,7 @@ body.property-dialog-open { overflow: hidden; }
           <div class="hotel-directory-heading">
             <h3>Hotel and resort directory</h3>
             <p>Property details and owner login access</p>
+            <div class="hotel-booking-legend" aria-label="All-time booking totals among shown properties"><span class="most-booked">Most booked</span><span class="moderate">Moderate</span><span class="no-bookings">No bookings</span></div>
           </div>
           <form method="GET" id="filterForm" class="filter-controls">
             <label class="hotel-toolbar-search">
@@ -1871,12 +1890,13 @@ body.property-dialog-open { overflow: hidden; }
 
               <?php foreach ($hotels as $hotel): ?>
 
-                <tr>
+                <?php $bookingPerformance = (int)$hotel['booking_count'] === 0 ? 'no-bookings' : ((int)$hotel['booking_count'] === $mostHotelBookings ? 'most-booked' : 'moderate'); ?>
+                <tr class="booking-performance <?= $bookingPerformance ?>">
 
                   <td>
                     <div class="property-cell">
                       <span class="property-avatar <?= strtolower((string)$hotel['type']) ?>" aria-hidden="true">
-                        <svg viewBox="0 0 24 24"><path d="M4 20V8l8-4 8 4v12M8 20v-7h8v7"/></svg>
+                        <img src="<?= htmlspecialchars(trim((string)($hotel['image_path'] ?? '')) ?: 'img/sampleimage.png', ENT_QUOTES, 'UTF-8') ?>" alt="" loading="lazy" onerror="this.onerror=null;this.src='img/sampleimage.png';">
                       </span>
                       <span class="property-meta">
                         <strong><?= htmlspecialchars((string)$hotel['name']) ?></strong>
@@ -1887,7 +1907,7 @@ body.property-dialog-open { overflow: hidden; }
 
                   <td>
                     <span class="capsule <?= strtolower((string)$hotel['type']) ?>">
-                      <?= htmlspecialchars(ucfirst((string)$hotel['type'])) ?>
+                      <?= htmlspecialchars(strtoupper((string)$hotel['type'])) ?>
                     </span>
                   </td>
 
@@ -1930,11 +1950,10 @@ body.property-dialog-open { overflow: hidden; }
                         <a class="view-property-btn" role="menuitem" href="hotel_details.php?id=<?= (int)$hotel['hotel_resort_id'] ?>&amp;source=result" target="_blank" rel="noopener noreferrer" aria-label="Open <?= htmlspecialchars((string)$hotel['name']) ?> live property page in a new tab">
                           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>View property
                         </a>
-                        <?php if (trim((string)($hotel['username'] ?? '')) !== ''): ?>
-                          <button type="button" role="menuitem" class="reset-owner-password-btn" data-hotel-id="<?= (int)$hotel['hotel_resort_id'] ?>" data-property-name="<?= htmlspecialchars((string)$hotel['name'], ENT_QUOTES, 'UTF-8') ?>">
-                            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v2"/></svg>Reset password
+                        <?php $hasOwnerAccount = trim((string)($hotel['username'] ?? '')) !== ''; ?>
+                          <button type="button" role="menuitem" class="reset-owner-password-btn" <?= $hasOwnerAccount ? '' : 'disabled title="No owner account is linked to this property."' ?> data-hotel-id="<?= (int)$hotel['hotel_resort_id'] ?>" data-property-name="<?= htmlspecialchars((string)$hotel['name'], ENT_QUOTES, 'UTF-8') ?>">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v2"/></svg>Change password
                           </button>
-                        <?php endif; ?>
                         <button type="button" role="menuitem" class="toggle-status-btn <?= $hotel['status'] === 'active' ? 'is-deactivate' : 'is-activate' ?>" data-hotel-id="<?= (int)$hotel['hotel_resort_id'] ?>" data-current-status="<?= htmlspecialchars((string)$hotel['status']) ?>">
                           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5M12 16h.01"/></svg><?= $hotel['status'] === 'active' ? 'Deactivate' : 'Activate' ?>
                         </button>
@@ -1989,8 +2008,8 @@ body.property-dialog-open { overflow: hidden; }
 <div class="modal property-modal-overlay" id="resetHotelPasswordModal" aria-hidden="true">
   <section class="property-modal password-reset-modal" role="dialog" aria-modal="true" aria-labelledby="resetHotelPasswordTitle">
     <header class="property-modal-header">
-      <div><span>OWNER PORTAL SECURITY</span><h3 id="resetHotelPasswordTitle">Reset Hotel Owner Password</h3><p>Set a new login password for this property's owner account.</p></div>
-      <button type="button" class="property-modal-close" id="closeResetPasswordModal" aria-label="Close password reset form"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
+      <div><span>OWNER PORTAL SECURITY</span><h3 id="resetHotelPasswordTitle">Change Hotel Owner Password</h3><p>Set a new login password for this property's owner account.</p></div>
+      <button type="button" class="property-modal-close" id="closeResetPasswordModal" aria-label="Close password change form"><svg viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg></button>
     </header>
     <form method="POST" action="adhotelresorts.php" autocomplete="off" id="resetHotelPasswordForm">
       <input type="hidden" name="reset_hotel_password" value="1">
@@ -2002,7 +2021,7 @@ body.property-dialog-open { overflow: hidden; }
         <label><span>Confirm new password <b>*</b></span><div class="property-password"><input type="password" name="confirm_password" minlength="8" required autocomplete="new-password" placeholder="Repeat the new password"><button type="button" class="property-password-toggle" aria-label="Show password" aria-pressed="false"><svg class="eye-open" viewBox="0 0 24 24"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg><svg class="eye-off" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.6 6.2A10.7 10.7 0 0 1 12 6c6 0 9.5 6 9.5 6s-.8 1.4-2.3 2.9M6.1 6.1C3.8 7.8 2.5 12 2.5 12s3.5 6 9.5 6a10.7 10.7 0 0 0 3.4-.5"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg></button></div></label>
       </div>
       <div class="password-reset-error" id="resetHotelPasswordError" role="alert"></div>
-      <footer><button type="button" class="property-modal-cancel" id="cancelResetPasswordModal">Cancel</button><button type="submit" class="property-modal-submit"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Reset Password</button></footer>
+      <footer><button type="button" class="property-modal-cancel" id="cancelResetPasswordModal">Cancel</button><button type="submit" class="property-modal-submit"><svg viewBox="0 0 24 24"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Change Password</button></footer>
     </form>
   </section>
 </div>
@@ -2179,7 +2198,7 @@ function loadHotels() {
     search: searchInput?.value || '',
     status: statusSelect?.value || 'all',
     type: typeSelect?.value || 'all',
-    sort: sortSelect?.value || 'id_desc',
+    sort: sortSelect?.value || 'id_asc',
     rows: rowsInput?.value || 25
   });
 
@@ -2219,7 +2238,10 @@ function loadHotels() {
         return;
       }
 
+      const mostHotelBookings = Math.max(0, ...data.map(h => Number(h.booking_count || 0)));
       data.forEach(h => {
+        const bookingCount = Number(h.booking_count || 0);
+        const bookingPerformance = bookingCount === 0 ? 'no-bookings' : (bookingCount === mostHotelBookings ? 'most-booked' : 'moderate');
         const type = String(h.type || 'hotel').toLowerCase();
         const typeClass = type === 'resort' ? 'resort' : 'hotel';
         const status = String(h.status || 'inactive').toLowerCase();
@@ -2229,17 +2251,17 @@ function loadHotels() {
         const username = escapeHtml(h.username || 'N/A');
 
         tbody.innerHTML += `
-          <tr>
+          <tr class="booking-performance ${bookingPerformance}">
             <td>
               <div class="property-cell">
-                <span class="property-avatar ${typeClass}">${propertyIcon}</span>
+                <span class="property-avatar ${typeClass}" aria-hidden="true"><img src="${escapeHtml(String(h.image_path || '').trim() || 'img/sampleimage.png')}" alt="" loading="lazy" onerror="this.onerror=null;this.src='img/sampleimage.png';"></span>
                 <span class="property-meta">
                   <strong>${name}</strong>
                   <small>${island}</small>
                 </span>
               </div>
             </td>
-            <td><span class="capsule ${typeClass}">${typeClass.charAt(0).toUpperCase() + typeClass.slice(1)}</span></td>
+            <td><span class="capsule ${typeClass}">${typeClass.toUpperCase()}</span></td>
             <td><div class="property-inventory"><strong>${Number(h.active_room_count || 0)} active room${Number(h.active_room_count || 0) === 1 ? '' : 's'}</strong><span>${Number(h.available_units || 0)} unit${Number(h.available_units || 0) === 1 ? '' : 's'} available</span></div></td>
             <td><div class="property-bookings"><strong>${Number(h.booking_count || 0).toLocaleString()}</strong><span>total booking${Number(h.booking_count || 0) === 1 ? '' : 's'}</span></div></td>
             <td><span class="capsule ${isActive ? 'active' : 'inactive'}">${isActive ? 'Active' : 'Inactive'}</span></td>
@@ -2249,7 +2271,7 @@ function loadHotels() {
                 <button type="button" class="property-actions-toggle" aria-haspopup="menu" aria-expanded="false">Actions <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m7 10 5 5 5-5"></path></svg></button>
                 <div class="property-actions-menu" role="menu">
                   <a class="view-property-btn" role="menuitem" href="hotel_details.php?id=${Number(h.hotel_resort_id) || 0}&source=result" target="_blank" rel="noopener noreferrer" aria-label="Open ${name} live property page in a new tab">${propertyIcon}<span>View property</span></a>
-                  ${h.username ? `<button type="button" role="menuitem" class="reset-owner-password-btn" data-hotel-id="${Number(h.hotel_resort_id) || 0}" data-property-name="${name}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v2"></path></svg>Reset password</button>` : ''}
+                  <button type="button" role="menuitem" class="reset-owner-password-btn" ${String(h.username || '').trim() ? '' : 'disabled title="No owner account is linked to this property."'} data-hotel-id="${Number(h.hotel_resort_id) || 0}" data-property-name="${name}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"></rect><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v2"></path></svg>Change password</button>
                   <button type="button" role="menuitem" class="toggle-status-btn ${isActive ? 'is-deactivate' : 'is-activate'}" data-hotel-id="${Number(h.hotel_resort_id) || 0}" data-current-status="${isActive ? 'active' : 'inactive'}"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5M12 16h.01"></path></svg>${isActive ? 'Deactivate' : 'Activate'}</button>
                 </div>
               </div>
@@ -2417,7 +2439,7 @@ resetPasswordForm?.addEventListener('submit', async event => {
 if (tbody) {
   tbody.addEventListener('click', async (e) => {
     const resetButton = e.target.closest('.reset-owner-password-btn');
-    if (resetButton) {
+    if (resetButton && !resetButton.disabled) {
       openResetPasswordModal(resetButton);
       return;
     }
