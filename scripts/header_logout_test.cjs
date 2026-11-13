@@ -6,10 +6,10 @@ function fixture(options={}) {
  const calls={loads:0,posts:[],confirm:0,alerts:0,dialogs:[],menuClose:0};
  const element=()=>({dataset:{},attrs:{},listeners:[],setAttribute(k,v){this.attrs[k]=v;},removeAttribute(k){delete this.attrs[k];},addEventListener(type,fn){this.listeners.push(fn);},click(){this.lastClick=this.listeners[0]({preventDefault(){},currentTarget:this});return this.lastClick;}});
  const button=element(),mobile=element();
- const dialog={async fire(config){calls.dialogs.push(config.icon);if(config.icon==='warning')return {isConfirmed:options.confirmed!==false};if(options.successDialogFails&&config.icon==='success')throw Error('Dialog failed');return {};}};
+ const dialog={async fire(config){calls.dialogs.push(config.icon);if(options.homepage!==false){assert.equal(config.scrollbarPadding,false,'Homepage dialogs must not add right padding');assert.equal(config.heightAuto,false);}else{assert.equal(config.scrollbarPadding,undefined,'Other pages retain their existing layout options');assert.equal(config.heightAuto,undefined);}if(config.icon==='warning')return {isConfirmed:options.confirmed!==false};if(options.successDialogFails&&config.icon==='success')throw Error('Dialog failed');return {};}};
  const window={location:{href:'original'},confirm(){calls.confirm++;return options.confirmed!==false;},alert(){calls.alerts++;},setTimeout(fn){if(options.cdn==='timeout')queueMicrotask(fn);return 1;},clearTimeout(){}};
  if(options.preloaded)window.Swal=dialog;
- const document={getElementById:id=>id==='logoutBtn'?button:id==='headNavMobileToggle'?{getAttribute:()=> 'true',click(){calls.menuClose++;}}:null,querySelectorAll:()=>[mobile]};
+ const document={body:{classList:{contains:()=>options.homepage!==false}},getElementById:id=>id==='logoutBtn'?button:id==='headNavMobileToggle'?{getAttribute:()=> 'true',click(){calls.menuClose++;}}:null,querySelectorAll:()=>[mobile]};
  const scope={window,document,console:{error(){}},loadScriptOnce:async()=>{calls.loads++;if(options.cdn==='fail')throw Error('CDN unavailable');if(options.cdn==='timeout')await new Promise(()=>{});window.Swal=dialog;},fetch:async(url,config)=>{calls.posts.push({url,config});if(options.networkFails)throw Error('Offline');return {ok:!options.serverFails};}};
  vm.createContext(scope);vm.runInContext(logoutCode,scope);
  const binding=source.slice(source.indexOf('    // Idempotent binding:'),source.indexOf('    // Scroll to top',source.indexOf('    // Idempotent binding:')));
@@ -19,7 +19,7 @@ function fixture(options={}) {
  return {scope,window,button,mobile,calls,dialog};
 }
 (async()=>{
- for(const options of [{preloaded:true},{},{cdn:'fail'},{cdn:'timeout'}]) {
+ for(const options of [{preloaded:true},{preloaded:true,homepage:false},{},{cdn:'fail'},{cdn:'timeout'}]) {
   const f=fixture(options);await f.button.click();assert.equal(f.calls.posts.length,1);assert.equal(f.calls.posts[0].url,'php/logout.php');assert.equal(f.calls.posts[0].config.method,'POST');assert.equal(f.calls.posts[0].config.credentials,'same-origin');assert.equal(f.window.location.href,'./');assert.equal(f.button.attrs['aria-busy'],undefined);assert.equal(f.calls.loads,options.preloaded?0:1);
  }
  for(const options of [{preloaded:true,confirmed:false},{cdn:'fail',confirmed:false}]){const f=fixture(options);await f.button.click();assert.equal(f.calls.posts.length,0);assert.equal(f.window.location.href,'original');}

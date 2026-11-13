@@ -99,6 +99,10 @@ async function headNavLogout(event) {
   button.dataset.logoutPending = "1";
   button.setAttribute("aria-busy", "true");
   let dialog = window.Swal?.fire ? window.Swal : null;
+  // This full-width page must not shrink when SweetAlert hides the scrollbar.
+  const dialogLayout = document.body?.classList.contains("homepage")
+    ? { scrollbarPadding: false, heightAuto: false }
+    : {};
   try {
     if (!dialog) {
       let timeout;
@@ -118,6 +122,7 @@ async function headNavLogout(event) {
     if (dialog) {
       try {
         confirmed = (await dialog.fire({
+          ...dialogLayout,
           title: 'Are you sure you want to log out?', icon: 'warning',
           showCancelButton: true, confirmButtonText: 'Yes, logout',
           cancelButtonText: 'Cancel', confirmButtonColor: '#2B7066', cancelButtonColor: '#D33'
@@ -128,7 +133,7 @@ async function headNavLogout(event) {
     const response = await fetch("php/logout.php", { method: "POST", credentials: "same-origin" });
     if (!response.ok) throw new Error("Logout request failed");
     if (dialog) {
-      try { await dialog.fire({ icon: 'success', title: 'Logged Out', text: 'You have been logged out.', confirmButtonColor: '#2B7066' }); }
+      try { await dialog.fire({ ...dialogLayout, icon: 'success', title: 'Logged Out', text: 'You have been logged out.', confirmButtonColor: '#2B7066' }); }
       catch (_) { /* Successful server logout still redirects if a dialog fails. */ }
     }
     window.location.href = "./";
@@ -136,7 +141,7 @@ async function headNavLogout(event) {
     console.error("Logout error:", error);
     const message = 'Unable to log out. Please try again.';
     if (dialog) {
-      try { await dialog.fire({ icon: 'error', title: 'Logout Failed', text: message, confirmButtonColor: '#2B7066' }); }
+      try { await dialog.fire({ ...dialogLayout, icon: 'error', title: 'Logout Failed', text: message, confirmButtonColor: '#2B7066' }); }
       catch (_) { window.alert(message); }
     } else window.alert(message);
   } finally {
