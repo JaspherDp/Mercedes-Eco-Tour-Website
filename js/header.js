@@ -91,6 +91,60 @@ function ensureGlobalAuthModal() {
   return window.__globalAuthModalPromise;
 }
 
+// Logout must work for signed-in visitors who never opened the lazy login form.
+async function headNavLogout(event) {
+  event.preventDefault();
+  const button = event.currentTarget || document.getElementById("logoutBtn");
+  if (!button || button.dataset.logoutPending === "1") return;
+  button.dataset.logoutPending = "1";
+  button.setAttribute("aria-busy", "true");
+  let dialog = window.Swal?.fire ? window.Swal : null;
+  try {
+    if (!dialog) {
+      let timeout;
+      try {
+        await Promise.race([
+          loadScriptOnce("https://cdn.jsdelivr.net/npm/sweetalert2@11", "sweetalert2", () => typeof window.Swal?.fire === "function"),
+          new Promise((_, reject) => { timeout = window.setTimeout(() => reject(new Error("Dialog load timed out")), 5000); })
+        ]);
+        dialog = window.Swal?.fire ? window.Swal : null;
+      } catch (_) {
+        // Native confirmation keeps logout available when the CDN is unavailable.
+      } finally {
+        window.clearTimeout(timeout);
+      }
+    }
+    let confirmed;
+    if (dialog) {
+      try {
+        confirmed = (await dialog.fire({
+          title: 'Are you sure you want to log out?', icon: 'warning',
+          showCancelButton: true, confirmButtonText: 'Yes, logout',
+          cancelButtonText: 'Cancel', confirmButtonColor: '#2B7066', cancelButtonColor: '#D33'
+        })).isConfirmed;
+      } catch (_) { confirmed = window.confirm('Are you sure you want to log out?'); }
+    } else confirmed = window.confirm('Are you sure you want to log out?');
+    if (!confirmed) return;
+    const response = await fetch("php/logout.php", { method: "POST", credentials: "same-origin" });
+    if (!response.ok) throw new Error("Logout request failed");
+    if (dialog) {
+      try { await dialog.fire({ icon: 'success', title: 'Logged Out', text: 'You have been logged out.', confirmButtonColor: '#2B7066' }); }
+      catch (_) { /* Successful server logout still redirects if a dialog fails. */ }
+    }
+    window.location.href = "./";
+  } catch (error) {
+    console.error("Logout error:", error);
+    const message = 'Unable to log out. Please try again.';
+    if (dialog) {
+      try { await dialog.fire({ icon: 'error', title: 'Logout Failed', text: message, confirmButtonColor: '#2B7066' }); }
+      catch (_) { window.alert(message); }
+    } else window.alert(message);
+  } finally {
+    delete button.dataset.logoutPending;
+    button.removeAttribute("aria-busy");
+  }
+}
+
 // Keep booking-triggered login on the current page and retain the selected booking.
 document.addEventListener('click', async (event) => {
   if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
@@ -466,55 +520,12 @@ function initHeader() {
       });
     });
 
-    // Logout
+    // Idempotent binding: notification refreshes can call initHeader again.
     const logoutBtn = document.getElementById("logoutBtn");
-    logoutBtn?.addEventListener("click", async (e) => {
-      e.preventDefault();
-
-      Swal.fire({
-        title: 'Are you sure you want to log out?',
-        icon: 'warning',
-        showCancelButton: true,
-        confirmButtonText: 'Yes, logout',
-        cancelButtonText: 'Cancel',
-        confirmButtonColor: '#2B7066',
-        cancelButtonColor: '#D33'
-      }).then(async (result) => {
-        if (result.isConfirmed) {
-          try {
-            const response = await fetch("php/logout.php", {
-              method: "POST",
-              credentials: "same-origin",
-            });
-            if (response.ok) {
-              Swal.fire({
-                icon: 'success',
-                title: 'Logged Out',
-                text: 'You have been logged out.',
-                confirmButtonColor: '#2B7066'
-              }).then(() => {
-                window.location.href = "./";
-              });
-            } else {
-              Swal.fire({
-                icon: 'error',
-                title: 'Logout Failed',
-                text: 'Please try again.',
-                confirmButtonColor: '#2B7066'
-              });
-            }
-          } catch (error) {
-            console.error("Logout error:", error);
-            Swal.fire({
-              icon: 'error',
-              title: 'Error',
-              text: 'An error occurred while logging out.',
-              confirmButtonColor: '#2B7066'
-            });
-          }
-        }
-      });
-    });
+    if (logoutBtn && logoutBtn.dataset.logoutBound !== "1") {
+      logoutBtn.dataset.logoutBound = "1";
+      logoutBtn.addEventListener("click", headNavLogout);
+    }
 
     document.querySelectorAll("[data-head-nav-logout]").forEach((drawerLogoutButton) => {
       if (drawerLogoutButton.dataset.logoutBound === "1") return;

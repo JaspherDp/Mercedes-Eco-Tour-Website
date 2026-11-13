@@ -124,3 +124,33 @@ Retest https://itourmercedes.com/ directly, with the same region and cache
 conditions. The earlier HAR recorded two redirects from the HTTP www address.
 No deployed score of 90 or higher is promised: hosting compression negotiation,
 asset-host cookies, the test URL and the tester's grading remain relevant.
+
+## Logout regression correction
+
+The on-demand authentication optimization exposed an existing implicit dependency:
+the public header logout handler called Swal.fire directly, while SweetAlert had
+previously been loaded incidentally with the login modal. Signed-in visitors who
+never opened login could therefore receive a missing-Swal JavaScript error.
+This was a regression in the optimization and was missed by the earlier tests.
+
+The public logout handler now explicitly loads its dialog dependency on click,
+falls back to native confirmation if loading fails or times out, and submits the
+same POST to php/logout.php with same-origin credentials. Failed server/network
+requests display an error and do not claim logout succeeded. Reinitializing the
+header or double-clicking cannot submit duplicate logout requests. Mobile logout
+continues through the same desktop handler. The server endpoint and session
+security logic were not modified.
+
+The homepage runtime bundle and integrity manifest were rebuilt. Deploy all three:
+
+- js/header.js
+- js/homepage-runtime.bundle.js
+- js/homepage-runtime.manifest.json
+
+Clear the hosting/CDN cache after deployment. The new test
+scripts/header_logout_test.cjs covers desktop/mobile binding, preloaded and absent
+dialogs, CDN failure/timeout, cancellation, repeated initialization, double clicks,
+server/network failures and redirect after successful logout. Related login,
+media, loader, search, guest, date, filter and map checks also passed locally.
+These are regression checks, not a guarantee that every website feature has
+received a full live browser audit.

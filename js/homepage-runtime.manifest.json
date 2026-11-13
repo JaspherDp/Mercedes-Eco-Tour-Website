@@ -4,11 +4,11 @@
         "js/legal-policy-modal.js": "cb0a20e051f79c6d446f89c97d018ce7c743b3941fb0e94c371cdde7e2de3837",
         "js/cookie-consent-banner.js": "bfaca192680210adee5c32ba1d213a635a90a539ef90b9f2691c1c3631368d19",
         "js/mobile-scroll.js": "9aa17f438cc3b292fdaa54a7f2ba8d6f0a48d3a46a67320ae679c8d34055e697",
-        "js/header.js": "67ae7c09122a8b81665e7563eba2929a0e9e2c91dbfaf898cfdea50bfafd761f",
+        "js/header.js": "9d9a8a624c4f3d6997bc2db3ea631886964d2055c5e1191eba801aabac35aaa4",
         "js/recently_viewed.js": "05d21eebfd6988cc72cdb80620de8eb79b9bd1d32914beee97c4a570c784a121",
         "js/featured-viewport-video.js": "58e669226c668a68ac6b3628266d1179ea3f90502aed0a61f2323257607dd8c3",
         "js/homepage.js": "6b0cf1314e52adb875d94403d7a5336b890ad6405c607280cd460648c88bfc7f",
         "js/back-to-top.js": "5a562294ae7e415a3eaa312460a1eb0d3da068e1e77d6f5eeafc1a97886008ce"
     },
-    "bundle": "c6bbf881575e5eef538faec10cfee7ddf2cf244ae6b651d677d500b103b1ada2"
+    "bundle": "97cc04aca8eabd4484f9b1e7752e6d92477b4cde04592e471a7b3b229426cf17"
 }
